@@ -7,6 +7,7 @@ export INTENT_HOME="/Users/chet.mancini/code"
 export CODE_DIR="/Users/chet.mancini/code"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
 
+# RVM
 PATH=$PATH:$HOME/.rvm/bin
 
 if [ -f ~/.bashrc ]; then
