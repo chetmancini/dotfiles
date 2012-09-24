@@ -1,0 +1,49 @@
+[alias]
+    a = add
+    aa = add -A
+    f = fetch 
+    fp = fetch --prune
+    br = branch
+    b = branch
+    bl = blame
+    cm = commit
+    ch = checkout
+    get = checkout
+    d = diff
+    l = log
+    hist = log --pretty=format:'%h %ad | %s%d [%an]' --graph --date=short
+    st = status
+    ri = rebase --interactive
+    rc = rebase --continue
+    rom = rebase origin/master
+    mt = mergetool
+    type = cat-file -t
+    dump = cat-file -p
+    fixup = commit --fixup
+    squash = commit --squash
+    ignored = !git ls-files -v | grep "^[[:lower:]]"
+    ignore = update-index --assume-unchanged
+    unignore = update-index --no-assume-unchanged
+[color]
+    branch = auto
+    diff = auto
+    interactive = auto
+    status = auto
+    ui = auto
+[core]
+    editor = vim
+[merge]
+    tool = diffmerge
+[mergetool]
+    keepBackup = false
+[diff]
+    tool = diffmerge
+[push]
+    default = upstream
+[rebase]
+    autosquash = true
+[user]
+    name = Chet Mancini
+    email = chetmancini@gmail.com
+[credential]
+    helper = osxkeychain
