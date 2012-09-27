@@ -40,6 +40,7 @@ alias ghist='git hist'
 alias gpush='git push origin'
 alias gdiff='git diff'
 alias gpush='git push'
+alias gpull='git pull'
 
 #############################
 # Random git commands for Intent Media protocol
