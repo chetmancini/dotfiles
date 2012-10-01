@@ -35,6 +35,7 @@ alias gch='git checkout'
 alias gaa='git add -A'
 alias gcom='git commit -m'
 alias grom='git rebase origin/master'
+alias gri='git rebase -i'
 alias glog='git log'
 alias ghist='git hist'
 alias gpush='git push origin'
@@ -60,9 +61,7 @@ function cpmsg() {
 . ~/Scripts/z.sh
 
 #echo 'source /usr/local/etc/bash_completion.d/*'
-
 #eval "$(rbenv init -)"
-
 #$[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm"
 
 ##############################

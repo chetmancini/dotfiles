@@ -17,7 +17,6 @@ set history=1000                " Store a ton of history (default is 20)
     "color solarized                 " load a colorscheme
     set tabpagemax=15               " only show 15 tabs
     set showmode                    " display the current mode
-
     set cursorline                  " highlight current line
     hi cursorline guibg=#333333     " highlight bg color of current line
     hi CursorColumn guibg=#333333   " highlight cursor
