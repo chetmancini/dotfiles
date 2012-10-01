@@ -1,4 +1,4 @@
-# Path to your oh-my-zsh configuration.
+ Path to your oh-my-zsh configuration.
 ZSH=$HOME/.oh-my-zsh
 
 # Set name of the theme to load.
@@ -45,7 +45,7 @@ export PATH="$JAVA_HOME/bin:/usr/local/mysql/bin:/Users/chet.mancini/code/conf/v
 export JAVA_HOME="/Library/Java/Home"
 export INTENT_HOME="~/code"
 export CODE_DIR="~/code"
-export DEV_DIR="~/Development'
+export DEV_DIR="~/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
 ##############################
 # Aliases
