@@ -1,4 +1,4 @@
- Path to your oh-my-zsh configuration.
+#Path to your oh-my-zsh configuration.
 ZSH=$HOME/.oh-my-zsh
 
 # Set name of the theme to load.
@@ -8,8 +8,8 @@ ZSH=$HOME/.oh-my-zsh
 ZSH_THEME="robbyrussell"
 
 # Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
+alias zshconfig="sublime ~/dotfiles/.zshrc"
+alias ohmyzsh="sublime ~/.oh-my-zsh"
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
@@ -33,11 +33,11 @@ plugins=(battery brew history-substring-search node osx pip python rbenv redis-c
 
 source $ZSH/oh-my-zsh.sh
 
-# Customize to your needs...
 ##############################
 # Variables
 ##############################
-export EDITOR="sublime"
+EDITOR="sublime"
+DEFAULT_USER="chet.mancini"
 ##############################
 # Paths
 ##############################
@@ -99,7 +99,6 @@ function cpmsg() {
     echo [#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: | tr -d '\n' | pbcopy
 }
 
-#alias gmsg='echo [#`curid`] '
 ##############################
 # Execute on launch
 ##############################
