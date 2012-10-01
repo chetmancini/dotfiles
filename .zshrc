@@ -39,6 +39,15 @@ source $ZSH/oh-my-zsh.sh
 ##############################
 export EDITOR="sublime"
 ##############################
+# Paths
+##############################
+export PATH="$JAVA_HOME/bin:/usr/local/mysql/bin:/Users/chet.mancini/code/conf/vms/ruby/jruby/bin:/Users/chet.mancini/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin:$PATH"
+export JAVA_HOME="/Library/Java/Home"
+export INTENT_HOME="~/code"
+export CODE_DIR="~/code"
+export DEV_DIR="~/Development'
+export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+##############################
 # Aliases
 ##############################
 alias h='history | grep $1'
@@ -95,10 +104,6 @@ function cpmsg() {
 # Execute on launch
 ##############################
 . ~/Scripts/z.sh
-
-#echo 'source /usr/local/etc/bash_completion.d/*'
-#eval "$(rbenv init -)"
-#$[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm"
 
 ##############################
 # Ad Tools Specific to Intent Media
