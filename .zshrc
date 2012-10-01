@@ -24,7 +24,9 @@ alias ohmyzsh="sublime ~/.oh-my-zsh"
 # DISABLE_AUTO_TITLE="true"
 
 # Uncomment following line if you want red dots to be displayed while waiting for completion
-# COMPLETION_WAITING_DOTS="true"
+COMPLETION_WAITING_DOTS="true"
+
+zstyle ':completion:*' hosts off
 
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
@@ -50,6 +52,10 @@ export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
 ##############################
 # Aliases
 ##############################
+alias -g L="|less"
+alias -g TL='| tail -20'
+alias -g NUL="> /dev/null 2>&1"
+
 alias h='history | grep $1'
 alias c='clear'
 alias ..='cd ..'
