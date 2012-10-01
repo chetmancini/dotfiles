@@ -40,6 +40,7 @@ source $ZSH/oh-my-zsh.sh
 ##############################
 EDITOR="sublime"
 DEFAULT_USER="chet.mancini"
+AUTO_CD="true"
 ##############################
 # Paths
 ##############################
@@ -69,9 +70,6 @@ alias be='bundle exec'
 #alias ss='bundle exec trinidad'
 #alias sc='bundle exec rails console'
 alias cuke='bundle exec cucumber -c'
-alias code='cd $CODE_DIR'
-alias extranet='cd $CODE_DIR/extranet'
-alias adserver='cd $CODE_DIR/adServer'
 alias rs='bundle exec rspec'
 alias vi='vim'
 alias x='exit'
