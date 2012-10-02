@@ -1,21 +1,21 @@
 #Path to your oh-my-zsh configuration.
-ZSH=$HOME/.oh-my-zsh
+ZSH=$HOME/dotfiles/.oh-my-zsh
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
 # Optionally, if you set this to "random", it'll load a random theme each
 # time that oh-my-zsh is loaded.
-ZSH_THEME="robbyrussell"
+ZSH_THEME="chetmancini"
 
 # Example aliases
 alias zshconfig="sublime ~/dotfiles/.zshrc"
-alias ohmyzsh="sublime ~/.oh-my-zsh"
+alias ohmyzsh="sublime ~/dotfiles/.oh-my-zsh"
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
 
 # Comment this out to disable weekly auto-update checks
-# DISABLE_AUTO_UPDATE="true"
+DISABLE_AUTO_UPDATE="true"
 
 # Uncomment following line if you want to disable colors in ls
 # DISABLE_LS_COLORS="true"
@@ -38,9 +38,21 @@ source $ZSH/oh-my-zsh.sh
 ##############################
 # Variables
 ##############################
-EDITOR="sublime"
 DEFAULT_USER="chet.mancini"
-AUTO_CD="true"
+setopt AUTO_CD
+
+##############################
+# Vim
+##############################
+export EDITOR="vim"
+bindkey -v 
+
+# vi style incremental search
+bindkey '^R' history-incremental-search-backward
+bindkey '^S' history-incremental-search-forward
+bindkey '^P' history-search-backward
+bindkey '^N' history-search-forward  
+
 ##############################
 # Paths
 ##############################
