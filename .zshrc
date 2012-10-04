@@ -95,12 +95,14 @@ alias extranet='cd EXTRANET'
 #######################
 # Git Aliases to make it all shorter
 ########################
-alias gs='git status'
+alias gs='git status -sb'
+alias gd='git diff'
 alias gb='git branch'
-alias gf='git fetch'
+alias gf='git fetch --all --prune'
 alias gch='git checkout'
 alias gaa='git add -A'
-alias gcom='git commit -m'
+alias gco='git commit -m'
+alias gca='git commit -am'
 alias grom='git rebase origin/master'
 alias gri='git rebase -i'
 alias glog='git log'
@@ -108,7 +110,8 @@ alias ghist='git hist'
 alias gpush='git push origin'
 alias gdiff='git diff'
 alias gpush='git push'
-alias gpull='git pull'
+alias gpull='git pull --prune'
+alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 
 #############################
 # Random git commands for Intent Media protocol
