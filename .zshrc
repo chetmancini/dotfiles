@@ -41,6 +41,9 @@ source $ZSH/oh-my-zsh.sh
 DEFAULT_USER="chet.mancini"
 setopt AUTO_CD
 
+CODE=/Users/chet.mancini/code
+EXTRANET=/Users/chet.mancini/code/extranet
+
 ##############################
 # Vim
 ##############################
@@ -79,12 +82,15 @@ alias la='ls -a'
 alias ll='ls -lah'
 alias grep='grep --color=auto'
 alias be='bundle exec'
+alias berake='bundle exec rake'
 #alias ss='bundle exec trinidad'
 #alias sc='bundle exec rails console'
 alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec'
 alias vi='vim'
 alias x='exit'
+alias code='cd CODE'
+alias extranet='cd EXTRANET'
 
 #######################
 # Git Aliases to make it all shorter
@@ -112,7 +118,12 @@ function cpbranch() {
 }
 
 function cpmsg() {
-    echo [#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: | tr -d '\n' | pbcopy
+    echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
+}
+
+function pushRemoteRun() {
+    branch=$(git rev-parse --abbrev-ref HEAD | tr -d '\n')
+    git push -uf origin $branch:remote-run/chet.mancini/$branch
 }
 
 ##############################
@@ -152,6 +163,9 @@ function server() {
     python -m SimpleHTTPServer "$port"
 }
 
+function killByName() {
+  ps aux | egrep -i "(tokill)" | grep -v egrep | awk '{ print $2 }' | xargs sudo kill -STOP
+}
 
 #-------------------------------------------------------------
 # fun
@@ -279,29 +293,33 @@ function dbMigrateAndPrepXnet() {
 
 function dbMigrateBase() {
   currentDir=`pwd`
-  cd $INTENT_HOME/dataMigrations
-  rake db:migrate
+  cd $CODE/dataMigrations
+  echo "Migrating base"
+  bundle exec rake db:migrate
   cd $currentDir
 }
 
 function dbTestPrepareBase() {
   currentDir=`pwd`
-  cd $INTENT_HOME/dataMigrations
-  rake db:test:prepare
+  cd $CODE/dataMigrations
+  echo "Preparing base"
+  bundle exec rake db:test:prepare
   cd $currentDir
 }
 
 function dbMigrateExtranet() {
   currentDir=`pwd`
-  cd $INTENT_HOME/extranet/db
-  rake db:migrate
+  cd $EXTRANET/db
+  echo "Migrating extranet"
+  bundle exec rake db:migrate
   cd $currentDir
 }
 
 function dbTestPrepareExtranet() {
   currentDir=`pwd`
-  cd $INTENT_HOME/extranet/db
-  rake db:test:prepare
+  cd $EXTRANET/db
+  echo "Preparing extranet"
+  bundle exec rake db:test:prepare
   cd $currentDir
 }
 
