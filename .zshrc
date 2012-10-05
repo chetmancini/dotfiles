@@ -26,6 +26,13 @@ DISABLE_AUTO_UPDATE="true"
 # Uncomment following line if you want red dots to be displayed while waiting for completion
 COMPLETION_WAITING_DOTS="true"
 
+
+
+#########
+# History
+#########
+
+
 zstyle ':completion:*' hosts off
 
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
@@ -41,8 +48,30 @@ source $ZSH/oh-my-zsh.sh
 DEFAULT_USER="chet.mancini"
 setopt AUTO_CD
 
-CODE=/Users/chet.mancini/code
-EXTRANET=/Users/chet.mancini/code/extranet
+CODE=/Users/$DEFAULT_USER/code
+EXTRANET=/Users/$DEFAULT_USER/code/extranet
+
+# If I type cd and then cd again, only save the last one
+setopt HIST_IGNORE_DUPS
+
+# Pretty    Obvious.  Right?
+setopt HIST_REDUCE_BLANKS
+
+# Save the time and how long a command ran
+setopt EXTENDED_HISTORY
+
+setopt HIST_SAVE_NO_DUPS
+setopt HIST_EXPIRE_DUPS_FIRST
+setopt HIST_FIND_NO_DUPS
+
+# Spell check commands!  (Sometimes annoying)
+setopt CORRECT
+
+setopt VI
+
+# beeps are annoying
+setopt NO_BEEP
+
 
 ##############################
 # Vim
@@ -59,12 +88,13 @@ bindkey '^N' history-search-forward
 ##############################
 # Paths
 ##############################
-export PATH="$JAVA_HOME/bin:/usr/local/mysql/bin:/Users/chet.mancini/code/conf/vms/ruby/jruby/bin:/Users/chet.mancini/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin:$PATH"
 export JAVA_HOME="/Library/Java/Home"
+export PATH="$PATH:$JAVA_HOME/bin:/usr/local/mysql/bin:~/code/conf/vms/ruby/jruby/bin"
 export INTENT_HOME="~/code"
 export CODE_DIR="~/code"
 export DEV_DIR="~/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+
 ##############################
 # Aliases
 ##############################
@@ -78,8 +108,10 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../../'
-alias la='ls -a'
-alias ll='ls -lah'
+alias ls="gls -ltrhF --color"
+alias l="gls -lAh --color"
+alias ll="gls -l --color"
+alias la='gls -A --color'
 alias grep='grep --color=auto'
 alias be='bundle exec'
 alias berake='bundle exec rake'
@@ -89,6 +121,12 @@ alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec'
 alias vi='vim'
 alias x='exit'
+alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
+
+# aliases that use xtitle
+alias top='xtitle Processes on $HOST && top'
+alias make='xtitle Making $(basename $PWD) ; make'
+
 alias code='cd CODE'
 alias extranet='cd EXTRANET'
 
@@ -154,6 +192,11 @@ function respoof() {
 }
 
 ##############################
+# SSH
+##############################
+
+
+##############################
 # Generic Tools
 ##############################
 function tlb-server() {
@@ -183,9 +226,22 @@ function xtitle()      # Adds some text in the terminal frame.
     esac
 }
 
-# aliases that use xtitle
-alias top='xtitle Processes on $HOST && top'
-alias make='xtitle Making $(basename $PWD) ; make'
+
+
+function most_useless_use_of_zsh {
+   local lines columns colour a b p q i pnew
+   ((columns=COLUMNS-1, lines=LINES-1, colour=0))
+   for ((b=-1.5; b<=1.5; b+=3.0/lines)) do
+       for ((a=-2.0; a<=1; a+=3.0/columns)) do
+           for ((p=0.0, q=0.0, i=0; p*p+q*q < 4 && i < 32; i++)) do
+               ((pnew=p*p-q*q+a, q=2*p*q+b, p=pnew))
+           done
+           ((colour=(i/4)%8))
+            echo -n "\\e[4${colour}m "
+        done
+        echo
+    done
+}
 
 ##############################
 # Stupid shortcuts
@@ -338,3 +394,6 @@ function haml_move() {
 function haml_convert() {
   cat "$1" | bundle exec html2haml -s -e "$1" && git add "$1"
 }
+
+
+
