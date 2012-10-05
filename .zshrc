@@ -1,13 +1,11 @@
 #Path to your oh-my-zsh configuration.
 ZSH=$HOME/dotfiles/.oh-my-zsh
 
-# Set name of the theme to load.
-# Look in ~/.oh-my-zsh/themes/
-# Optionally, if you set this to "random", it'll load a random theme each
-# time that oh-my-zsh is loaded.
+######################
+# oh-my-zsh
+######################
 ZSH_THEME="chetmancini"
 
-# Example aliases
 alias zshconfig="sublime ~/dotfiles/.zshrc"
 alias ohmyzsh="sublime ~/dotfiles/.oh-my-zsh"
 
@@ -15,7 +13,7 @@ alias ohmyzsh="sublime ~/dotfiles/.oh-my-zsh"
 # CASE_SENSITIVE="true"
 
 # Comment this out to disable weekly auto-update checks
-DISABLE_AUTO_UPDATE="true"
+# DISABLE_AUTO_UPDATE="true"
 
 # Uncomment following line if you want to disable colors in ls
 # DISABLE_LS_COLORS="true"
@@ -25,13 +23,6 @@ DISABLE_AUTO_UPDATE="true"
 
 # Uncomment following line if you want red dots to be displayed while waiting for completion
 COMPLETION_WAITING_DOTS="true"
-
-
-
-#########
-# History
-#########
-
 
 zstyle ':completion:*' hosts off
 
@@ -53,29 +44,22 @@ EXTRANET=/Users/$DEFAULT_USER/code/extranet
 
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
-
-# Pretty    Obvious.  Right?
-setopt HIST_REDUCE_BLANKS
-
-# Save the time and how long a command ran
-setopt EXTENDED_HISTORY
-
 setopt HIST_SAVE_NO_DUPS
 setopt HIST_EXPIRE_DUPS_FIRST
 setopt HIST_FIND_NO_DUPS
-
+# reduce blanks
+setopt HIST_REDUCE_BLANKS
+# Save the time and how long a command ran
+setopt EXTENDED_HISTORY
 # Spell check commands!  (Sometimes annoying)
 setopt CORRECT
-
-setopt VI
-
 # beeps are annoying
 setopt NO_BEEP
-
 
 ##############################
 # Vim
 ##############################
+setopt VI
 export EDITOR="vim"
 bindkey -v 
 
@@ -115,8 +99,8 @@ alias la='gls -A --color'
 alias grep='grep --color=auto'
 alias be='bundle exec'
 alias berake='bundle exec rake'
-#alias ss='bundle exec trinidad'
-#alias sc='bundle exec rails console'
+alias trinidad='bundle exec trinidad'
+alias rconsole='bundle exec rails console'
 alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec'
 alias vi='vim'
@@ -127,6 +111,7 @@ alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | ga
 alias top='xtitle Processes on $HOST && top'
 alias make='xtitle Making $(basename $PWD) ; make'
 
+# Intent aliases
 alias code='cd CODE'
 alias extranet='cd EXTRANET'
 
@@ -152,16 +137,14 @@ alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 
 #############################
-# Random git commands for Intent Media protocol
+# Random git commands for Intent Media protocol of 1234storynum_title_of_feature
 #############################
 function cpbranch() {
     git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy
 }
-
 function cpmsg() {
     echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
 }
-
 function pushRemoteRun() {
     branch=$(git rev-parse --abbrev-ref HEAD | tr -d '\n')
     git push -uf origin $branch:remote-run/chet.mancini/$branch
@@ -329,15 +312,9 @@ function sysinfo()   # Get current host related info.
     echo
 }
 
-
-GREEN='0;32m'
-YELLOW='1;33m'
-#PS1='[\u@\h \[\033[$GREEN\]\W\[\033[0m\]\[\033[$YELLOW\]$(__git_ps1 " (%s)")\[\033[0m\]]\$ '
-
 #####################################
 # Database Migrations Specif to Intent Media
 #####################################
-
 function dbMigrateAndPrepAll() {
   dbMigrateBase
   dbTestPrepareBase
