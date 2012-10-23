@@ -40,7 +40,7 @@
 [diff]
     tool = diffmerge
 [push]
-	default = upstream
+    default = current
 [rebase]
     autosquash = true
 [user]
