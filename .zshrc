@@ -39,8 +39,8 @@ source $ZSH/oh-my-zsh.sh
 DEFAULT_USER="chet.mancini"
 setopt AUTO_CD
 
-CODE=/Users/$DEFAULT_USER/code
-EXTRANET=/Users/$DEFAULT_USER/code/extranet
+#CODE=/Users/$DEFAULT_USER/code
+#EXTRANET=/Users/$DEFAULT_USER/code/extranet
 
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
@@ -73,11 +73,16 @@ bindkey '^N' history-search-forward
 # Paths
 ##############################
 export JAVA_HOME="/Library/Java/Home"
-export PATH="$PATH:$JAVA_HOME/bin:/usr/local/mysql/bin:~/code/conf/vms/ruby/jruby/bin"
-export INTENT_HOME="~/code"
+export INTENT_HOME="/Users/chet.mancini/code"
 export CODE_DIR="~/code"
 export DEV_DIR="~/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
+export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
+export MYSQL_HOME=/usr/local/mysql/bin
+export USR_LOCAL_HOME=/usr/local/bin
+export VERTICA_HOME=/usr/local/vertica/bin
+export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$PATH
 
 ##############################
 # Aliases
@@ -101,6 +106,7 @@ alias be='bundle exec'
 alias berake='bundle exec rake'
 alias trinidad='bundle exec trinidad'
 alias rconsole='bundle exec rails console'
+alias rdebug-ide='bundle exec rdebug-ide'
 alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec'
 alias vi='vim'
@@ -135,6 +141,12 @@ alias gdiff='git diff'
 alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
+
+
+
+__git_files () { 
+    _wanted files expl 'local files' _files 
+}
 
 #############################
 # Random git commands for Intent Media protocol of 1234storynum_title_of_feature
