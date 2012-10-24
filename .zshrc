@@ -118,8 +118,8 @@ alias top='xtitle Processes on $HOST && top'
 alias make='xtitle Making $(basename $PWD) ; make'
 
 # Intent aliases
-alias code='cd CODE'
-alias extranet='cd EXTRANET'
+alias code='cd ~/code'
+alias extranet='cd ~/code/extranet'
 
 #######################
 # Git Aliases to make it all shorter
@@ -138,6 +138,7 @@ alias glog='git log'
 alias ghist='git hist'
 alias gpush='git push origin'
 alias gdiff='git diff'
+alias gmerge='git merge'
 alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
