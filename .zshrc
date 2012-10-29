@@ -70,6 +70,17 @@ bindkey '^P' history-search-backward
 bindkey '^N' history-search-forward  
 
 ##############################
+# Conditional
+##############################
+platform='unknown'
+unamestr=`uname`
+if [[ "$unamestr" == 'Linux' ]]; then
+  source ~/dotfiles/linux_specific.sh
+elif [[ "$unamestr" == 'Darwin' ]]; then
+  source ~/dotfiles/mac_specific.sh
+fi
+
+##############################
 # Paths
 ##############################
 export JAVA_HOME="/Library/Java/Home"
@@ -82,7 +93,8 @@ export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export VERTICA_HOME=/usr/local/vertica/bin
-export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$PATH
+export ANACONDA_HOME=/Users/chet.mancini/anaconda/bin
+export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$ANACONDA_HOME:$PATH
 
 ##############################
 # Aliases
@@ -97,10 +109,6 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../../'
-alias ls="gls -ltrhF --color"
-alias l="gls -lAh --color"
-alias ll="gls -l --color"
-alias la='gls -A --color'
 alias grep='grep --color=auto'
 alias be='bundle exec'
 alias berake='bundle exec rake'
@@ -143,8 +151,6 @@ alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 
-
-
 __git_files () { 
     _wanted files expl 'local files' _files 
 }
@@ -169,28 +175,8 @@ function pushRemoteRun() {
 . ~/Scripts/z.sh
 
 ##############################
-# Ad Tools Specific to Intent Media
-##############################
-function jstest() {
-    ant -Dargs="$1" -f $INTENT_HOME/tags/build/build.xml start-and-run-all
-}
-
-function spoof_ads() {
-    sudo $INTENT_HOME/conf/scripts/spoof_ads/spoof_ads $@
-}
-
-function spoof_ads_alpha() {
-    sudo $INTENT_HOME/conf/scripts/spoof_ads/spoof_ads_alpha $@
-}
-
-function respoof() {
-    ant -f $INTENT_HOME/adServer/build/build.xml concatenate && spoof_ads on
-}
-
-##############################
 # SSH
 ##############################
-
 
 ##############################
 # Generic Tools
@@ -209,9 +195,9 @@ function killByName() {
   ps aux | egrep -i "(tokill)" | grep -v egrep | awk '{ print $2 }' | xargs sudo kill -STOP
 }
 
-#-------------------------------------------------------------
+##############################
 # fun
-#-------------------------------------------------------------
+##############################
 function xtitle()      # Adds some text in the terminal frame.
 {
     case "$TERM" in
@@ -221,8 +207,6 @@ function xtitle()      # Adds some text in the terminal frame.
             ;;
     esac
 }
-
-
 
 function most_useless_use_of_zsh {
    local lines columns colour a b p q i pnew
@@ -324,66 +308,3 @@ function sysinfo()   # Get current host related info.
     echo -e "\n${RED}Open connections :$NC "; netstat -pan --inet;
     echo
 }
-
-#####################################
-# Database Migrations Specif to Intent Media
-#####################################
-function dbMigrateAndPrepAll() {
-  dbMigrateBase
-  dbTestPrepareBase
-  dbMigrateExtranet
-  dbTestPrepareExtranet
-}
-
-function dbMigrateAndPrepXnet() {
-  dbMigrateExtranet
-  dbTestPrepareExtranet
-}
-
-function dbMigrateBase() {
-  currentDir=`pwd`
-  cd $CODE/dataMigrations
-  echo "Migrating base"
-  bundle exec rake db:migrate
-  cd $currentDir
-}
-
-function dbTestPrepareBase() {
-  currentDir=`pwd`
-  cd $CODE/dataMigrations
-  echo "Preparing base"
-  bundle exec rake db:test:prepare
-  cd $currentDir
-}
-
-function dbMigrateExtranet() {
-  currentDir=`pwd`
-  cd $EXTRANET/db
-  echo "Migrating extranet"
-  bundle exec rake db:migrate
-  cd $currentDir
-}
-
-function dbTestPrepareExtranet() {
-  currentDir=`pwd`
-  cd $EXTRANET/db
-  echo "Preparing extranet"
-  bundle exec rake db:test:prepare
-  cd $currentDir
-}
-
-##################
-# Convert ERB to HAML
-##################
-function haml_move() {
-  [[ $1 =~ (.+)\.erb ]]
-  erb_name="${BASH_REMATCH[1]}"
-  git mv "${erb_name}.erb" "${erb_name}.haml" &&  git add "${erb_name}.haml"
-}
-
-function haml_convert() {
-  cat "$1" | bundle exec html2haml -s -e "$1" && git add "$1"
-}
-
-
-
