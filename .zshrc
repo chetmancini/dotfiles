@@ -172,7 +172,7 @@ function pushRemoteRun() {
 ##############################
 # Execute on launch
 ##############################
-. ~/Scripts/z.sh
+. ~/dotfiles/z.sh
 
 ##############################
 # SSH
