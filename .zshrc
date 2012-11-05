@@ -147,6 +147,7 @@ alias ghist='git hist'
 alias gpush='git push origin'
 alias gdiff='git diff'
 alias gmerge='git merge'
+alias gff='git merge --ff-only'
 alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
