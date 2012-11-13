@@ -151,6 +151,7 @@ alias gff='git merge --ff-only'
 alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
+alias gamend="git commit --amend"
 
 __git_files () { 
     _wanted files expl 'local files' _files 

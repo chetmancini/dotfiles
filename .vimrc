@@ -86,8 +86,8 @@ nnoremap ; :
 "map <C-K> <C-W>k<C-W>_
 
 " Wrapped lines goes down/up to next row, rather than next line in file.
-nnoremap j gj
-nnoremap k gk
+"nnoremap j gj
+"nnoremap k gk
 
 " Stupid shift key fixes
 "cmap WQ wq
