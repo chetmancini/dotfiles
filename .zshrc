@@ -84,9 +84,9 @@ fi
 # Paths
 ##############################
 export JAVA_HOME="/Library/Java/Home"
-export INTENT_HOME="/Users/chet.mancini/code"
-export CODE_DIR="~/code"
-export DEV_DIR="~/Development"
+export INTENT_HOME="$HOME/code"
+export CODE_DIR="$HOME/code"
+export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
 export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
 export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
