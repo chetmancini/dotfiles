@@ -38,7 +38,7 @@ source $ZSH/oh-my-zsh.sh
 ##############################
 DEFAULT_USER="chet.mancini"
 setopt AUTO_CD
-
+export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
 #CODE=/Users/$DEFAULT_USER/code
 #EXTRANET=/Users/$DEFAULT_USER/code/extranet
 
@@ -88,13 +88,14 @@ export INTENT_HOME="$HOME/code"
 export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+export NPM_PATH=/usr/local/share/npm/bin
 export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
 export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export VERTICA_HOME=/usr/local/vertica/bin
 export ANACONDA_HOME=/Users/chet.mancini/anaconda/bin
-export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$ANACONDA_HOME:$PATH
+export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
 
 ##############################
 # Aliases
