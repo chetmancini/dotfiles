@@ -94,8 +94,11 @@ export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export VERTICA_HOME=/usr/local/vertica/bin
+export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export ANACONDA_HOME=/Users/chet.mancini/anaconda/bin
-export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$JRUBY_HOME:$GEMS_HOME:$USR_LOCAL_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
+export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
+
+eval "$(rbenv init -)"
 
 ##############################
 # Aliases
