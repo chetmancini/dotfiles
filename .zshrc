@@ -36,7 +36,7 @@ source $ZSH/oh-my-zsh.sh
 ##############################
 # Variables
 ##############################
-DEFAULT_USER="chet.mancini"
+DEFAULT_USER="chet"
 setopt AUTO_CD
 export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
 #CODE=/Users/$DEFAULT_USER/code
@@ -87,7 +87,7 @@ export JAVA_HOME="/Library/Java/Home"
 export INTENT_HOME="$HOME/code"
 export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
-export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
 export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
 export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
@@ -95,8 +95,9 @@ export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export VERTICA_HOME=/usr/local/vertica/bin
 export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
-export ANACONDA_HOME=/Users/chet.mancini/anaconda/bin
+export ANACONDA_HOME=$HOME/anaconda/bin
 export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
+export CLASSPATH=$HOME/lib/jars
 
 eval "$(rbenv init -)"
 
@@ -120,7 +121,7 @@ alias trinidad='bundle exec trinidad'
 alias rconsole='bundle exec rails console'
 alias rdebug-ide='bundle exec rdebug-ide'
 alias cuke='bundle exec cucumber -c'
-alias rs='bundle exec rspec'
+alias rs='bundle exec rspec --color --format documentation'
 alias vi='vim'
 alias x='exit'
 alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
@@ -141,6 +142,7 @@ alias gd='git diff'
 alias gb='git branch'
 alias gf='git fetch --all --prune'
 alias gch='git checkout'
+alias gadd 'git add'
 alias gaa='git add -A'
 alias gco='git commit -m'
 alias gca='git commit -am'
@@ -172,7 +174,7 @@ function cpmsg() {
 }
 function pushRemoteRun() {
     branch=$(git rev-parse --abbrev-ref HEAD | tr -d '\n')
-    git push -uf origin $branch:remote-run/chet.mancini/$branch
+    git push -uf origin $branch:remote-run/chet/$branch
 }
 
 ##############################
@@ -187,6 +189,10 @@ function pushRemoteRun() {
 ##############################
 # Generic Tools
 ##############################
+function lt() { ls -ltrsa "$@" | tail; }
+function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
+function fname() { find . -iname "*$@*"; }
+
 function tlb-server() {
     . ~/tlb-server/tlb-server-0.3.2/server.sh
 }
