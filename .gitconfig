@@ -33,6 +33,7 @@
 [core]
     editor = vim
 [merge]
+    conflictstyle = diff3
     tool = diffmerge
     defaultToUpstream = true
 [mergetool]
