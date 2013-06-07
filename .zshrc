@@ -41,6 +41,9 @@ setopt AUTO_CD
 export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
 #CODE=/Users/$DEFAULT_USER/code
 #EXTRANET=/Users/$DEFAULT_USER/code/extranet
+# Ant
+export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
+export ANT_OPTS="-Xmx2048m -Xms512m"
 
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
