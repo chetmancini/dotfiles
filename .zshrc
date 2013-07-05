@@ -82,6 +82,7 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
+source ~/dotfiles/intent_specific.sh
 
 ##############################
 # Paths
