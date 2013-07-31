@@ -38,9 +38,13 @@ if has('statusline')
     set statusline+=%=%-14.(%l,%c%V%)\ %p%%  " Right aligned file nav info
 endif
 
+set relativenumber
+autocmd InsertEnter * :set number
+autocmd InsertLeave * :set relativenumber
+
 set backspace=indent,eol,start  " backspace for dummys
 set linespace=0                 " No extra spaces between rows
-set nu                          " Line numbers on
+"set nu                          " Line numbers on
 set showmatch                   " show matching brackets/parenthesis
 set incsearch                   " find as you type search
 set hlsearch                    " highlight search terms
