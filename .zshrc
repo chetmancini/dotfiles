@@ -100,7 +100,7 @@ export USR_LOCAL_HOME=/usr/local/bin
 export VERTICA_HOME=/usr/local/vertica/bin
 export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export ANACONDA_HOME=$HOME/anaconda/bin
-export PATH=$HOME/local/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
 export CLASSPATH=$HOME/lib/jars
 
 eval "$(rbenv init -)"
