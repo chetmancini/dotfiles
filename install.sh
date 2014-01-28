@@ -1,3 +1,8 @@
+pushd dotfiles
+git clone git://github.com/robbyrussell/oh-my-zsh.git
+popd
+
+brew update
 brew install ack
 brew install gdbm
 brew install hbase
@@ -27,6 +32,9 @@ brew install node
 brew install postgresql
 brew install redis
 brew install tmux
+brew install clojurescript
+brew install leiningen
+brew install datomic
 
 easy_install pip
 sudo pip install setuptools
