@@ -47,7 +47,7 @@ autocmd InsertEnter * :set number
 autocmd InsertLeave * :set relativenumber
 
 " MISC SETTINGS
-set undofile
+"set undofile
 set backspace=indent,eol,start  " backspace for dummys
 set linespace=0                 " No extra spaces between rows
 set showmatch                   " show matching brackets/parenthesis

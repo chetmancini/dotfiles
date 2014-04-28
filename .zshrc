@@ -29,7 +29,7 @@ zstyle ':completion:*' hosts off
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(battery brew history-substring-search node osx pip python rbenv redis-cli rvm sublime)
+plugins=(aws battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -114,6 +114,7 @@ alias -g NUL="> /dev/null 2>&1"
 
 alias h='history | grep $1'
 alias c='clear'
+alias ll='ls -la'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'

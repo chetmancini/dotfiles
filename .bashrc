@@ -262,3 +262,12 @@ function haml_convert() {
   cat "$1" | bundle exec html2haml -s -e "$1" && git add "$1"
 }
 
+
+# Cascading Lingual - Concurrent, Inc.
+# http://cascading.org/lingual
+
+export LINGUAL_HOME=/Users/chet.mancini/.lingual-client
+
+# add lingual tool to PATH
+export PATH=$PATH:$LINGUAL_HOME/bin
+
