@@ -32,6 +32,7 @@ zstyle ':completion:*' hosts off
 plugins=(aws battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
+archey
 
 ##############################
 # Variables
@@ -87,7 +88,7 @@ source ~/dotfiles/intent_specific.sh
 ##############################
 # Paths
 ##############################
-export JAVA_HOME="/Library/Java/Home"
+export JAVA_HOME="`/usr/libexec/java_home -v '1.7*'`"
 export INTENT_HOME="$HOME/code"
 export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
@@ -139,6 +140,11 @@ alias make='xtitle Making $(basename $PWD) ; make'
 alias code='cd ~/code'
 alias extranet='cd ~/code/extranet'
 
+# Amazon Elastic Map Reduce (EMR) ssh tunnel, use like # ssh-emr
+# hadoop@ec2-blah.blah.blah.amazonaws.com
+# # This creates
+alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -i ~/.ssh/hadoop.pem'
+
 #######################
 # Git Aliases to make it all shorter
 ########################
@@ -153,6 +159,7 @@ alias gco='git commit -m'
 alias gca='git commit -am'
 alias grom='git rebase origin/master'
 alias gri='git rebase -i'
+alias grc='git rebase --continue'
 alias glog='git log'
 alias ghist='git hist'
 alias gpush='git push origin'
