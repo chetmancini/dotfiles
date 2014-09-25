@@ -98,10 +98,12 @@ export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
 export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
+export USR_LOCAL_SBIN=/usr/local/sbin
 export VERTICA_HOME=/usr/local/vertica/bin
 export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export ANACONDA_HOME=$HOME/anaconda/bin
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$PATH
+export EMR_HOME=$HOME/elastic-mapreduce-cli
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PATH
 export CLASSPATH=$HOME/lib/jars
 
 eval "$(rbenv init -)"
