@@ -145,7 +145,8 @@ alias extranet='cd ~/code/extranet'
 # Amazon Elastic Map Reduce (EMR) ssh tunnel, use like # ssh-emr
 # hadoop@ec2-blah.blah.blah.amazonaws.com
 # # This creates
-alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -i ~/.ssh/hadoop.pem'
+alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
+alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
 
 #######################
 # Git Aliases to make it all shorter
