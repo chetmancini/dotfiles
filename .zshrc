@@ -29,7 +29,7 @@ zstyle ':completion:*' hosts off
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(aws battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
+plugins=(battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
 archey
@@ -37,15 +37,9 @@ archey
 ##############################
 # Variables
 ##############################
+# ZSH Options
 DEFAULT_USER="chet"
 setopt AUTO_CD
-export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
-#CODE=/Users/$DEFAULT_USER/code
-#EXTRANET=/Users/$DEFAULT_USER/code/extranet
-# Ant
-export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
-export ANT_OPTS="-Xmx2048m -Xms512m"
-
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
 setopt HIST_SAVE_NO_DUPS
@@ -60,8 +54,13 @@ setopt CORRECT
 # beeps are annoying
 setopt NO_BEEP
 
+# Java/Ant Options
+export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
+export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
+export ANT_OPTS="-Xmx2048m -Xms512m"
+
 ##############################
-# Vim
+# Editor Settings
 ##############################
 setopt VI
 export EDITOR="vim"
@@ -74,7 +73,7 @@ bindkey '^P' history-search-backward
 bindkey '^N' history-search-forward  
 
 ##############################
-# Conditional
+# Source other files based on platform/organization
 ##############################
 platform='unknown'
 unamestr=`uname`
@@ -106,6 +105,9 @@ export EMR_HOME=$HOME/elastic-mapreduce-cli
 export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PATH
 export CLASSPATH=$HOME/lib/jars
 
+##############################
+# Launch Background Apps
+##############################
 eval "$(rbenv init -)"
 
 ##############################
@@ -133,20 +135,19 @@ alias rs='bundle exec rspec --color --format documentation'
 alias vi='vim'
 alias x='exit'
 alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
+alias urldecode='python -c "import sys, urllib as ul; print ul.unquote_plus(sys.argv[1])"'
 
 # aliases that use xtitle
 alias top='xtitle Processes on $HOST && top'
 alias make='xtitle Making $(basename $PWD) ; make'
-
-# Intent aliases
-alias code='cd ~/code'
-alias extranet='cd ~/code/extranet'
 
 # Amazon Elastic Map Reduce (EMR) ssh tunnel, use like # ssh-emr
 # hadoop@ec2-blah.blah.blah.amazonaws.com
 # # This creates
 alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
 alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
+
+# Other tools
 
 #######################
 # Git Aliases to make it all shorter
@@ -179,7 +180,7 @@ __git_files () {
 }
 
 #############################
-# Random git commands for Intent Media protocol of 1234storynum_title_of_feature
+# Random git commands for my usual branch protocol of 1234storynum_title_of_feature
 #############################
 function cpbranch() {
     git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy
@@ -212,12 +213,14 @@ function tlb-server() {
     . ~/tlb-server/tlb-server-0.3.2/server.sh
 }
 
+# Launch a server in the current dir with an optional port defaulting to 8000
 function server() {
     local port="${1:-8000}"
     open "http://localhost:${port}/"
     python -m SimpleHTTPServer "$port"
 }
 
+# Kill a process with a name.
 function killByName() {
   ps aux | egrep -i "(tokill)" | grep -v egrep | awk '{ print $2 }' | xargs sudo kill -STOP
 }
@@ -270,7 +273,8 @@ function dtgz {
 # Find a file with a pattern in name:
 function ff() { find . -type f -iname '*'$*'*' -ls ; }
 
-function extract()      # Handy Extract Program.
+# Handy Extract Program.
+function extract()
 {
      if [ -f $1 ] ; then
          case $1 in
@@ -296,8 +300,8 @@ function extract()      # Handy Extract Program.
 function my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
 function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
 
-
-function killps()                 # Kill by process name.
+# Kill by process name.
+function killps()
 {
     local pid pname sig="-TERM"   # Default signal.
     if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
@@ -313,7 +317,8 @@ function killps()                 # Kill by process name.
     done
 }
 
-function my_ip() # Get IP adresses.
+# Get IP adresses.
+function my_ip()
 {
     MY_IP=$(/sbin/ifconfig ppp0 | awk '/inet/ { print $2 } ' | \
 sed -e s/addr://)
@@ -321,7 +326,8 @@ sed -e s/addr://)
 sed -e s/P-t-P://)
 }
 
-function sysinfo()   # Get current host related info.
+# Get current host related info.
+function sysinfo()
 {
     echo -e "\nYou are logged on ${RED}$HOST"
     echo -e "\nAdditionnal information:$NC " ; uname -a
