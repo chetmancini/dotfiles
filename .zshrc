@@ -154,7 +154,7 @@ alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25
 ########################
 alias gs='git status -sb'
 alias gd='git diff'
-alias gb='git branch'
+alias gb='git branch -vv'
 alias gf='git fetch --all --prune'
 alias gch='git checkout'
 alias gadd 'git add'
