@@ -88,8 +88,8 @@ source ~/dotfiles/intent_specific.sh
 # Paths
 ##############################
 export JAVA_HOME="`/usr/libexec/java_home -v '1.7*'`"
-export INTENT_HOME="$HOME/code"
-export CODE_DIR="$HOME/code"
+export INTENT_HOME="$HOME/intentmedia/code"
+export CODE_DIR="$HOME/intentmedia/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
@@ -175,6 +175,7 @@ alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 alias gamend="git commit --amend"
+alias gclean="git checkout . && git clean -f"
 
 __git_files () { 
     _wanted files expl 'local files' _files 
