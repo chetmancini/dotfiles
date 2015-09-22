@@ -113,6 +113,8 @@ eval "$(rbenv init -)"
 ##############################
 # Aliases
 ##############################
+alias docker="docker $(docker-machine config default)"
+
 alias -g L="|less"
 alias -g TL='| tail -20'
 alias -g NUL="> /dev/null 2>&1"
