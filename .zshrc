@@ -87,24 +87,23 @@ source ~/dotfiles/intent_specific.sh
 ##############################
 # Paths
 ##############################
-export JAVA_HOME="`/usr/libexec/java_home -v '1.7*'`"
+export JAVA_HOME="`/usr/libexec/java_home -v '1.8*'`"
 export INTENT_HOME="$HOME/intentmedia/code"
 export CODE_DIR="$HOME/intentmedia/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
-export GEMS_HOME=$INTENT_HOME/conf/vms/ruby/jruby/lib/ruby/gems/1.8/bin
-export JRUBY_HOME=$INTENT_HOME/conf/vms/ruby/jruby/bin
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
 export VERTICA_HOME=/usr/local/vertica/bin
-export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
+#export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export ANACONDA_HOME=$HOME/anaconda/bin
 export EMR_HOME=$HOME/elastic-mapreduce-cli
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$RBENV_HOME:$JRUBY_HOME:$GEMS_HOME:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PATH
 export CLASSPATH=$HOME/lib/jars
 
+export RBENV_ROOT=~/.rbenv
 ##############################
 # Launch Background Apps
 ##############################
@@ -202,6 +201,18 @@ function pushRemoteRun() {
 ##############################
 . ~/dotfiles/z.sh
 
+
+
+#export GPG_AGENT_INFO_FILE=$HOME/.gpg-agent-info  
+#gpg-agent --daemon --enable-ssh-support --write-env-file "${GPG_AGENT_INFO_FILE}"    
+#if [ -f "${GPG_AGENT_INFO_FILE}" ]; then  
+#  . "${GPG_AGENT_INFO_FILE}"
+#  export GPG_AGENT_INFO
+#  export SSH_AUTH_SOCK
+#  export SSH_AGENT_PID
+#fi    
+#export GPG_TTY=$(tty)
+
 ##############################
 # SSH
 ##############################
@@ -227,6 +238,22 @@ function server() {
 # Kill a process with a name.
 function killByName() {
   ps aux | egrep -i "(tokill)" | grep -v egrep | awk '{ print $2 }' | xargs sudo kill -STOP
+}
+
+
+function removeFromPath() {
+    export PATH=$(echo $PATH | sed -E -e "s;:$1;;" -e "s;$1:?;;")
+}
+
+function setjdk() {
+  if [ $# -ne 0 ]; then
+   removeFromPath '/System/Library/Frameworks/JavaVM.framework/Home/bin'
+   if [ -n "${JAVA_HOME+x}" ]; then
+    removeFromPath $JAVA_HOME
+   fi
+   export JAVA_HOME=`/usr/libexec/java_home -v $@`
+   export PATH=$JAVA_HOME/bin:$PATH
+  fi
 }
 
 ##############################
@@ -315,8 +342,9 @@ function killps()
     if [ $# = 2 ]; then sig=$1 ; fi
     for pid in $(my_ps| awk '!/awk/ && $0~pat { print $1 }' pat=${!#} ) ; do
         pname=$(my_ps | awk '$1~var { print $5 }' var=$pid )
-        if ask "Kill process $pid <$pname> with signal $sig?"
-            then kill $sig $pid
+        read -p "Kill process $pid <$pname> with signal $sig?" RESP
+        if [ "$RESP" = "y" ]; then
+            kill $sig $pid
         fi
     done
 }
