@@ -6,8 +6,8 @@ ZSH=$HOME/dotfiles/.oh-my-zsh
 ######################
 ZSH_THEME="chetmancini"
 
-alias zshconfig="sublime ~/dotfiles/.zshrc"
-alias ohmyzsh="sublime ~/dotfiles/.oh-my-zsh"
+alias zshconfig="vim ~/dotfiles/.zshrc"
+alias ohmyzsh="vim ~/dotfiles/.oh-my-zsh"
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
@@ -82,7 +82,6 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
-source ~/dotfiles/intent_specific.sh
 
 ##############################
 # Paths
@@ -148,6 +147,12 @@ alias make='xtitle Making $(basename $PWD) ; make'
 alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 9026:localhost:9026 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
 alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
 alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
+
+
+alias start_mysql='mysql.server start'
+alias start_postgres='postgres -D /usr/local/var/postgres'
+
+
 
 # Other tools
 
