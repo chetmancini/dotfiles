@@ -32,6 +32,9 @@ zstyle ':completion:*' hosts off
 plugins=(battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
+# AWS completion
+source /usr/local/share/zsh/site-functions/_aws
+# Stats on startup
 archey
 
 ##############################
@@ -40,6 +43,8 @@ archey
 # ZSH Options
 DEFAULT_USER="chet"
 setopt AUTO_CD
+HISTFILESIZE=1000000
+HISTSIZE=1000000
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
 setopt HIST_SAVE_NO_DUPS
@@ -82,6 +87,7 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
+source ~/dotfiles/simon_specific.sh
 
 ##############################
 # Paths
@@ -151,7 +157,7 @@ alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200
 
 alias start_mysql='mysql.server start'
 alias start_postgres='postgres -D /usr/local/var/postgres'
-
+alias start_memcached='/usr/local/opt/memcached/bin/memcached'
 
 
 # Other tools
@@ -169,11 +175,13 @@ alias gaa='git add -A'
 alias gco='git commit -m'
 alias gca='git commit -am'
 alias grom='git rebase origin/master'
+alias grod='git rebase origin/develop'
 alias gri='git rebase -i'
 alias grc='git rebase --continue'
 alias glog='git log'
 alias ghist='git hist'
-alias gpush='git push origin'
+alias gpush='git push'
+alias gpushod='git push origin develop'
 alias gpushom='git push origin master'
 alias gdiff='git diff'
 alias gmerge='git merge'

@@ -48,6 +48,8 @@
 [user]
     name = Chet Mancini
     email = chetmancini@gmail.com
+[github]
+    user = chetmancini
 [credential]
     helper = osxkeychain
 [filter "media"]
