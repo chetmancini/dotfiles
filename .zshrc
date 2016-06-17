@@ -93,7 +93,6 @@ source ~/dotfiles/simon_specific.sh
 # Paths
 ##############################
 export JAVA_HOME="`/usr/libexec/java_home -v '1.8*'`"
-export INTENT_HOME="$HOME/intentmedia/code"
 export CODE_DIR="$HOME/intentmedia/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
@@ -105,7 +104,8 @@ export VERTICA_HOME=/usr/local/vertica/bin
 #export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export ANACONDA_HOME=$HOME/anaconda/bin
 export EMR_HOME=$HOME/elastic-mapreduce-cli
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PATH
+export PERSONAL_BIN=$HOME/dotfiles/bin
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PERSONAL_BIN:$PATH
 export CLASSPATH=$HOME/lib/jars
 
 export RBENV_ROOT=~/.rbenv
