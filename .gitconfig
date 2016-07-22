@@ -11,7 +11,8 @@
     get = checkout
     d = diff
     l = log
-    hist = log --pretty=format:'%h %ad | %s%d [%an]' --graph --date=short
+    # hist = log --pretty=format:'%h %ad | %s%d [%an]' --graph --date=short
+    hist = log --graph --pretty=format:'%C(magenta)%h %C(green)%ad%Creset -%C(red)%d%Creset %s %C(dim green)(%cr) %C(cyan)<%an>%Creset' --abbrev-commit --date=short
     st = status
     ri = rebase --interactive
     rc = rebase --continue
@@ -33,6 +34,7 @@
     ui = auto
 [core]
     editor = vim
+    pager = diff-so-fancy | less --tabs=4 -RFX
 [merge]
     conflictstyle = diff3
     tool = diffmerge

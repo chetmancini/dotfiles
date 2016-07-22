@@ -183,13 +183,13 @@ alias ghist='git hist'
 alias gpush='git push'
 alias gpushod='git push origin develop'
 alias gpushom='git push origin master'
-alias gdiff='git diff'
+alias gdiff='git diff --color'
 alias gmerge='git merge'
 alias gff='git merge --ff-only'
 alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
-alias gamend="git commit --amend"
+alias gamend="git commit --amend -C HEAD"
 alias gclean="git checkout . && git clean -f"
 
 __git_files () { 
@@ -237,6 +237,8 @@ function pushRemoteRun() {
 function lt() { ls -ltrsa "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { find . -iname "*$@*"; }
+
+function strip_quotes() { sed 's/\"//g' $@; }
 
 function tlb-server() {
     . ~/tlb-server/tlb-server-0.3.2/server.sh
