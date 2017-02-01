@@ -133,4 +133,5 @@ cmap w!! w !sudo tee % >/dev/null
 
 " PLUGINS
 execute pathogen#infect()
+set rtp+=/usr/local/opt/fzf
 

@@ -271,3 +271,5 @@ export LINGUAL_HOME=/Users/chet.mancini/.lingual-client
 # add lingual tool to PATH
 export PATH=$PATH:$LINGUAL_HOME/bin
 
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash

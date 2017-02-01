@@ -45,6 +45,7 @@ DEFAULT_USER="chet"
 setopt AUTO_CD
 HISTFILESIZE=1000000
 HISTSIZE=1000000
+export HISTCONTROL=ignoreboth:erasedups
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
 setopt HIST_SAVE_NO_DUPS
@@ -389,3 +390,5 @@ function sysinfo()
     echo -e "\n${RED}Open connections :$NC "; netstat -pan --inet;
     echo
 }
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
