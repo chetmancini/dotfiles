@@ -1,3 +1,4 @@
+
 #Path to your oh-my-zsh configuration.
 ZSH=$HOME/dotfiles/.oh-my-zsh
 
@@ -29,11 +30,13 @@ zstyle ':completion:*' hosts off
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(battery brew bundler emacs history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
+# removed: emacs
+plugins=(battery brew bundler history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
 # AWS completion
 source /usr/local/share/zsh/site-functions/_aws
+source /usr/local/share/zsh/site-functions/_awless
 # Stats on startup
 archey
 
@@ -103,6 +106,7 @@ export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
 export VERTICA_HOME=/usr/local/vertica/bin
 #export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
+export NVM_DIR="$HOME/.nvm"
 export ANACONDA_HOME=$HOME/anaconda/bin
 export EMR_HOME=$HOME/elastic-mapreduce-cli
 export PERSONAL_BIN=$HOME/dotfiles/bin
@@ -114,11 +118,12 @@ export RBENV_ROOT=~/.rbenv
 # Launch Background Apps
 ##############################
 eval "$(rbenv init -)"
+  . "/usr/local/opt/nvm/nvm.sh"
 
 ##############################
 # Aliases
 ##############################
-alias docker="docker $(docker-machine config default)"
+#alias docker="docker $(docker-machine config default)"
 
 alias -g L="|less"
 alias -g TL='| tail -20'
@@ -140,6 +145,7 @@ alias rdebug-ide='bundle exec rdebug-ide'
 alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec --color --format documentation'
 alias vi='vim'
+alias wget='wget -c'
 alias x='exit'
 alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
 alias urldecode='python -c "import sys, urllib as ul; print ul.unquote_plus(sys.argv[1])"'
@@ -154,12 +160,12 @@ alias make='xtitle Making $(basename $PWD) ; make'
 alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 9026:localhost:9026 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
 alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
 alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
-alias ssh-mrjob='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 9200:localhost:80 -i ~/keys/radico.pem'
 
 alias start_mysql='mysql.server start'
 alias start_postgres='postgres -D /usr/local/var/postgres'
 alias start_memcached='/usr/local/opt/memcached/bin/memcached'
 
+alias brewski='brew update && brew upgrade && brew cleanup; brew doctor'
 
 # Other tools
 
