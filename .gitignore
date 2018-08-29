@@ -8,4 +8,5 @@
 replstate.xml
 .rvmrc
 intent_specific.sh
+simon_specific.sh
 /.oh-my-zsh
