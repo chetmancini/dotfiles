@@ -1,6 +1,6 @@
 
 #Path to your oh-my-zsh configuration.
-ZSH=$HOME/dotfiles/.oh-my-zsh
+ZSH=$HOME/dotfiles/oh-my-zsh
 
 ######################
 # oh-my-zsh
@@ -36,9 +36,11 @@ plugins=(battery brew bundler history-substring-search node npm osx pip python r
 source $ZSH/oh-my-zsh.sh
 # AWS completion
 source /usr/local/share/zsh/site-functions/_aws
-source /usr/local/share/zsh/site-functions/_awless
+#source /usr/local/share/zsh/site-functions/_awless
 # Stats on startup
 archey
+
+eval "$(pyenv init -)"
 
 ##############################
 # Variables
@@ -64,9 +66,9 @@ setopt CORRECT
 setopt NO_BEEP
 
 # Java/Ant Options
-export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
-export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
-export ANT_OPTS="-Xmx2048m -Xms512m"
+#export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
+#export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
+#export ANT_OPTS="-Xmx2048m -Xms512m"
 
 ##############################
 # Editor Settings
@@ -101,6 +103,8 @@ export CODE_DIR="$HOME/intentmedia/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
+#export N_PATH="$HOME/n/bin"
+export PYENV_PATH="$HOME/.pyenv/shims"
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
@@ -110,7 +114,7 @@ export NVM_DIR="$HOME/.nvm"
 export ANACONDA_HOME=$HOME/anaconda/bin
 export EMR_HOME=$HOME/elastic-mapreduce-cli
 export PERSONAL_BIN=$HOME/dotfiles/bin
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PERSONAL_BIN:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$PYENV_PATH:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PERSONAL_BIN:$PATH
 export CLASSPATH=$HOME/lib/jars
 
 export RBENV_ROOT=~/.rbenv
@@ -118,7 +122,7 @@ export RBENV_ROOT=~/.rbenv
 # Launch Background Apps
 ##############################
 eval "$(rbenv init -)"
-  . "/usr/local/opt/nvm/nvm.sh"
+#  . "/usr/local/opt/nvm/nvm.sh"
 
 ##############################
 # Aliases
@@ -398,3 +402,4 @@ function sysinfo()
 }
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
