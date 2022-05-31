@@ -1,6 +1,6 @@
 
 #Path to your oh-my-zsh configuration.
-ZSH=$HOME/dotfiles/oh-my-zsh
+ZSH=$HOME/.oh-my-zsh
 
 ######################
 # oh-my-zsh
@@ -31,11 +31,11 @@ zstyle ':completion:*' hosts off
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # removed: emacs
-plugins=(battery brew bundler history-substring-search node npm osx pip python rbenv redis-cli rvm sublime web-search)
+plugins=(battery brew bundler history-substring-search node npm macos pip python rbenv redis-cli rvm sublime web-search)
 
 source $ZSH/oh-my-zsh.sh
 # AWS completion
-source /usr/local/share/zsh/site-functions/_aws
+#source /usr/local/share/zsh/site-functions/_aws
 #source /usr/local/share/zsh/site-functions/_awless
 # Stats on startup
 archey
@@ -93,7 +93,7 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
-source ~/dotfiles/simon_specific.sh
+#source ~/dotfiles/simon_specific.sh
 
 ##############################
 # Paths
