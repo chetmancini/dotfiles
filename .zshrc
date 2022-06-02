@@ -93,7 +93,7 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
-#source ~/dotfiles/simon_specific.sh
+source ~/dotfiles/carta_specific.sh
 
 ##############################
 # Paths
