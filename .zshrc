@@ -40,6 +40,8 @@ source $ZSH/oh-my-zsh.sh
 # Stats on startup
 archey
 
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
 ##############################
@@ -108,16 +110,24 @@ export PYENV_PATH="$HOME/.pyenv/shims"
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
-export VERTICA_HOME=/usr/local/vertica/bin
+#export VERTICA_HOME=/usr/local/vertica/bin
 #export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export NVM_DIR="$HOME/.nvm"
 export ANACONDA_HOME=$HOME/anaconda/bin
-export EMR_HOME=$HOME/elastic-mapreduce-cli
+#export EMR_HOME=$HOME/elastic-mapreduce-cli
 export PERSONAL_BIN=$HOME/dotfiles/bin
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$PYENV_PATH:$VERTICA_HOME:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$EMR_HOME:$PERSONAL_BIN:$PATH
+export MODULAR_HOME="$HOME/.modular"
+export MODULAR_BIN="$MODULAR_HOME/pkg/packages.modular.com_mojo/bin"
+
+#export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$PYENV_PATH:$MODULAR_BIN:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$PERSONAL_BIN:$PATH
+
 export CLASSPATH=$HOME/lib/jars
 
 export RBENV_ROOT=~/.rbenv
+
+
+
 ##############################
 # Launch Background Apps
 ##############################
@@ -403,3 +413,11 @@ function sysinfo()
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+
+# bun completions
+[ -s "/Users/chet/.bun/_bun" ] && source "/Users/chet/.bun/_bun"
