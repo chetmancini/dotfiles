@@ -1,6 +1,6 @@
 
 #Path to your oh-my-zsh configuration.
-ZSH=$HOME/.oh-my-zsh
+export ZSH=$HOME/dotfiles/oh-my-zsh
 
 ######################
 # oh-my-zsh
@@ -8,7 +8,7 @@ ZSH=$HOME/.oh-my-zsh
 ZSH_THEME="chetmancini"
 
 alias zshconfig="vim ~/dotfiles/.zshrc"
-alias ohmyzsh="vim ~/dotfiles/.oh-my-zsh"
+alias ohmyzsh="vim ~/dotfiles/oh-my-zsh"
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
@@ -30,23 +30,21 @@ zstyle ':completion:*' hosts off
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-# removed: emacs
-plugins=(battery brew bundler history-substring-search node npm macos pip python rbenv redis-cli rvm sublime web-search)
+# removed: emacs rbenv sublime rvm
+plugins=(battery brew bundler history-substring-search node npm macos pip python redis-cli web-search)
 
 source $ZSH/oh-my-zsh.sh
 # AWS completion
 #source /usr/local/share/zsh/site-functions/_aws
 #source /usr/local/share/zsh/site-functions/_awless
-# Stats on startup
-archey
 
-export PYENV_ROOT="$HOME/.pyenv"
-command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
+#export PYENV_ROOT="$HOME/.pyenv"
+#command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+#eval "$(pyenv init -)"
 
 ##############################
 # Variables
-##############################
+##########################oh-m####
 # ZSH Options
 DEFAULT_USER="chet"
 setopt AUTO_CD
@@ -77,13 +75,13 @@ setopt NO_BEEP
 ##############################
 setopt VI
 export EDITOR="vim"
-bindkey -v 
+bindkey -v
 
 # vi style incremental search
 bindkey '^R' history-incremental-search-backward
 bindkey '^S' history-incremental-search-forward
 bindkey '^P' history-search-backward
-bindkey '^N' history-search-forward  
+bindkey '^N' history-search-forward
 
 ##############################
 # Source other files based on platform/organization
@@ -100,27 +98,26 @@ source ~/dotfiles/carta_specific.sh
 ##############################
 # Paths
 ##############################
-export JAVA_HOME="`/usr/libexec/java_home -v '1.8*'`"
-export CODE_DIR="$HOME/intentmedia/code"
+export BREW_PATH=/opt/homebrew/bin
+export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
+export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
+export UV_PATH="$HOME/.local/bin"
 #export N_PATH="$HOME/n/bin"
-export PYENV_PATH="$HOME/.pyenv/shims"
+#export PYENV_PATH="$HOME/.pyenv/shims"
+export BUN_INSTALL="$HOME/.bun"
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
-#export VERTICA_HOME=/usr/local/vertica/bin
 #export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
 export NVM_DIR="$HOME/.nvm"
-export ANACONDA_HOME=$HOME/anaconda/bin
-#export EMR_HOME=$HOME/elastic-mapreduce-cli
+#export ANACONDA_HOME=$HOME/anaconda/bin
 export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
-export MODULAR_BIN="$MODULAR_HOME/pkg/packages.modular.com_mojo/bin"
-
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$MYSQL_HOME:$PYENV_PATH:$MODULAR_BIN:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$ANACONDA_HOME:$NPM_PATH:$PERSONAL_BIN:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$PATH
 
 export CLASSPATH=$HOME/lib/jars
 
@@ -131,7 +128,7 @@ export RBENV_ROOT=~/.rbenv
 ##############################
 # Launch Background Apps
 ##############################
-eval "$(rbenv init -)"
+#eval "$(rbenv init -)"
 #  . "/usr/local/opt/nvm/nvm.sh"
 
 ##############################
@@ -145,7 +142,8 @@ alias -g NUL="> /dev/null 2>&1"
 
 alias h='history | grep $1'
 alias c='clear'
-alias ll='ls -la'
+#alias ll='ls -la'
+alias ll='eza --all --long --header --icons --git'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
@@ -213,8 +211,8 @@ alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 alias gamend="git commit --amend -C HEAD"
 alias gclean="git checkout . && git clean -f"
 
-__git_files () { 
-    _wanted files expl 'local files' _files 
+__git_files () {
+    _wanted files expl 'local files' _files
 }
 
 #############################
@@ -226,26 +224,21 @@ function cpbranch() {
 function cpmsg() {
     echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
 }
-function pushRemoteRun() {
-    branch=$(git rev-parse --abbrev-ref HEAD | tr -d '\n')
-    git push -uf origin $branch:remote-run/chet/$branch
-}
 
 ##############################
 # Execute on launch
 ##############################
-. ~/dotfiles/z.sh
+#. ~/dotfiles/z.sh
 
 
-
-#export GPG_AGENT_INFO_FILE=$HOME/.gpg-agent-info  
-#gpg-agent --daemon --enable-ssh-support --write-env-file "${GPG_AGENT_INFO_FILE}"    
-#if [ -f "${GPG_AGENT_INFO_FILE}" ]; then  
+#export GPG_AGENT_INFO_FILE=$HOME/.gpg-agent-info
+#gpg-agent --daemon --enable-ssh-support --write-env-file "${GPG_AGENT_INFO_FILE}"
+#if [ -f "${GPG_AGENT_INFO_FILE}" ]; then
 #  . "${GPG_AGENT_INFO_FILE}"
 #  export GPG_AGENT_INFO
 #  export SSH_AUTH_SOCK
 #  export SSH_AGENT_PID
-#fi    
+#fi
 #export GPG_TTY=$(tty)
 
 ##############################
@@ -260,10 +253,6 @@ function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { find . -iname "*$@*"; }
 
 function strip_quotes() { sed 's/\"//g' $@; }
-
-function tlb-server() {
-    . ~/tlb-server/tlb-server-0.3.2/server.sh
-}
 
 # Launch a server in the current dir with an optional port defaulting to 8000
 function server() {
@@ -301,24 +290,9 @@ function xtitle()      # Adds some text in the terminal frame.
     case "$TERM" in
         *term | rxvt)
             echo -n -e "\033]0;$*\007" ;;
-        *)  
+        *)
             ;;
     esac
-}
-
-function most_useless_use_of_zsh {
-   local lines columns colour a b p q i pnew
-   ((columns=COLUMNS-1, lines=LINES-1, colour=0))
-   for ((b=-1.5; b<=1.5; b+=3.0/lines)) do
-       for ((a=-2.0; a<=1; a+=3.0/columns)) do
-           for ((p=0.0, q=0.0, i=0; p*p+q*q < 4 && i < 32; i++)) do
-               ((pnew=p*p-q*q+a, q=2*p*q+b, p=pnew))
-           done
-           ((colour=(i/4)%8))
-            echo -n "\\e[4${colour}m "
-        done
-        echo
-    done
 }
 
 ##############################
@@ -341,30 +315,6 @@ function dtgz {
 # Find a file with a pattern in name:
 function ff() { find . -type f -iname '*'$*'*' -ls ; }
 
-# Handy Extract Program.
-function extract()
-{
-     if [ -f $1 ] ; then
-         case $1 in
-             *.tar.bz2)   tar xvjf $1     ;;
-             *.tar.gz)    tar xvzf $1     ;;
-             *.bz2)       bunzip2 $1      ;;
-             *.rar)       unrar x $1      ;;
-             *.gz)        gunzip $1       ;;
-             *.tar)       tar xvf $1      ;;
-             *.tbz2)      tar xvjf $1     ;;
-             *.tgz)       tar xvzf $1     ;;
-             *.zip)       unzip $1        ;;
-             *.Z)         uncompress $1   ;;
-             *.7z)        7z x $1         ;;
-             *)           echo "'$1' cannot be extracted via >extract<" ;;
-         esac
-     else
-         echo "'$1' is not a valid file"
-     fi
-}
-
-
 function my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
 function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
 
@@ -386,14 +336,6 @@ function killps()
     done
 }
 
-# Get IP adresses.
-function my_ip()
-{
-    MY_IP=$(/sbin/ifconfig ppp0 | awk '/inet/ { print $2 } ' | \
-sed -e s/addr://)
-    MY_ISP=$(/sbin/ifconfig ppp0 | awk '/P-t-P/ { print $3 } ' | \
-sed -e s/P-t-P://)
-}
 
 # Get current host related info.
 function sysinfo()
@@ -411,12 +353,18 @@ function sysinfo()
     echo
 }
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+eval "$(fzf --zsh)"
+eval "$(zoxide init zsh)"
+#stats on startup
+fastfetch
 
+eval $(thefuck --alias)
+
+eval "$(magic completion --shell zsh)"
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-export SDKMAN_DIR="$HOME/.sdkman"
-[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+#export SDKMAN_DIR="$HOME/.sdkman"
+#[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
 
 # bun completions
