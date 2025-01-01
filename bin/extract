@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Function to check if required dependencies are installed
+check_dependencies() {
+    local deps=("tar" "bunzip2" "unrar" "gunzip" "unzip" "uncompress" "7z")
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &>/dev/null; then
+            echo "Error: '$dep' is not installed. Please install it to proceed."
+            exit 1
+        fi
+    done
+}
+
+# Function to print help message
+print_help() {
+    echo "Usage: extract [-v | -q] <file> [destination]"
+    echo "Extracts a variety of archive formats such as .tar.gz, .zip, .rar, etc."
+    echo "Options:"
+    echo "  -v    Verbose mode (default)"
+    echo "  -q    Quiet mode (minimal output)"
+    echo "Arguments:"
+    echo "  <file>        The file to be extracted"
+    echo "  [destination] Optional target directory (default: current directory)"
+    exit 0
+}
+
+# Parse options and set verbose or quiet mode
+VERBOSE=1
+while getopts "vq" opt; do
+    case $opt in
+        v) VERBOSE=1 ;; # Verbose mode
+        q) VERBOSE=0 ;; # Quiet mode
+        *) print_help ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+# Check if a file was provided
+if [ -z "$1" ]; then
+    print_help
+fi
+
+# Assign arguments
+FILE="$1"
+TARGET_DIR="${2:-.}"
+
+# Check dependencies
+check_dependencies
+
+# Check if the file exists
+if [ ! -f "$FILE" ]; then
+    echo "Error: '$FILE' is not a valid file"
+    exit 1
+fi
+
+# Determine verbosity flags
+if [ "$VERBOSE" -eq 1 ]; then
+    TAR_FLAGS="xv"
+else
+    TAR_FLAGS="x"
+fi
+
+# Extract the file based on its extension
+case "$FILE" in
+    *.tar.bz2)   tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"     ;;
+    *.tar.gz)    tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"     ;;
+    *.bz2)       bunzip2 "$FILE" -c > "$TARGET_DIR/${FILE%.bz2}" ;;
+    *.rar)       unrar x -y "$FILE" "$TARGET_DIR" > /dev/null 2>&1 ;;
+    *.gz)        gunzip -c "$FILE" > "$TARGET_DIR/${FILE%.gz}" ;;
+    *.tar)       tar "${TAR_FLAGS}f" "$FILE" -C "$TARGET_DIR"      ;;
+    *.tbz2)      tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"     ;;
+    *.tgz)       tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"     ;;
+    *.zip)       unzip "$FILE" -d "$TARGET_DIR" > /dev/null 2>&1 ;;
+    *.Z)         uncompress -c "$FILE" > "$TARGET_DIR/${FILE%.Z}" ;;
+    *.7z)        7z x "$FILE" -o"$TARGET_DIR" > /dev/null 2>&1 ;;
+    *)           echo "Error: '$FILE' cannot be extracted via >extract<" ;;
+esac
+
+# Notify the user of completion
+if [ "$VERBOSE" -eq 1 ]; then
+    echo "Extraction of '$FILE' completed successfully to '$TARGET_DIR'."
+fi

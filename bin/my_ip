@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Function to display help
+print_help() {
+    echo "Usage: my_ip [-i interface] [-v | -q]"
+    echo "Retrieve IP and ISP information for a specified network interface."
+    echo "Options:"
+    echo "  -i interface  Specify the network interface (default: eth0)"
+    echo "  -v            Verbose mode (default)"
+    echo "  -q            Quiet mode (minimal output)"
+    echo "  -h            Display this help message"
+    exit 0
+}
+
+# Default values
+INTERFACE="eth0"
+VERBOSE=1
+
+# Parse options
+while getopts "i:vqh" opt; do
+    case $opt in
+        i) INTERFACE="$OPTARG" ;;
+        v) VERBOSE=1 ;;
+        q) VERBOSE=0 ;;
+        h) print_help ;;
+        *) print_help ;;
+    esac
+done
+
+# Check if the interface exists
+if ! ip link show "$INTERFACE" &>/dev/null; then
+    echo "Error: Network interface '$INTERFACE' not found."
+    exit 1
+fi
+
+# Function to retrieve IP and ISP information
+get_ip_info() {
+    local interface="$1"
+    local ip_info
+    local isp_info
+
+    # Retrieve IP address
+    ip_info=$(ip -4 addr show "$interface" | awk '/inet / {print $2}' | cut -d/ -f1)
+    # Retrieve ISP (peer) info for point-to-point interfaces
+    isp_info=$(ip -4 addr show "$interface" | awk '/peer/ {print $4}')
+
+    # Handle cases where data might be missing
+    if [ -z "$ip_info" ]; then
+        echo "Error: Unable to retrieve IP address for interface '$interface'."
+        exit 1
+    fi
+
+    # Display results
+    if [ "$VERBOSE" -eq 1 ]; then
+        echo "Interface: $interface"
+        echo "IP Address: $ip_info"
+        [ -n "$isp_info" ] && echo "ISP/Peer Address: $isp_info"
+    else
+        echo "$ip_info"
+    fi
+}
+
+# Call the function
+get_ip_info "$INTERFACE"
