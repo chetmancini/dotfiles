@@ -1,7 +1,7 @@
 [alias]
     a = add
     aa = add -A
-    f = fetch 
+    f = fetch
     fp = fetch --prune
     br = branch
     b = branch
@@ -34,7 +34,14 @@
     ui = auto
 [core]
     editor = vim
-    pager = diff-so-fancy | less --tabs=4 -RFX
+    #pager = diff-so-fancy | less --tabs=4 -RFX
+    pager = delta
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    navigate = true  # use n and N to move between diff sections
+    dark = true      # or light = true, or omit for auto-detection
+    side-by-side = true
 [merge]
     conflictstyle = diff3
     tool = diffmerge
@@ -52,9 +59,8 @@
     email = chetmancini@gmail.com
 [github]
     user = chetmancini
-[credential]
-	helper = 
-	helper = /usr/local/share/gcm-core/git-credential-manager-core
+#[credential]
+#	helper = /usr/local/share/gcm-core/git-credential-manager-core
 [filter "media"]
 	clean = git media clean %f
 	smudge = git media smudge %f
