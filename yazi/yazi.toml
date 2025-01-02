@@ -16,6 +16,12 @@ scrolloff      = 5
 mouse_events   = [ "click", "scroll" ]
 title_format   = "Yazi: {cwd}"
 
+[[manager.prepend_keymap]]
+on = "<C-p>"
+run = '''
+  shell 'qlmanage -p "$@"'
+'''
+
 [preview]
 wrap            = "no"
 tab_size        = 2
