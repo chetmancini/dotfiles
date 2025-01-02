@@ -378,14 +378,24 @@ function sysinfo()
     echo
 }
 
-eval "$(fzf --zsh)"
-eval "$(zoxide init zsh)"
+if command -v fzf &> /dev/null; then
+  eval "$(fzf --zsh)"
+fi
+if command -v zoxide &> /dev/null; then
+  eval "$(zoxide init zsh)"
+fi
 #stats on startup
-fastfetch
+if command -v fastfetch &> /dev/null; then
+  fastfetch
+fi
 
-eval $(thefuck --alias)
+if command -v thefuck &> /dev/null; then
+  eval $(thefuck --alias)
+fi
 
-eval "$(magic completion --shell zsh)"
+if command -v magic &> /dev/null; then
+  eval "$(magic completion --shell zsh)"
+fi
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 #export SDKMAN_DIR="$HOME/.sdkman"
