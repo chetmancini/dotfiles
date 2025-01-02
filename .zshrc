@@ -31,7 +31,32 @@ zstyle ':completion:*' hosts off
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # removed: emacs rbenv sublime rvm
-plugins=(battery brew bundler history-substring-search node npm macos pip python redis-cli web-search)
+plugins=(
+    1password
+    battery
+    brew
+    bundler
+    bun
+    command-not-found
+    dbt
+    docker-compose
+    encode64
+    eza
+    history
+    history-substring-search
+    gh
+    git-commit
+    gitfast
+    node
+    npm
+    macos
+    pip
+    python
+    redis-cli
+    thefuck
+    tldr
+    web-search
+)
 
 source $ZSH/oh-my-zsh.sh
 # AWS completion
