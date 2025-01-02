@@ -1,0 +1,6 @@
+background-opacity = 0.75
+background-blur-radius = 20
+theme = DoomOne
+
+
+keybind = global:cmd+grave_accent=toggle_quick_terminal
