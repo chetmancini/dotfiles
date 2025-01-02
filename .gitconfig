@@ -89,4 +89,4 @@
 [oh-my-zsh]
 	git-commit-alias = d82669199b5d900b50fd06dd3518c277f0def869
 [credential]
-	helper = /usr/local/share/gcm-core/git-credential-manager
+	#helper = /usr/local/share/gcm-core/git-credential-manager
