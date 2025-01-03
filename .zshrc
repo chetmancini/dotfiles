@@ -99,7 +99,7 @@ setopt NO_BEEP
 # Editor Settings
 ##############################
 setopt VI
-export EDITOR="vim"
+export EDITOR="nvim"
 bindkey -v
 
 # vi style incremental search
@@ -181,7 +181,7 @@ alias rconsole='bundle exec rails console'
 alias rdebug-ide='bundle exec rdebug-ide'
 alias cuke='bundle exec cucumber -c'
 alias rs='bundle exec rspec --color --format documentation'
-alias vi='vim'
+alias vi='nvim'
 alias wget='wget -c'
 alias x='exit'
 alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
@@ -205,6 +205,7 @@ alias start_memcached='/usr/local/opt/memcached/bin/memcached'
 alias brewski='brew update && brew upgrade && brew cleanup; brew doctor'
 
 # Other tools
+alias fzfp='fzf --preview "bat --color=always --style=header,grid --line-range :500 {}"'
 
 #######################
 # Git Aliases to make it all shorter
@@ -376,6 +377,15 @@ function sysinfo()
     echo -e "\n${RED}ISP Address :$NC" ; echo ${MY_ISP:-"Not connected"}
     echo -e "\n${RED}Open connections :$NC "; netstat -pan --inet;
     echo
+}
+
+function y() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+	yazi "$@" --cwd-file="$tmp"
+	if cwd="$(command cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+		builtin cd -- "$cwd"
+	fi
+	rm -f -- "$tmp"
 }
 
 if command -v fzf &> /dev/null; then
