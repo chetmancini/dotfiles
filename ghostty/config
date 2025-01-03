@@ -1,7 +1,7 @@
 #theme = DoomOne
 theme = tokyonight
 #background = #000000
-background-opacity = 0.8
+background-opacity = 0.9
 background-blur-radius = 20
 
 font-family = JetBrainsMonoNL Nerd Font
