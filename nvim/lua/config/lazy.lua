@@ -24,12 +24,12 @@ vim.g.maplocalleader = "\\"
 -- Setup lazy.nvim
 require("lazy").setup({
   spec = {
-	{ "LazyVim/LazyVim", import = "lazyvim.plugins" },
+    { "LazyVim/LazyVim", import = "lazyvim.plugins" },
     -- import your plugins
-	{ import = "lazyvim.plugins.extras.lang.rust" },
-	{ import = "lazyvim.plugins.extras.lang.tailwind" },
-	{ import = "lazyvim.plugins.extras.ai.copilot" },
-	{ import = "plugins" },
+    { import = "lazyvim.plugins.extras.lang.rust" },
+    { import = "lazyvim.plugins.extras.lang.tailwind" },
+    { import = "lazyvim.plugins.extras.ai.copilot" },
+    { import = "plugins" },
   },
   -- Configure any other settings here. See the documentation for more details.
   -- colorscheme that will be used when installing plugins.
@@ -37,4 +37,3 @@ require("lazy").setup({
   -- automatically check for plugin updates
   checker = { enabled = true },
 })
-
