@@ -1,6 +1,19 @@
+theme = DoomOne
+#background = #000000
 background-opacity = 0.75
 background-blur-radius = 20
-theme = DoomOne
 
+font-family = JetBrainsMonoNL Nerd Font
+cursor-style = block
+cursor-style-blink = false
+shell-integration-features = no-cursor
+
+macos-titlebar-style = tabs
+
+confirm-close-surface = false
+window-decoration = true
+window-padding-x = 10
+window-padding-y = 10
+window-padding-balance = true
 
 keybind = global:cmd+grave_accent=toggle_quick_terminal
