@@ -168,6 +168,7 @@ alias -g NUL="> /dev/null 2>&1"
 alias h='history | grep $1'
 alias c='clear'
 #alias ll='ls -la'
+alias ls='eza --icons '
 alias ll='eza --all --long --header --icons --git'
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -275,6 +276,12 @@ function cpmsg() {
 ##############################
 # SSH
 ##############################
+
+##############################
+# SSH
+##############################
+source ~/dotfiles/api_keys.sh
+
 
 ##############################
 # Generic Tools
