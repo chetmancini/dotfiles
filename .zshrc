@@ -199,8 +199,13 @@ alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25
 alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
 
 alias start_mysql='mysql.server start'
+alias stop_mysql='mysql.server stop'
+
 alias start_postgres='postgres -D /usr/local/var/postgres'
+alias stop_postgres='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
+
 alias start_memcached='/usr/local/opt/memcached/bin/memcached'
+alias stop_memcached='killall memcached'
 
 alias brewski='brew update && brew upgrade && brew cleanup; brew doctor'
 
@@ -219,7 +224,7 @@ alias gadd 'git add'
 alias gaa='git add -A'
 alias gco='git commit -m'
 alias gca='git commit -am'
-alias grom='git rebase origin/master'
+alias grom='git rebase origin/main'
 alias grod='git rebase origin/develop'
 alias gri='git rebase -i'
 alias grc='git rebase --continue'
