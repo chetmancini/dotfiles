@@ -87,6 +87,6 @@
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [oh-my-zsh]
-	git-commit-alias = d82669199b5d900b50fd06dd3518c277f0def869
+	git-commit-alias = 042605ee6b2afeb21e380d05b22d5072f0eeff44
 [credential]
 	#helper = /usr/local/share/gcm-core/git-credential-manager
