@@ -136,9 +136,10 @@ export NVM_DIR="$HOME/.nvm"
 #export ANACONDA_HOME=$HOME/anaconda/bin
 export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
-export WINDSURF_PATH="/Users/chester.mancini/.codeium/windsurf/bin"
+export WINDSURF_PATH="$HOME/.codeium/windsurf/bin"
+export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$LMSTUDIO_PATH:$PATH
 
 export CLASSPATH=$HOME/lib/jars
 
@@ -434,4 +435,13 @@ command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
 # bun completions
-[ -s "/Users/chet/.bun/_bun" ] && source "/Users/chet/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=($HOME/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
+# End of Docker CLI completions
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:$HOME/.lmstudio/bin"
+# End of LM Studio CLI section
