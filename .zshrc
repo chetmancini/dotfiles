@@ -141,8 +141,9 @@ export NVM_DIR="$HOME/.nvm"
 #export ANACONDA_HOME=$HOME/anaconda/bin
 export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
+export WINDSURF_PATH="/Users/chester.mancini/.codeium/windsurf/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$PATH
 
 export CLASSPATH=$HOME/lib/jars
 
@@ -195,12 +196,12 @@ alias make='xtitle Making $(basename $PWD) ; make'
 # Amazon Elastic Map Reduce (EMR) ssh tunnel, use like # ssh-emr
 # hadoop@ec2-blah.blah.blah.amazonaws.com
 # # This creates
-alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 9026:localhost:9026 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
-alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
-alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
+# alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 9026:localhost:9026 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
+# alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
+# alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
 
-alias start_mysql='mysql.server start'
-alias stop_mysql='mysql.server stop'
+# alias start_mysql='mysql.server start'
+# alias stop_mysql='mysql.server stop'
 
 alias start_postgres='postgres -D /usr/local/var/postgres'
 alias stop_postgres='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
@@ -415,14 +416,15 @@ if command -v thefuck &> /dev/null; then
   eval $(thefuck --alias)
 fi
 
-if command -v magic &> /dev/null; then
-  eval "$(magic completion --shell zsh)"
-fi
+# if command -v magic &> /dev/null; then
+  # eval "$(magic completion --shell zsh)"
+# fi
+autoload -Uz compinit && compinit
+
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 #export SDKMAN_DIR="$HOME/.sdkman"
 #[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
 
 # bun completions
 [ -s "/Users/chet/.bun/_bun" ] && source "/Users/chet/.bun/_bun"
