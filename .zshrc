@@ -63,10 +63,6 @@ source $ZSH/oh-my-zsh.sh
 #source /usr/local/share/zsh/site-functions/_aws
 #source /usr/local/share/zsh/site-functions/_awless
 
-#export PYENV_ROOT="$HOME/.pyenv"
-#command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-#eval "$(pyenv init -)"
-
 ##############################
 # Variables
 ##########################oh-m####
@@ -118,7 +114,6 @@ if [[ "$unamestr" == 'Linux' ]]; then
 elif [[ "$unamestr" == 'Darwin' ]]; then
   source ~/dotfiles/mac_specific.sh
 fi
-source ~/dotfiles/carta_specific.sh
 
 ##############################
 # Paths
@@ -143,7 +138,7 @@ export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
 export WINDSURF_PATH="/Users/chester.mancini/.codeium/windsurf/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$PATH
 
 export CLASSPATH=$HOME/lib/jars
 
@@ -425,6 +420,18 @@ autoload -Uz compinit && compinit
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 #export SDKMAN_DIR="$HOME/.sdkman"
 #[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+source ~/dotfiles/carta_specific.sh
+
+# Load nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+
+# Load pyenv
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
 
 # bun completions
 [ -s "/Users/chet/.bun/_bun" ] && source "/Users/chet/.bun/_bun"
