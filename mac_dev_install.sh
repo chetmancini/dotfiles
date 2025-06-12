@@ -6,8 +6,6 @@ chsh -s /bin/zsh
 # Install xcode tools
 xcode-select --install
 
-
-
 # Disable opening and closing window animations
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 
@@ -411,6 +409,3 @@ for app in "Activity Monitor" "Address Book" "Calendar" "Contacts" "Dock" \
             "Transmission" "Twitter" "iCal"; do
         killall "${app}" > /dev/null 2>&1
     done
-
-
-
