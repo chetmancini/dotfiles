@@ -58,6 +58,7 @@ brew install git-delta
 brew install mob
 brew install emacs
 brew install tig
+brew install htop
 
 # Kube
 brew install kubernetes-cli
@@ -94,6 +95,8 @@ brew install yarn
 
 # Fonts
 brew install font-monaspace
+brew install font-monaspace-nerd-font
+brew install font-hack
 brew install font-hack-nerd-font
 brew install font-symbols-only-nerd-font
 
@@ -113,6 +116,7 @@ brew install discord
 brew install whatsapp
 brew install slack
 
+# Install Symlinks
 mkdir -p ~/.config
 ln -s ~/dotfiles/yazi ~/.config/yazi
 ln -s ~/dotfiles/ghostty ~/.config/ghostty
