@@ -140,7 +140,7 @@ export WINDSURF_PATH="$HOME/.codeium/windsurf/bin"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
 export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$LMSTUDIO_PATH:$PATH
-
+#export NPM_GLOBAL_PATH="$HOME/.npm-global/bin"
 export CLASSPATH=$HOME/lib/jars
 
 export RBENV_ROOT=~/.rbenv
@@ -441,7 +441,3 @@ fpath=($HOME/.docker/completions $fpath)
 autoload -Uz compinit
 compinit
 # End of Docker CLI completions
-
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:$HOME/.lmstudio/bin"
-# End of LM Studio CLI section
