@@ -70,6 +70,10 @@
     email = chetmancini@gmail.com
 [github]
     user = chetmancini
+[includeIf "gitdir:~/code/"]
+    path = ~/dotfiles/.gitconfig-personal
+[includeIf "gitdir:~/norm/"]
+    path = ~/dotfiles/.gitconfig-work
 [filter "media"]
 	clean = git media clean %f
 	smudge = git media smudge %f
@@ -84,10 +88,16 @@
 	process = git-lfs filter-process
 	required = true
 [oh-my-zsh]
-	git-commit-alias = cb72d7dcbf08b435c7f8a6470802b207b2aa02c3
+	git-commit-alias = 680298e920069b313650c1e1e413197c251c9cde
 [credential]
-	helper = 
+	helper =
 	helper = /usr/local/share/gcm-core/git-credential-manager
 	#helper = /usr/local/share/gcm-core/git-credential-manager
 [credential "https://dev.azure.com"]
 	useHttpPath = true
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
