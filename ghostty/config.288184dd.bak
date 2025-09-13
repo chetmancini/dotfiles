@@ -19,4 +19,3 @@ window-padding-balance = true
 
 keybind = global:cmd+grave_accent=toggle_quick_terminal
 keybind = super+f=write_screen_file:open
-keybind = shift+enter=text:\n

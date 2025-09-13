@@ -88,7 +88,7 @@
 	process = git-lfs filter-process
 	required = true
 [oh-my-zsh]
-	git-commit-alias = 680298e920069b313650c1e1e413197c251c9cde
+	git-commit-alias = 9e23925b8581d22033f07f1983587412d3761494
 [credential]
 	helper =
 	helper = /usr/local/share/gcm-core/git-credential-manager
@@ -96,8 +96,8 @@
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [credential "https://github.com"]
-	helper = 
+	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = 
+	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
