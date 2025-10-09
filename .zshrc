@@ -444,5 +444,4 @@ compinit
 export PATH="$PATH:/Users/chet/.cache/lm-studio/bin"
 # End of LM Studio CLI section
 
-
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
