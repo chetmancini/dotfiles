@@ -445,3 +445,11 @@ export PATH="$PATH:/Users/chet/.cache/lm-studio/bin"
 # End of LM Studio CLI section
 
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/chet/.lmstudio/bin"
+# End of LM Studio CLI section
+
+
+# Added by Antigravity
+export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"

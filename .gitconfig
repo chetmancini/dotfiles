@@ -88,7 +88,7 @@
 	process = git-lfs filter-process
 	required = true
 [oh-my-zsh]
-	git-commit-alias = 9e23925b8581d22033f07f1983587412d3761494
+	git-commit-alias = 18d0a63df8ed61aad7b25dc9c6f61a7cb88760dc
 [credential]
 	helper =
 	helper = /usr/local/share/gcm-core/git-credential-manager
@@ -101,3 +101,5 @@
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
+[coderabbit]
+	machineId = cli/c236e7dd59ab4076bf99c21de2a1cbf7
