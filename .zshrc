@@ -190,6 +190,8 @@ alias c='clear'
 #alias ll='ls -la'
 alias ls='eza --icons '
 alias ll='eza --all --long --header --icons --git'
+alias cat='bat --paging=never'
+alias catp='bat'  # With paging
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
@@ -431,6 +433,35 @@ function y() {
 
 if command -v fzf &> /dev/null; then
   eval "$(fzf --zsh)"
+
+  # Fuzzy cd into directory
+  fcd() { cd "$(find . -type d 2>/dev/null | fzf --preview 'ls -la {}')" }
+
+  # Fuzzy kill process
+  fkill() {
+    local pid
+    pid=$(ps aux | sed 1d | fzf --multi --preview 'echo {}' | awk '{print $2}')
+    [ -n "$pid" ] && echo "$pid" | xargs kill -${1:-9}
+  }
+
+  # Fuzzy git checkout branch (local + remote)
+  fbr() {
+    local branch
+    branch=$(git branch -a --color=always | grep -v HEAD | fzf --ansi --preview 'git log --oneline --graph --color=always {1}' | sed 's/^[* ]*//' | sed 's/remotes\/origin\///')
+    [ -n "$branch" ] && git checkout "$branch"
+  }
+
+  # Fuzzy git log browser
+  flog() {
+    git log --oneline --color=always | fzf --ansi --preview 'git show --color=always {1}' | awk '{print $1}' | xargs -I {} git show {}
+  }
+
+  # Fuzzy search file contents and open in editor
+  fgrep() {
+    local file line
+    read -r file line <<< $(rg --line-number --no-heading . 2>/dev/null | fzf --delimiter ':' --preview 'bat --color=always --highlight-line {2} {1}' | awk -F: '{print $1, $2}')
+    [ -n "$file" ] && $EDITOR "$file" +$line
+  }
 fi
 if command -v zoxide &> /dev/null; then
   eval "$(zoxide init zsh)"
