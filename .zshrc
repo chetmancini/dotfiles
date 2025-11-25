@@ -71,9 +71,11 @@ DEFAULT_USER="chet"
 setopt AUTO_CD
 HISTFILESIZE=1000000
 HISTSIZE=1000000
-export HISTCONTROL=ignoreboth:erasedups
+SAVEHIST=1000000
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
+setopt INC_APPEND_HISTORY    # Write history immediately, not on shell exit
+setopt HIST_IGNORE_SPACE     # Commands starting with space won't be saved
 setopt HIST_SAVE_NO_DUPS
 setopt HIST_EXPIRE_DUPS_FIRST
 setopt HIST_FIND_NO_DUPS
@@ -104,6 +106,28 @@ bindkey '^S' history-incremental-search-forward
 bindkey '^P' history-search-backward
 bindkey '^N' history-search-forward
 
+# Edit command line in $EDITOR (Ctrl-X Ctrl-E)
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey '^X^E' edit-command-line
+
+# Vi mode cursor shape: block for NORMAL, beam for INSERT
+function zle-keymap-select {
+  if [[ $KEYMAP == vicmd ]] || [[ $1 == 'block' ]]; then
+    echo -ne '\e[1 q'  # Block cursor
+  elif [[ $KEYMAP == main ]] || [[ $KEYMAP == viins ]] || [[ $1 == 'beam' ]]; then
+    echo -ne '\e[5 q'  # Beam cursor
+  fi
+}
+zle -N zle-keymap-select
+
+# Start with beam cursor
+function zle-line-init { echo -ne '\e[5 q' }
+zle -N zle-line-init
+
+# Reset cursor on command execution
+preexec() { echo -ne '\e[5 q' }
+
 ##############################
 # Source other files based on platform/organization
 ##############################
@@ -132,7 +156,6 @@ export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
 #export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
-export NVM_DIR="$HOME/.nvm"
 #export ANACONDA_HOME=$HOME/anaconda/bin
 export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
@@ -182,8 +205,9 @@ alias rs='bundle exec rspec --color --format documentation'
 alias vi='nvim'
 alias wget='wget -c'
 alias x='exit'
-alias biggest='find -type f -printf '\''%s %p\n'\'' | sort -nr | head -n 40 | gawk "{ print \$1/1000000 \" \" \$2 \" \" \$3 \" \" \$4 \" \" \$5 \" \" \$6 \" \" \$7 \" \" \$8 \" \" \$9 }"'
-alias urldecode='python -c "import sys, urllib as ul; print ul.unquote_plus(sys.argv[1])"'
+alias biggest='du -ah . 2>/dev/null | sort -rh | head -n 40'
+alias urldecode='python3 -c "import sys; from urllib.parse import unquote_plus; print(unquote_plus(sys.argv[1]))"'
+alias urlencode='python3 -c "import sys; from urllib.parse import quote_plus; print(quote_plus(sys.argv[1]))"'
 
 # aliases that use xtitle
 alias top='xtitle Processes on $HOST && top'
@@ -218,7 +242,7 @@ alias gd='git diff'
 alias gb='git branch -vv'
 alias gf='git fetch --all --prune'
 alias gch='git checkout'
-alias gadd 'git add'
+alias gadd='git add'
 alias gaa='git add -A'
 alias gco='git commit -m'
 alias gca='git commit -am'
@@ -234,7 +258,6 @@ alias gpushom='git push origin master'
 alias gdiff='git diff --color'
 alias gmerge='git merge'
 alias gff='git merge --ff-only'
-alias gpush='git push'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 alias gamend="git commit --amend -C HEAD"
@@ -283,7 +306,7 @@ source ~/dotfiles/api_keys.sh
 ##############################
 # Generic Tools
 ##############################
-function lt() { ls -ltrsa "$@" | tail; }
+function lt() { eza -la --sort=modified "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { find . -iname "*$@*"; }
 
@@ -293,12 +316,16 @@ function strip_quotes() { sed 's/\"//g' $@; }
 function server() {
     local port="${1:-8000}"
     open "http://localhost:${port}/"
-    python -m SimpleHTTPServer "$port"
+    python -m http.server "$port"
 }
 
 # Kill a process with a name.
 function killByName() {
-  ps aux | egrep -i "(tokill)" | grep -v egrep | awk '{ print $2 }' | xargs sudo kill -STOP
+  if [ -z "$1" ]; then
+    echo "Usage: killByName <process_name>"
+    return 1
+  fi
+  ps aux | grep -i "$1" | grep -v grep | awk '{ print $2 }' | xargs sudo kill -TERM
 }
 
 
@@ -372,19 +399,24 @@ function killps()
 }
 
 
-# Get current host related info.
+# Get current host related info (macOS compatible).
 function sysinfo()
 {
-    echo -e "\nYou are logged on ${RED}$HOST"
-    echo -e "\nAdditionnal information:$NC " ; uname -a
-    echo -e "\n${RED}Users logged on:$NC " ; w -h
-    echo -e "\n${RED}Current date :$NC " ; date
-    echo -e "\n${RED}Machine stats :$NC " ; uptime
-    echo -e "\n${RED}Memory stats :$NC " ; free
-    my_ip 2>&- ;
-    echo -e "\n${RED}Local IP Address :$NC" ; echo ${MY_IP:-"Not connected"}
-    echo -e "\n${RED}ISP Address :$NC" ; echo ${MY_ISP:-"Not connected"}
-    echo -e "\n${RED}Open connections :$NC "; netstat -pan --inet;
+    local RED='\033[0;31m'
+    local NC='\033[0m'
+    echo -e "\nYou are logged on ${RED}$HOST${NC}"
+    echo -e "\n${RED}Additional information:${NC}" ; uname -a
+    echo -e "\n${RED}Users logged on:${NC}" ; w -h
+    echo -e "\n${RED}Current date:${NC}" ; date
+    echo -e "\n${RED}Machine stats:${NC}" ; uptime
+    echo -e "\n${RED}Memory stats:${NC}"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        vm_stat | perl -ne '/page size of (\d+)/ and $size=$1; /Pages\s+([^:]+)[^\d]+(\d+)/ and printf "%-16s %8.2f MB\n", "$1:", $2 * $size / 1048576'
+    else
+        free -h
+    fi
+    echo -e "\n${RED}Local IP Address:${NC}" ; ipconfig getifaddr en0 2>/dev/null || echo "Not connected"
+    echo -e "\n${RED}Public IP Address:${NC}" ; curl -s ifconfig.me 2>/dev/null || echo "Not connected"
     echo
 }
 
@@ -402,6 +434,7 @@ if command -v fzf &> /dev/null; then
 fi
 if command -v zoxide &> /dev/null; then
   eval "$(zoxide init zsh)"
+  alias cd='z'  # Use zoxide for all cd commands
 fi
 #stats on startup
 if command -v fastfetch &> /dev/null; then
@@ -415,40 +448,49 @@ fi
 # if command -v magic &> /dev/null; then
   # eval "$(magic completion --shell zsh)"
 # fi
-autoload -Uz compinit && compinit
+# Cached compinit - only regenerate once per day
+autoload -Uz compinit
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
 
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 #export SDKMAN_DIR="$HOME/.sdkman"
 #[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-# Load nvm
+# Lazy-load nvm (saves ~300-500ms on shell startup)
 export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+_nvm_load() {
+  unset -f nvm node npm npx
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+}
+nvm() { _nvm_load; nvm "$@"; }
+node() { _nvm_load; node "$@"; }
+npm() { _nvm_load; npm "$@"; }
+npx() { _nvm_load; npx "$@"; }
 
-# Load pyenv
+# Lazy-load pyenv (saves ~100ms on shell startup)
 export PYENV_ROOT="$HOME/.pyenv"
-command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
+export PATH="$PYENV_ROOT/bin:$PATH"
+pyenv() {
+  unset -f pyenv
+  eval "$(command pyenv init -)"
+  pyenv "$@"
+}
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
-# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+# Docker CLI completions (compinit called once above)
 fpath=($HOME/.docker/completions $fpath)
-autoload -Uz compinit
-compinit
-# End of Docker CLI completions
 
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/chet/.cache/lm-studio/bin"
-# End of LM Studio CLI section
+# LM Studio CLI paths (consolidated)
+export PATH="$PATH:/Users/chet/.cache/lm-studio/bin:/Users/chet/.lmstudio/bin"
 
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
-
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/chet/.lmstudio/bin"
-# End of LM Studio CLI section
 
 
 # Added by Antigravity
