@@ -88,7 +88,7 @@
 	process = git-lfs filter-process
 	required = true
 [oh-my-zsh]
-	git-commit-alias = 18d0a63df8ed61aad7b25dc9c6f61a7cb88760dc
+	git-commit-alias = beadd56dd75e8a40fe0a7d4a5d63ed5bf9efcd48
 [credential]
 	helper =
 	helper = /usr/local/share/gcm-core/git-credential-manager
