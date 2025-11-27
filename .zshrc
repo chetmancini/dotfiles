@@ -457,7 +457,7 @@ if command -v fzf &> /dev/null; then
   }
 
   # Fuzzy search file contents and open in editor
-  fgrep() {
+  fsearch() {
     local file line
     read -r file line <<< $(rg --line-number --no-heading . 2>/dev/null | fzf --delimiter ':' --preview 'bat --color=always --highlight-line {2} {1}' | awk -F: '{print $1, $2}')
     [ -n "$file" ] && $EDITOR "$file" +$line
