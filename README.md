@@ -94,7 +94,7 @@ fzfp        # fzf with bat preview
 ├── .tmux.conf          # tmux config
 ├── Brewfile            # Homebrew packages
 ├── install.sh          # Setup script
-├── bin/                # Custom scripts
+├── bin/                # Custom scripts (see bin/README.md)
 ├── nvim/               # Neovim (LazyVim)
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
