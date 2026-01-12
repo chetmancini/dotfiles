@@ -405,17 +405,22 @@ show_github_notifications() {
 
     print_section "GitHub Notifications"
 
-    # Get notifications as JSON, then format them
+    # Get notifications as JSON, grouped by repo
     notifications=$(gh api notifications --paginate 2>/dev/null | jq -r --arg limit "$GITHUB_NOTIFICATIONS_LIMIT" '
-        .[:($limit | tonumber)] | .[] |
+        .[:($limit | tonumber)] |
+        group_by(.repository.full_name) |
+        .[] |
         {
-            repo: .repository.full_name,
-            title: .subject.title,
-            type: .subject.type,
-            reason: .reason,
-            url: .subject.url
+            repo: .[0].repository.full_name,
+            items: [.[] | {
+                title: .subject.title,
+                type: .subject.type,
+                reason: .reason,
+                url: .subject.url
+            }]
         } |
-        "\(.type)|\(.repo)|\(.title)|\(.reason)|\(.url)"
+        "REPO:\(.repo)",
+        (.items[] | "ITEM:\(.type)|\(.title)|\(.reason)|\(.url)")
     ' 2>/dev/null)
 
     if [ -z "$notifications" ]; then
@@ -424,54 +429,60 @@ show_github_notifications() {
         return
     fi
 
-    count=0
-    while IFS='|' read -r type repo title reason url; do
-        count=$((count + 1))
+    current_repo=""
+    while IFS= read -r line; do
+        if [[ "$line" == REPO:* ]]; then
+            # New repo header
+            current_repo="${line#REPO:}"
+            repo_link=$(print_link "https://github.com/$current_repo" "$current_repo")
+            echo -e "  ${YELLOW}$repo_link${NC}"
+        elif [[ "$line" == ITEM:* ]]; then
+            # Notification item
+            item="${line#ITEM:}"
+            IFS='|' read -r type title reason url <<< "$item"
 
-        # Convert API URL to web URL
-        web_url=""
-        if [ -n "$url" ]; then
-            # Extract type and number from API URL
-            if echo "$url" | grep -q "/pulls/"; then
-                pr_num=$(echo "$url" | grep -oE '/pulls/[0-9]+' | grep -oE '[0-9]+')
-                web_url="https://github.com/$repo/pull/$pr_num"
-            elif echo "$url" | grep -q "/issues/"; then
-                issue_num=$(echo "$url" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+')
-                web_url="https://github.com/$repo/issues/$issue_num"
-            elif echo "$url" | grep -q "/commits/"; then
-                commit_sha=$(echo "$url" | grep -oE '/commits/[a-f0-9]+' | sed 's|/commits/||')
-                web_url="https://github.com/$repo/commit/$commit_sha"
+            # Convert API URL to web URL
+            web_url=""
+            if [ -n "$url" ]; then
+                if echo "$url" | grep -q "/pulls/"; then
+                    pr_num=$(echo "$url" | grep -oE '/pulls/[0-9]+' | grep -oE '[0-9]+')
+                    web_url="https://github.com/$current_repo/pull/$pr_num"
+                elif echo "$url" | grep -q "/issues/"; then
+                    issue_num=$(echo "$url" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+')
+                    web_url="https://github.com/$current_repo/issues/$issue_num"
+                elif echo "$url" | grep -q "/commits/"; then
+                    commit_sha=$(echo "$url" | grep -oE '/commits/[a-f0-9]+' | sed 's|/commits/||')
+                    web_url="https://github.com/$current_repo/commit/$commit_sha"
+                fi
             fi
-        fi
 
-        # Format type icon
-        case "$type" in
-            PullRequest) icon="PR" ;;
-            Issue) icon="Issue" ;;
-            Commit) icon="Commit" ;;
-            Release) icon="Release" ;;
-            *) icon="$type" ;;
-        esac
+            # Format type icon
+            case "$type" in
+                PullRequest) icon="PR" ;;
+                Issue) icon="Issue" ;;
+                Commit) icon="Commit" ;;
+                Release) icon="Release" ;;
+                *) icon="$type" ;;
+            esac
 
-        # Format reason
-        case "$reason" in
-            review_requested) reason_text="review requested" ;;
-            mention) reason_text="mentioned" ;;
-            author) reason_text="author" ;;
-            comment) reason_text="commented" ;;
-            assign) reason_text="assigned" ;;
-            ci_activity) reason_text="CI" ;;
-            *) reason_text="$reason" ;;
-        esac
+            # Format reason
+            case "$reason" in
+                review_requested) reason_text="review requested" ;;
+                mention) reason_text="mentioned" ;;
+                author) reason_text="author" ;;
+                comment) reason_text="commented" ;;
+                assign) reason_text="assigned" ;;
+                ci_activity) reason_text="CI" ;;
+                *) reason_text="$reason" ;;
+            esac
 
-        # Print notification with clickable link
-        if [ -n "$web_url" ]; then
-            # Create clickable link text
-            link_text=$(print_link "$web_url" "[$icon] $title")
-            echo -e "  ${BLUE}$link_text${NC}"
-            print_info "  $repo ($reason_text)"
-        else
-            print_info "[$icon] $repo: $title ($reason_text)"
+            # Print notification with clickable link
+            if [ -n "$web_url" ]; then
+                link_text=$(print_link "$web_url" "[$icon] $title")
+                echo -e "    ${BLUE}$link_text${NC} ${NC}[$reason_text]${NC}"
+            else
+                echo -e "    [$icon] $title [$reason_text]"
+            fi
         fi
     done <<< "$notifications"
 
