@@ -16,6 +16,7 @@ NC='\033[0m' # No Color
 
 CONFIG_DIR="$HOME/.config/good-morning"
 CONFIG_FILE="$CONFIG_DIR/config"
+VERBOSE=false
 
 # Default configuration
 DEFAULT_REPOS_DIR="$HOME/norm"
@@ -79,6 +80,59 @@ print_error() {
 
 print_info() {
     echo -e "  $1"
+}
+
+# Print a clickable hyperlink using OSC 8 escape sequence
+# Usage: print_link "url" "text"
+# Falls back to plain text in terminals that don't support it
+print_link() {
+    local url="$1"
+    local text="$2"
+    # OSC 8 hyperlink: \e]8;;URL\e\\TEXT\e]8;;\e\\
+    printf '\e]8;;%s\e\\%s\e]8;;\e\\\n' "$url" "$text"
+}
+
+# Run a command with a spinner (quiet mode) or show output (verbose mode)
+# Usage: run_with_spinner "message" command args...
+run_with_spinner() {
+    local message="$1"
+    shift
+
+    if [ "$VERBOSE" = true ]; then
+        # Verbose mode: just run the command with output
+        "$@"
+        return $?
+    fi
+
+    # Quiet mode: show spinner while command runs
+    local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local pid
+    local i=0
+
+    # Run command in background, capture output
+    local tmpfile
+    tmpfile=$(mktemp)
+    "$@" > "$tmpfile" 2>&1 &
+    pid=$!
+
+    # Show spinner while waiting
+    printf "  %s " "$message"
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\b%s" "${spin_chars:i++%${#spin_chars}:1}"
+        sleep 0.1
+    done
+
+    # Get exit status
+    wait "$pid"
+    local status=$?
+
+    # Clear spinner
+    printf "\b \b"
+    printf "\r"
+
+    # Clean up
+    rm -f "$tmpfile"
+    return $status
 }
 
 # Homebrew tasks
@@ -213,7 +267,7 @@ update_nvim_plugins() {
 
     print_section "Updating Neovim plugins..."
 
-    if nvim --headless "+Lazy! sync" +qa 2>/dev/null; then
+    if run_with_spinner "Syncing plugins..." nvim --headless "+Lazy! sync" +qa; then
         print_success "Neovim plugins updated"
     else
         print_error "Failed to update Neovim plugins"
@@ -410,10 +464,12 @@ show_github_notifications() {
             *) reason_text="$reason" ;;
         esac
 
-        # Print notification
+        # Print notification with clickable link
         if [ -n "$web_url" ]; then
-            print_info "[$icon] $repo: $title"
-            print_info "       ($reason_text) $web_url"
+            # Create clickable link text
+            link_text=$(print_link "$web_url" "[$icon] $title")
+            echo -e "  ${BLUE}$link_text${NC}"
+            print_info "  $repo ($reason_text)"
         else
             print_info "[$icon] $repo: $title ($reason_text)"
         fi
@@ -422,7 +478,8 @@ show_github_notifications() {
     total=$(gh api notifications 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
     if [ "$total" -gt "$GITHUB_NOTIFICATIONS_LIMIT" ]; then
         remaining=$((total - GITHUB_NOTIFICATIONS_LIMIT))
-        print_info "  ... and $remaining more. View all: https://github.com/notifications"
+        more_link=$(print_link "https://github.com/notifications" "View all $total notifications")
+        echo -e "  ... and $remaining more. $more_link"
     fi
 
     echo ""
@@ -480,6 +537,7 @@ print_help() {
     echo ""
     echo "Options:"
     echo "  -h, --help       Show this help message"
+    echo "  -v, --verbose    Show verbose output (e.g., nvim plugin updates)"
     echo "  --init           Generate a default config file at ~/.config/good-morning/config"
     echo "  --dry-run        Show what would be done without executing"
     echo ""
@@ -578,18 +636,30 @@ dry_run() {
 
 # Main
 main() {
-    case "${1:-}" in
-        -h|--help)
-            print_help
-            ;;
-        --init)
-            generate_config
-            exit 0
-            ;;
-        --dry-run)
-            dry_run
-            ;;
-    esac
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                print_help
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            --init)
+                generate_config
+                exit 0
+                ;;
+            --dry-run)
+                dry_run
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Run 'good-morning --help' for usage."
+                exit 1
+                ;;
+        esac
+    done
 
     load_config
     print_header
