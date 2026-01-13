@@ -434,8 +434,8 @@ show_github_notifications() {
         if [[ "$line" == REPO:* ]]; then
             # New repo header
             current_repo="${line#REPO:}"
-            # Use printf for proper escape sequence handling
-            printf '  \e]8;;https://github.com/%s\e\\%s\e]8;;\e\\\n' "$current_repo" "$current_repo"
+            # Use printf for proper escape sequence handling (yellow for repo headers)
+            printf '  \e[1;33m\e]8;;https://github.com/%s\e\\%s\e]8;;\e\\\e[0m\n' "$current_repo" "$current_repo"
         elif [[ "$line" == ITEM:* ]]; then
             # Notification item
             item="${line#ITEM:}"
@@ -478,8 +478,8 @@ show_github_notifications() {
 
             # Print notification with clickable link
             if [ -n "$web_url" ]; then
-                # Use printf for proper escape sequence handling
-                printf '    \e]8;;%s\e\\%s\e]8;;\e\\ [%s]\n' "$web_url" "[$icon] $title" "$reason_text"
+                # Use printf for proper escape sequence handling (blue for links)
+                printf '    \e[0;34m\e]8;;%s\e\\%s\e]8;;\e\\\e[0m [%s]\n' "$web_url" "[$icon] $title" "$reason_text"
             else
                 echo "    [$icon] $title [$reason_text]"
             fi
@@ -489,8 +489,8 @@ show_github_notifications() {
     total=$(gh api notifications 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
     if [ "$total" -gt "$GITHUB_NOTIFICATIONS_LIMIT" ]; then
         remaining=$((total - GITHUB_NOTIFICATIONS_LIMIT))
-        # Use printf for proper escape sequence handling
-        printf '  ... and %d more. \e]8;;https://github.com/notifications\e\\View all %d notifications\e]8;;\e\\\n' "$remaining" "$total"
+        # Use printf for proper escape sequence handling (blue for link)
+        printf '  ... and %d more. \e[0;34m\e]8;;https://github.com/notifications\e\\View all %d notifications\e]8;;\e\\\e[0m\n' "$remaining" "$total"
     fi
 
     echo ""
