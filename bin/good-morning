@@ -290,27 +290,24 @@ pull_dotfiles() {
 
     print_section "Pulling dotfiles..."
 
-    (
-        cd "$DOTFILES_DIR"
+    # Check for uncommitted changes using git status (more reliable than diff-index)
+    if [ -n "$(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null)" ]; then
+        print_error "Dotfiles has uncommitted changes, skipping"
+        echo ""
+        return
+    fi
 
-        # Check for uncommitted changes
-        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-            print_error "Dotfiles has uncommitted changes, skipping"
-            exit 0
-        fi
-
-        # Fetch and pull
-        if git fetch origin 2>/dev/null; then
-            current_branch=$(git rev-parse --abbrev-ref HEAD)
-            if git pull --ff-only origin "$current_branch" 2>/dev/null; then
-                print_success "Dotfiles updated (branch: $current_branch)"
-            else
-                print_info "Dotfiles up to date or needs manual merge"
-            fi
+    # Fetch and pull
+    if git -C "$DOTFILES_DIR" fetch origin 2>/dev/null; then
+        current_branch=$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD)
+        if git -C "$DOTFILES_DIR" pull --ff-only origin "$current_branch" 2>/dev/null; then
+            print_success "Dotfiles updated (branch: $current_branch)"
         else
-            print_error "Failed to fetch dotfiles"
+            print_info "Dotfiles up to date or needs manual merge"
         fi
-    )
+    else
+        print_error "Failed to fetch dotfiles"
+    fi
     echo ""
 }
 
