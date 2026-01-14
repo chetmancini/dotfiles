@@ -23,7 +23,7 @@ DEFAULT_SHOW_CALENDAR=true
 DEFAULT_CALENDAR_DAYS=2
 DEFAULT_CALENDAR_NAME="chet.mancini@norm.ai"
 DEFAULT_SHOW_GITHUB_NOTIFICATIONS=true
-DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
+DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=20  # Per repository limit
 
 # Load configuration or use defaults
 load_config() {
@@ -59,8 +59,8 @@ show_weather() {
     local url_c="wttr.in/${WEATHER_LOCATION}?0qF"
 
     local weather_f weather_c
-    weather_f=$(curl -s --max-time 5 "$url_f" 2>/dev/null)
-    weather_c=$(curl -s --max-time 5 "$url_c" 2>/dev/null)
+    weather_f=$(curl -s --connect-timeout 3 --max-time 5 "$url_f" 2>/dev/null)
+    weather_c=$(curl -s --connect-timeout 3 --max-time 5 "$url_c" 2>/dev/null)
 
     if [ -z "$weather_f" ] && [ -z "$weather_c" ]; then
         print_error "Could not fetch weather"
@@ -159,21 +159,21 @@ show_github_notifications() {
 
     print_section "GitHub Notifications"
 
-    # Get notifications as JSON, grouped by repo
+    # Get notifications as JSON, grouped by repo (limit per repo)
     notifications=$(gh api notifications --paginate 2>/dev/null | jq -r --arg limit "$GITHUB_NOTIFICATIONS_LIMIT" '
-        .[:($limit | tonumber)] |
         group_by(.repository.full_name) |
         .[] |
         {
             repo: .[0].repository.full_name,
-            items: [.[] | {
+            total: length,
+            items: .[:($limit | tonumber)] | [.[] | {
                 title: .subject.title,
                 type: .subject.type,
                 reason: .reason,
                 url: .subject.url
             }]
         } |
-        "REPO:\(.repo)",
+        "REPO:\(.repo)|\(.total)",
         (.items[] | "ITEM:\(.type)|\(.title)|\(.reason)|\(.url)")
     ' 2>/dev/null)
 
@@ -184,13 +184,24 @@ show_github_notifications() {
     fi
 
     current_repo=""
+    current_repo_total=0
+    current_repo_shown=0
     while IFS= read -r line; do
         if [[ "$line" == REPO:* ]]; then
-            # New repo header
-            current_repo="${line#REPO:}"
+            # Show "and X more" for previous repo if needed
+            if [ "$current_repo_total" -gt "$current_repo_shown" ] && [ "$current_repo_shown" -gt 0 ]; then
+                remaining=$((current_repo_total - current_repo_shown))
+                echo "    ... and $remaining more in this repo"
+            fi
+            # New repo header - format is REPO:name|total
+            repo_data="${line#REPO:}"
+            current_repo="${repo_data%|*}"
+            current_repo_total="${repo_data##*|}"
+            current_repo_shown=0
             # Use printf for proper escape sequence handling (yellow for repo headers)
             printf '  \e[1;33m\e]8;;https://github.com/%s\e\\%s\e]8;;\e\\\e[0m\n' "$current_repo" "$current_repo"
         elif [[ "$line" == ITEM:* ]]; then
+            current_repo_shown=$((current_repo_shown + 1))
             # Notification item
             item="${line#ITEM:}"
             IFS='|' read -r type title reason url <<< "$item"
@@ -240,11 +251,16 @@ show_github_notifications() {
         fi
     done <<< "$notifications"
 
+    # Show "and X more" for the last repo if needed
+    if [ "$current_repo_total" -gt "$current_repo_shown" ] && [ "$current_repo_shown" -gt 0 ]; then
+        remaining=$((current_repo_total - current_repo_shown))
+        echo "    ... and $remaining more in this repo"
+    fi
+
+    # Show link to view all notifications
     total=$(gh api notifications 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    if [ "$total" -gt "$GITHUB_NOTIFICATIONS_LIMIT" ]; then
-        remaining=$((total - GITHUB_NOTIFICATIONS_LIMIT))
-        # Use printf for proper escape sequence handling (blue for link)
-        printf '  ... and %d more. \e[0;34m\e]8;;https://github.com/notifications\e\\View all %d notifications\e]8;;\e\\\e[0m\n' "$remaining" "$total"
+    if [ "$total" -gt 0 ]; then
+        printf '  \e[0;34m\e]8;;https://github.com/notifications\e\\View all %d notifications on GitHub\e]8;;\e\\\e[0m\n' "$total"
     fi
 
     echo ""
