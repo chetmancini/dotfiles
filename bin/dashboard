@@ -20,7 +20,7 @@ CONFIG_FILE="$CONFIG_DIR/config"
 DEFAULT_SHOW_WEATHER=true
 DEFAULT_WEATHER_LOCATION=""  # Empty uses IP geolocation
 DEFAULT_SHOW_CALENDAR=true
-DEFAULT_CALENDAR_DAYS=1
+DEFAULT_CALENDAR_DAYS=2
 DEFAULT_CALENDAR_NAME="chet.mancini@norm.ai"
 DEFAULT_SHOW_GITHUB_NOTIFICATIONS=true
 DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
@@ -99,13 +99,13 @@ show_calendar() {
         end_date="+${CALENDAR_DAYS}days"
     fi
 
-    # Get agenda, skip events that have already started
+    # Get agenda
     local agenda
     local calendar_flag=""
     if [ -n "$CALENDAR_NAME" ]; then
         calendar_flag="--calendar=$CALENDAR_NAME"
     fi
-    agenda=$(gcalcli agenda "$start_date" "$end_date" --nostarted $calendar_flag 2>&1)
+    agenda=$(gcalcli agenda "$start_date" "$end_date" $calendar_flag 2>&1)
 
     if [ -z "$agenda" ] || echo "$agenda" | grep -q "No Events Found"; then
         print_success "No upcoming events"
