@@ -114,6 +114,7 @@ generate_config() {
 # Calendar events (requires gcalcli)
 # SHOW_CALENDAR=true
 # CALENDAR_DAYS=1  # Number of days to show (0 = today only)
+# CALENDAR_NAME=""  # Specific calendar to show (empty = all calendars)
 
 # GitHub notifications (requires gh CLI)
 # SHOW_GITHUB_NOTIFICATIONS=true

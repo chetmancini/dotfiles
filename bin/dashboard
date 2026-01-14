@@ -19,6 +19,7 @@ CONFIG_FILE="$CONFIG_DIR/config"
 # Default configuration
 DEFAULT_SHOW_CALENDAR=true
 DEFAULT_CALENDAR_DAYS=1
+DEFAULT_CALENDAR_NAME="chet.mancini@norm.ai"
 DEFAULT_SHOW_GITHUB_NOTIFICATIONS=true
 DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
 
@@ -26,6 +27,7 @@ DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
 load_config() {
     SHOW_CALENDAR="$DEFAULT_SHOW_CALENDAR"
     CALENDAR_DAYS="$DEFAULT_CALENDAR_DAYS"
+    CALENDAR_NAME="$DEFAULT_CALENDAR_NAME"
     SHOW_GITHUB_NOTIFICATIONS="$DEFAULT_SHOW_GITHUB_NOTIFICATIONS"
     GITHUB_NOTIFICATIONS_LIMIT="$DEFAULT_GITHUB_NOTIFICATIONS_LIMIT"
 
@@ -61,7 +63,11 @@ show_calendar() {
 
     # Get agenda, skip events that have already started
     local agenda
-    agenda=$(gcalcli agenda "$start_date" "$end_date" --nostarted 2>&1)
+    local calendar_flag=""
+    if [ -n "$CALENDAR_NAME" ]; then
+        calendar_flag="--calendar=$CALENDAR_NAME"
+    fi
+    agenda=$(gcalcli agenda "$start_date" "$end_date" --nostarted $calendar_flag 2>&1)
 
     if [ -z "$agenda" ] || echo "$agenda" | grep -q "No Events Found"; then
         print_success "No upcoming events"
@@ -217,13 +223,18 @@ dry_run() {
     echo "Configuration:"
     echo "  SHOW_CALENDAR=$SHOW_CALENDAR"
     echo "  CALENDAR_DAYS=$CALENDAR_DAYS"
+    echo "  CALENDAR_NAME=$CALENDAR_NAME"
     echo "  SHOW_GITHUB_NOTIFICATIONS=$SHOW_GITHUB_NOTIFICATIONS"
     echo "  GITHUB_NOTIFICATIONS_LIMIT=$GITHUB_NOTIFICATIONS_LIMIT"
     echo ""
 
     if [ "$SHOW_CALENDAR" = true ]; then
         if command -v gcalcli &>/dev/null; then
-            echo "Would show: Calendar events (next $CALENDAR_DAYS day(s))"
+            local cal_info="next $CALENDAR_DAYS day(s)"
+            if [ -n "$CALENDAR_NAME" ]; then
+                cal_info="$cal_info, calendar: $CALENDAR_NAME"
+            fi
+            echo "Would show: Calendar events ($cal_info)"
         else
             echo "Would show: Calendar events (gcalcli not installed)"
         fi
