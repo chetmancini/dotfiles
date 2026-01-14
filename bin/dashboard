@@ -17,6 +17,8 @@ CONFIG_DIR="$HOME/.config/good-morning"
 CONFIG_FILE="$CONFIG_DIR/config"
 
 # Default configuration
+DEFAULT_SHOW_WEATHER=true
+DEFAULT_WEATHER_LOCATION=""  # Empty uses IP geolocation
 DEFAULT_SHOW_CALENDAR=true
 DEFAULT_CALENDAR_DAYS=1
 DEFAULT_CALENDAR_NAME="chet.mancini@norm.ai"
@@ -25,6 +27,8 @@ DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
 
 # Load configuration or use defaults
 load_config() {
+    SHOW_WEATHER="$DEFAULT_SHOW_WEATHER"
+    WEATHER_LOCATION="$DEFAULT_WEATHER_LOCATION"
     SHOW_CALENDAR="$DEFAULT_SHOW_CALENDAR"
     CALENDAR_DAYS="$DEFAULT_CALENDAR_DAYS"
     CALENDAR_NAME="$DEFAULT_CALENDAR_NAME"
@@ -35,6 +39,40 @@ load_config() {
         # shellcheck source=/dev/null
         source "$CONFIG_FILE"
     fi
+}
+
+# Show weather forecast
+show_weather() {
+    if [ "$SHOW_WEATHER" != true ]; then
+        return
+    fi
+
+    # Check if curl is available
+    if ! command -v curl &>/dev/null; then
+        return
+    fi
+
+    print_section "Weather"
+
+    # Build wttr.in URL - 0=current only, q=quiet, F=no follow line
+    local url="wttr.in/${WEATHER_LOCATION}?0qF"
+
+    # Fetch weather (with timeout)
+    local weather
+    weather=$(curl -s --max-time 5 "$url" 2>/dev/null)
+
+    if [ -z "$weather" ]; then
+        print_error "Could not fetch weather"
+    else
+        # Print with indentation, filtering out "not found" line
+        echo "$weather" | while IFS= read -r line; do
+            if [ -n "$line" ] && [ "$line" != "not found" ]; then
+                echo "  $line"
+            fi
+        done
+    fi
+
+    echo ""
 }
 
 # Show calendar events
@@ -207,12 +245,9 @@ print_help() {
     echo "  Config file location: ~/.config/good-morning/config"
     echo ""
     echo "Displays:"
+    echo "  - Weather (via wttr.in)"
     echo "  - Calendar events (via gcalcli)"
     echo "  - GitHub notifications"
-    echo ""
-    echo "Coming soon:"
-    echo "  - Weather"
-    echo "  - And more..."
     exit 0
 }
 
@@ -221,6 +256,8 @@ dry_run() {
     echo "Dry run - would display the following:"
     echo ""
     echo "Configuration:"
+    echo "  SHOW_WEATHER=$SHOW_WEATHER"
+    echo "  WEATHER_LOCATION=$WEATHER_LOCATION"
     echo "  SHOW_CALENDAR=$SHOW_CALENDAR"
     echo "  CALENDAR_DAYS=$CALENDAR_DAYS"
     echo "  CALENDAR_NAME=$CALENDAR_NAME"
@@ -228,6 +265,13 @@ dry_run() {
     echo "  GITHUB_NOTIFICATIONS_LIMIT=$GITHUB_NOTIFICATIONS_LIMIT"
     echo ""
 
+    if [ "$SHOW_WEATHER" = true ]; then
+        local loc_info="current location"
+        if [ -n "$WEATHER_LOCATION" ]; then
+            loc_info="$WEATHER_LOCATION"
+        fi
+        echo "Would show: Weather ($loc_info via wttr.in)"
+    fi
     if [ "$SHOW_CALENDAR" = true ]; then
         if command -v gcalcli &>/dev/null; then
             local cal_info="next $CALENDAR_DAYS day(s)"
@@ -283,6 +327,7 @@ main() {
         echo ""
     fi
 
+    show_weather
     show_calendar
     show_github_notifications
 }

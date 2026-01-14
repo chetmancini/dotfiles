@@ -111,6 +111,10 @@ generate_config() {
 # dashboard settings
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Weather (via wttr.in)
+# SHOW_WEATHER=true
+# WEATHER_LOCATION=""  # City name, airport code, or empty for IP geolocation
+
 # Calendar events (requires gcalcli)
 # SHOW_CALENDAR=true
 # CALENDAR_DAYS=1  # Number of days to show (0 = today only)
