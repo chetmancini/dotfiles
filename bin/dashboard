@@ -17,11 +17,15 @@ CONFIG_DIR="$HOME/.config/good-morning"
 CONFIG_FILE="$CONFIG_DIR/config"
 
 # Default configuration
+DEFAULT_SHOW_CALENDAR=true
+DEFAULT_CALENDAR_DAYS=1
 DEFAULT_SHOW_GITHUB_NOTIFICATIONS=true
 DEFAULT_GITHUB_NOTIFICATIONS_LIMIT=10
 
 # Load configuration or use defaults
 load_config() {
+    SHOW_CALENDAR="$DEFAULT_SHOW_CALENDAR"
+    CALENDAR_DAYS="$DEFAULT_CALENDAR_DAYS"
     SHOW_GITHUB_NOTIFICATIONS="$DEFAULT_SHOW_GITHUB_NOTIFICATIONS"
     GITHUB_NOTIFICATIONS_LIMIT="$DEFAULT_GITHUB_NOTIFICATIONS_LIMIT"
 
@@ -29,6 +33,48 @@ load_config() {
         # shellcheck source=/dev/null
         source "$CONFIG_FILE"
     fi
+}
+
+# Show calendar events
+show_calendar() {
+    if [ "$SHOW_CALENDAR" != true ]; then
+        return
+    fi
+
+    # Check if gcalcli is installed
+    if ! command -v gcalcli &>/dev/null; then
+        return
+    fi
+
+    print_section "Calendar"
+
+    # Calculate end date based on CALENDAR_DAYS
+    local start_date="today"
+    local end_date
+    if [ "$CALENDAR_DAYS" -eq 0 ]; then
+        end_date="today 11:59pm"
+    elif [ "$CALENDAR_DAYS" -eq 1 ]; then
+        end_date="tomorrow"
+    else
+        end_date="+${CALENDAR_DAYS}days"
+    fi
+
+    # Get agenda, skip events that have already started
+    local agenda
+    agenda=$(gcalcli agenda "$start_date" "$end_date" --nostarted 2>&1)
+
+    if [ -z "$agenda" ] || echo "$agenda" | grep -q "No Events Found"; then
+        print_success "No upcoming events"
+    else
+        # Print the agenda with indentation
+        echo "$agenda" | while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                echo "  $line"
+            fi
+        done
+    fi
+
+    echo ""
 }
 
 # Show GitHub notifications
@@ -155,10 +201,10 @@ print_help() {
     echo "  Config file location: ~/.config/good-morning/config"
     echo ""
     echo "Displays:"
+    echo "  - Calendar events (via gcalcli)"
     echo "  - GitHub notifications"
     echo ""
     echo "Coming soon:"
-    echo "  - Calendar events"
     echo "  - Weather"
     echo "  - And more..."
     exit 0
@@ -169,10 +215,19 @@ dry_run() {
     echo "Dry run - would display the following:"
     echo ""
     echo "Configuration:"
+    echo "  SHOW_CALENDAR=$SHOW_CALENDAR"
+    echo "  CALENDAR_DAYS=$CALENDAR_DAYS"
     echo "  SHOW_GITHUB_NOTIFICATIONS=$SHOW_GITHUB_NOTIFICATIONS"
     echo "  GITHUB_NOTIFICATIONS_LIMIT=$GITHUB_NOTIFICATIONS_LIMIT"
     echo ""
 
+    if [ "$SHOW_CALENDAR" = true ]; then
+        if command -v gcalcli &>/dev/null; then
+            echo "Would show: Calendar events (next $CALENDAR_DAYS day(s))"
+        else
+            echo "Would show: Calendar events (gcalcli not installed)"
+        fi
+    fi
     if [ "$SHOW_GITHUB_NOTIFICATIONS" = true ]; then
         if command -v gh &>/dev/null; then
             echo "Would show: GitHub notifications (limit: $GITHUB_NOTIFICATIONS_LIMIT)"
@@ -217,6 +272,7 @@ main() {
         echo ""
     fi
 
+    show_calendar
     show_github_notifications
 }
 

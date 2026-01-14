@@ -111,6 +111,10 @@ generate_config() {
 # dashboard settings
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Calendar events (requires gcalcli)
+# SHOW_CALENDAR=true
+# CALENDAR_DAYS=1  # Number of days to show (0 = today only)
+
 # GitHub notifications (requires gh CLI)
 # SHOW_GITHUB_NOTIFICATIONS=true
 # GITHUB_NOTIFICATIONS_LIMIT=10
