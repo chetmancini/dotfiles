@@ -54,18 +54,35 @@ show_weather() {
 
     print_section "Weather"
 
-    # Build wttr.in URL - 0=current only, q=quiet, F=no follow line
-    local url="wttr.in/${WEATHER_LOCATION}?0qF"
+    # Fetch both Fahrenheit and Celsius
+    local url_f="wttr.in/${WEATHER_LOCATION}?0qFu"
+    local url_c="wttr.in/${WEATHER_LOCATION}?0qF"
 
-    # Fetch weather (with timeout)
-    local weather
-    weather=$(curl -s --max-time 5 "$url" 2>/dev/null)
+    local weather_f weather_c
+    weather_f=$(curl -s --max-time 5 "$url_f" 2>/dev/null)
+    weather_c=$(curl -s --max-time 5 "$url_c" 2>/dev/null)
 
-    if [ -z "$weather" ]; then
+    if [ -z "$weather_f" ] && [ -z "$weather_c" ]; then
         print_error "Could not fetch weather"
-    else
-        # Print with indentation, filtering out "not found" line
-        echo "$weather" | while IFS= read -r line; do
+        echo ""
+        return
+    fi
+
+    # Extract temperatures by stripping ANSI codes and finding the temp pattern
+    local temp_f temp_c
+    temp_f=$(echo "$weather_f" | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '[+-]?[0-9]+\([+-]?[0-9]+\) °F' | head -1)
+    temp_c=$(echo "$weather_c" | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '[+-]?[0-9]+\([+-]?[0-9]+\) °C' | head -1)
+
+    # Extract condition from the output (usually on line 3)
+    local condition
+    condition=$(echo "$weather_f" | sed 's/\x1b\[[0-9;]*m//g' | sed -n '3p' | sed 's/^[[:space:]]*//' | cut -d' ' -f1-3 | xargs)
+
+    # Display combined temperature
+    if [ -n "$temp_f" ] && [ -n "$temp_c" ]; then
+        echo "  $condition: $temp_f / $temp_c"
+    elif [ -n "$weather_f" ]; then
+        # Fallback: show graphical weather
+        echo "$weather_f" | while IFS= read -r line; do
             if [ -n "$line" ] && [ "$line" != "not found" ]; then
                 echo "  $line"
             fi
