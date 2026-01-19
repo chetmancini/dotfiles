@@ -43,6 +43,7 @@ brew "ripgrep"              # Fast grep (rg)
 brew "rust"
 brew "sd"                   # Better sed
 brew "tmux"
+brew "tokei"                # Code statistics
 brew "wget"
 brew "xclip"
 brew "xz"                   # File compression
