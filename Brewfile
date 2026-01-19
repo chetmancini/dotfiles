@@ -2,6 +2,7 @@
 # Update with: brew bundle dump --force
 
 # Taps
+tap "github/gh"
 tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
 
@@ -11,14 +12,18 @@ tap "oven-sh/bun"
 brew "ack"
 brew "bat"                  # Better cat
 brew "brotli"
+brew "btop"                 # Resource monitor
 brew "cmake"
 brew "coreutils"
 brew "curl"
 brew "eza"                  # Better ls
 brew "fastfetch"            # System info
 brew "fzf"                  # Fuzzy finder
+brew "docker"
+brew "docker-completion"
 brew "gdbm"
 brew "gettext"
+brew "grep"
 brew "gti"                  # Fun typo for git
 brew "htop"                 # Process viewer
 brew "imagemagick"
@@ -29,6 +34,7 @@ brew "ossp-uuid"
 brew "pkg-config"
 brew "readline"
 brew "ripgrep"              # Fast grep (rg)
+brew "rust"
 brew "tmux"
 brew "wget"
 brew "xclip"
@@ -83,6 +89,7 @@ brew "yarn"
 #==============================================================================
 # Databases
 #==============================================================================
+brew "duckdb"
 brew "postgresql@16"
 brew "pgvector"
 brew "redis"
@@ -105,9 +112,12 @@ brew "tldr"                 # Simplified man pages
 #==============================================================================
 cask "1password-cli"
 cask "chatgpt"
+cask "claude"
+cask "cursor"
 cask "ghostty"              # Terminal
 cask "github"               # GitHub Desktop
 cask "jetbrains-toolbox"
+cask "kiro"
 cask "lm-studio"
 cask "openlens"             # Kubernetes IDE
 cask "postman"
@@ -122,13 +132,17 @@ cask "arc"                  # Browser
 cask "dropbox"
 cask "mactex"
 cask "opal-composer"
+cask "raycast"
 cask "reflect"
+cask "spotify"
+cask "todoist"
 
 #==============================================================================
 # Casks - Messaging
 #==============================================================================
 cask "discord"
 cask "slack"
+cask "telegram"
 cask "whatsapp"
 
 #==============================================================================
