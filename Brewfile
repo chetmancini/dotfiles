@@ -23,7 +23,7 @@ brew "htop"                 # Process viewer
 brew "imagemagick"
 brew "jasper"
 brew "jq"                   # JSON processor
-brew "little-cms"
+brew "little-cms2"
 brew "ossp-uuid"
 brew "pkg-config"
 brew "readline"
