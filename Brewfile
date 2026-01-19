@@ -129,13 +129,16 @@ cask "zed"                  # Editor
 #==============================================================================
 cask "adobe-creative-cloud"
 cask "arc"                  # Browser
+cask "conductor"
 cask "dropbox"
+cask "firefox"
 cask "mactex"
 cask "opal-composer"
 cask "raycast"
 cask "reflect"
 cask "spotify"
 cask "todoist"
+cask "zoom"
 
 #==============================================================================
 # Casks - Messaging
