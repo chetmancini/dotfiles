@@ -175,6 +175,10 @@ alias ls='eza --icons '
 alias ll='eza --all --long --header --icons --git'
 alias cat='bat --paging=never'
 alias catp='bat'  # With paging
+alias du='dust'
+alias ps='procs'
+alias psa='procs --tree'  # Process tree view
+alias find='fd'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
@@ -190,7 +194,7 @@ alias rs='bundle exec rspec --color --format documentation'
 alias vi='nvim'
 alias wget='wget -c'
 alias x='exit'
-alias biggest='du -ah . 2>/dev/null | sort -rh | head -n 40'
+alias biggest='dust -r -n 40'  # Top 40 largest dirs/files
 alias urldecode='python3 -c "import sys; from urllib.parse import unquote_plus; print(unquote_plus(sys.argv[1]))"'
 alias urlencode='python3 -c "import sys; from urllib.parse import quote_plus; print(quote_plus(sys.argv[1]))"'
 
@@ -276,7 +280,7 @@ source ~/dotfiles/api_keys.sh
 ##############################
 function lt() { eza -la --sort=modified "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
-function fname() { find . -iname "*$@*"; }
+function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
 
 function strip_quotes() { sed 's/\"//g' $@; }
 

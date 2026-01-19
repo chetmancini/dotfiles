@@ -17,7 +17,9 @@ brew "cmake"
 brew "cmatrix"              # Matrix screensaver
 brew "coreutils"
 brew "curl"
+brew "dust"                 # Better du
 brew "eza"                  # Better ls
+brew "fd"                   # Better find
 brew "fastfetch"            # System info
 brew "ffmpeg"               # Media processing
 brew "fzf"                  # Fuzzy finder
@@ -35,9 +37,11 @@ brew "jq"                   # JSON processor
 brew "little-cms2"
 brew "ossp-uuid"
 brew "pkg-config"
+brew "procs"                # Better ps
 brew "readline"
 brew "ripgrep"              # Fast grep (rg)
 brew "rust"
+brew "sd"                   # Better sed
 brew "tmux"
 brew "wget"
 brew "xclip"
