@@ -471,6 +471,20 @@ fpath=($HOME/.docker/completions $fpath)
 
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
 
+##############################
+# Terminal Screensaver
+##############################
+# cmatrix after 15 min of idle (900 seconds)
+if command -v cmatrix &> /dev/null; then
+  TMOUT=900
+  TRAPALRM() {
+    # Only run if terminal is idle (no background jobs, no text in prompt)
+    if [[ -z "$(jobs)" ]] && [[ -z "$BUFFER" ]]; then
+      cmatrix -s  # -s exits on any keypress
+      zle reset-prompt 2>/dev/null
+    fi
+  }
+fi
 
 # Added by Antigravity
 export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"

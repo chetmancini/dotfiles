@@ -14,6 +14,7 @@ brew "bat"                  # Better cat
 brew "brotli"
 brew "btop"                 # Resource monitor
 brew "cmake"
+brew "cmatrix"              # Matrix screensaver
 brew "coreutils"
 brew "curl"
 brew "eza"                  # Better ls
