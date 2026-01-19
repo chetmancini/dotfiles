@@ -18,7 +18,9 @@ brew "coreutils"
 brew "curl"
 brew "eza"                  # Better ls
 brew "fastfetch"            # System info
+brew "ffmpeg"               # Media processing
 brew "fzf"                  # Fuzzy finder
+brew "gnupg"                # GPG encryption
 brew "docker"
 brew "docker-completion"
 brew "gdbm"
@@ -98,12 +100,15 @@ brew "sqlite"
 #==============================================================================
 # AI Tools
 #==============================================================================
+brew "huggingface-cli"      # HuggingFace model downloads
 brew "llm"                  # CLI for LLMs
+brew "ollama"               # Run LLMs locally
 
 #==============================================================================
 # Helpers
 #==============================================================================
 brew "bash-completion"
+brew "mas"                  # Mac App Store CLI
 brew "thefuck"              # Command correction
 brew "tldr"                 # Simplified man pages
 
