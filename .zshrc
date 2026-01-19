@@ -47,8 +47,6 @@ plugins=(
     gh
     git-commit
     gitfast
-    node
-    npm
     macos
     pip
     python
@@ -59,9 +57,6 @@ plugins=(
 )
 
 source $ZSH/oh-my-zsh.sh
-# AWS completion
-#source /usr/local/share/zsh/site-functions/_aws
-#source /usr/local/share/zsh/site-functions/_awless
 
 ##############################
 # Variables
@@ -149,32 +144,20 @@ export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
 export UV_PATH="$HOME/.local/bin"
-#export N_PATH="$HOME/n/bin"
-#export PYENV_PATH="$HOME/.pyenv/shims"
 export BUN_INSTALL="$HOME/.bun"
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
-#export RBENV_HOME=/usr/local/opt/rbenv/shims:/usr/local/opt/rbenv/bin
-#export ANACONDA_HOME=$HOME/anaconda/bin
 export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
 export WINDSURF_PATH="$HOME/.codeium/windsurf/bin"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
 export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$LMSTUDIO_PATH:$PATH
-#export NPM_GLOBAL_PATH="$HOME/.npm-global/bin"
 export CLASSPATH=$HOME/lib/jars
 
-export RBENV_ROOT=~/.rbenv
 
 
-
-##############################
-# Launch Background Apps
-##############################
-#eval "$(rbenv init -)"
-#  . "/usr/local/opt/nvm/nvm.sh"
 
 ##############################
 # Aliases
@@ -285,23 +268,6 @@ function cpmsg() {
 #. ~/dotfiles/z.sh
 
 
-#export GPG_AGENT_INFO_FILE=$HOME/.gpg-agent-info
-#gpg-agent --daemon --enable-ssh-support --write-env-file "${GPG_AGENT_INFO_FILE}"
-#if [ -f "${GPG_AGENT_INFO_FILE}" ]; then
-#  . "${GPG_AGENT_INFO_FILE}"
-#  export GPG_AGENT_INFO
-#  export SSH_AUTH_SOCK
-#  export SSH_AGENT_PID
-#fi
-#export GPG_TTY=$(tty)
-
-##############################
-# SSH
-##############################
-
-##############################
-# SSH
-##############################
 source ~/dotfiles/api_keys.sh
 
 
@@ -465,7 +431,8 @@ if command -v fzf &> /dev/null; then
 fi
 if command -v zoxide &> /dev/null; then
   eval "$(zoxide init zsh)"
-  alias cd='z'  # Use zoxide for all cd commands
+  # Use zoxide for cd (function instead of alias for better compatibility)
+  cd() { z "$@"; }
 fi
 #stats on startup
 if command -v fastfetch &> /dev/null; then
@@ -488,22 +455,6 @@ else
 fi
 
 
-#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-#export SDKMAN_DIR="$HOME/.sdkman"
-#[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
-# Lazy-load nvm (saves ~300-500ms on shell startup)
-export NVM_DIR="$HOME/.nvm"
-_nvm_load() {
-  unset -f nvm node npm npx
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
-}
-nvm() { _nvm_load; nvm "$@"; }
-node() { _nvm_load; node "$@"; }
-npm() { _nvm_load; npm "$@"; }
-npx() { _nvm_load; npx "$@"; }
-
 # Lazy-load pyenv (saves ~100ms on shell startup)
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
@@ -517,9 +468,6 @@ pyenv() {
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 # Docker CLI completions (compinit called once above)
 fpath=($HOME/.docker/completions $fpath)
-
-# LM Studio CLI paths (consolidated)
-export PATH="$PATH:/Users/chet/.cache/lm-studio/bin:/Users/chet/.lmstudio/bin"
 
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
 

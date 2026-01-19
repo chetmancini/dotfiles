@@ -27,6 +27,7 @@ brew "little-cms"
 brew "ossp-uuid"
 brew "pkg-config"
 brew "readline"
+brew "ripgrep"              # Fast grep (rg)
 brew "tmux"
 brew "wget"
 brew "xclip"
@@ -71,17 +72,10 @@ brew "ruff"
 brew "uv"                   # Fast pip replacement
 
 #==============================================================================
-# Development - Ruby
-#==============================================================================
-brew "rbenv"
-brew "ruby-build"
-
-#==============================================================================
 # Development - Node.js
 #==============================================================================
 brew "bun"
 brew "n"                    # Node version manager
-brew "nvm"                  # Node version manager (alternative)
 brew "pnpm"
 brew "yarn"
 
