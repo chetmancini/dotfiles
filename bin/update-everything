@@ -400,8 +400,8 @@ main() {
     check_macos_updates
     run_brew_tasks
     run_docker_prune
-    update_nvim_plugins
     pull_dotfiles
+    update_nvim_plugins
     pull_repos
 
     if [ "$SHOW_HEADER" = true ]; then
