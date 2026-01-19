@@ -3,6 +3,7 @@
 
 # Taps
 tap "homebrew/cask-fonts"
+tap "oven-sh/bun"
 
 #==============================================================================
 # Core CLI Tools
@@ -74,7 +75,7 @@ brew "uv"                   # Fast pip replacement
 #==============================================================================
 # Development - Node.js
 #==============================================================================
-brew "bun"
+brew "oven-sh/bun/bun"
 brew "n"                    # Node version manager
 brew "pnpm"
 brew "yarn"
