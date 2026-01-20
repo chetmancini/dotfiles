@@ -2,6 +2,7 @@
 # Update with: brew bundle dump --force
 
 # Taps
+tap "anomalyco/tap"
 tap "github/gh"
 tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
@@ -106,6 +107,7 @@ brew "sqlite"
 #==============================================================================
 # AI Tools
 #==============================================================================
+brew "anomalyco/tap/opencode" # AI coding assistant CLI
 brew "huggingface-cli"      # HuggingFace model downloads
 brew "llm"                  # CLI for LLMs
 brew "ollama"               # Run LLMs locally
@@ -130,6 +132,7 @@ cask "github"               # GitHub Desktop
 cask "jetbrains-toolbox"
 cask "kiro"
 cask "lm-studio"
+cask "opencode-desktop"     # AI coding assistant
 cask "openlens"             # Kubernetes IDE
 cask "postman"
 cask "windsurf"
