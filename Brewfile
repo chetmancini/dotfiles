@@ -11,6 +11,7 @@ tap "oven-sh/bun"
 # Core CLI Tools
 #==============================================================================
 brew "ack"
+brew "ast-grep"             # Code search/refactor
 brew "bat"                  # Better cat
 brew "brotli"
 brew "btop"                 # Resource monitor
@@ -55,6 +56,7 @@ brew "zoxide"               # Smart cd
 # Development - General
 #==============================================================================
 brew "awscli"
+brew "aws-vault"            # AWS credentials manager
 brew "emacs"
 brew "gh"                   # GitHub CLI
 brew "git-delta"            # Better git diffs
@@ -151,7 +153,7 @@ cask "opal-composer"
 cask "raycast"
 cask "reflect"
 cask "spotify"
-cask "todoist"
+cask "todoist-app"
 cask "zoom"
 
 #==============================================================================
@@ -168,5 +170,5 @@ cask "whatsapp"
 cask "font-hack"
 cask "font-hack-nerd-font"
 cask "font-monaspace"
-cask "font-monaspace-nerd-font"
+cask "font-monaspice-nerd-font"
 cask "font-symbols-only-nerd-font"
