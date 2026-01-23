@@ -16,6 +16,7 @@ brew "bat"                  # Better cat
 brew "brotli"
 brew "btop"                 # Resource monitor
 brew "cmake"
+brew "chafa"                # Terminal image viewer (yazi fallback)
 brew "cmatrix"              # Matrix screensaver
 brew "coreutils"
 brew "curl"
