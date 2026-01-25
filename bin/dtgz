@@ -1,0 +1,154 @@
+#!/bin/bash
+
+# Download and extract tar.gz files
+
+print_help() {
+    echo "Usage: dtgz [options] <url> [url2 ...]"
+    echo "Download and extract .tar.gz files from URLs."
+    echo ""
+    echo "Options:"
+    echo "  -d, --dir DIR     Extract to DIR (default: current directory)"
+    echo "  -k, --keep        Keep downloaded archive after extraction"
+    echo "  -q, --quiet       Quiet mode (minimal output)"
+    echo "  -h, --help        Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  dtgz https://example.com/file.tar.gz"
+    echo "  dtgz -d ./vendor https://example.com/lib.tar.gz"
+    echo "  dtgz url1.tar.gz url2.tar.gz url3.tar.gz"
+    exit 0
+}
+
+# Defaults
+TARGET_DIR="."
+KEEP=0
+QUIET=0
+URLS=()
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -d|--dir)
+            TARGET_DIR="$2"
+            shift 2
+            ;;
+        -k|--keep)
+            KEEP=1
+            shift
+            ;;
+        -q|--quiet)
+            QUIET=1
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Use -h for help"
+            exit 1
+            ;;
+        *)
+            URLS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Validate URLs provided
+if [[ ${#URLS[@]} -eq 0 ]]; then
+    echo "Error: No URLs specified"
+    echo "Usage: dtgz <url> [url2 ...]"
+    exit 1
+fi
+
+# Create target directory if needed
+if [[ ! -d "$TARGET_DIR" ]]; then
+    mkdir -p "$TARGET_DIR" || {
+        echo "Error: Could not create directory '$TARGET_DIR'"
+        exit 1
+    }
+fi
+
+# Check for required tools
+if ! command -v curl &>/dev/null; then
+    echo "Error: curl is required but not installed"
+    exit 1
+fi
+
+# Process each URL
+FAILED=0
+for url in "${URLS[@]}"; do
+    # Extract filename from URL for display
+    filename=$(basename "$url")
+
+    if [[ $QUIET -eq 0 ]]; then
+        echo "Downloading: $url"
+    fi
+
+    # Create temp file
+    tmpfile=$(mktemp)
+
+    # Download with curl
+    # -f: fail on HTTP errors
+    # -S: show errors
+    # -L: follow redirects
+    if [[ $QUIET -eq 1 ]]; then
+        curl -fSL "$url" -o "$tmpfile" 2>/dev/null
+    else
+        curl -fSL --progress-bar "$url" -o "$tmpfile"
+    fi
+
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to download $url" 1>&2
+        rm -f "$tmpfile"
+        FAILED=$((FAILED + 1))
+        continue
+    fi
+
+    if [[ $QUIET -eq 0 ]]; then
+        echo "Extracting to $TARGET_DIR..."
+    fi
+
+    # Determine extraction flags based on quiet mode
+    if [[ $QUIET -eq 1 ]]; then
+        TAR_FLAGS="xzf"
+    else
+        TAR_FLAGS="xzvf"
+    fi
+
+    # Extract
+    if tar -"$TAR_FLAGS" "$tmpfile" -C "$TARGET_DIR"; then
+        if [[ $QUIET -eq 0 ]]; then
+            echo "Done: $filename"
+        fi
+    else
+        echo "Error: Failed to extract $url" 1>&2
+        rm -f "$tmpfile"
+        FAILED=$((FAILED + 1))
+        continue
+    fi
+
+    # Clean up or keep
+    if [[ $KEEP -eq 1 ]]; then
+        # Move to target dir with original filename
+        mv "$tmpfile" "$TARGET_DIR/$filename"
+        if [[ $QUIET -eq 0 ]]; then
+            echo "Kept archive: $TARGET_DIR/$filename"
+        fi
+    else
+        rm -f "$tmpfile"
+    fi
+
+    echo ""
+done
+
+# Summary
+if [[ $FAILED -gt 0 ]]; then
+    echo "Warning: $FAILED download(s) failed"
+    exit 1
+fi
+
+if [[ $QUIET -eq 0 && ${#URLS[@]} -gt 1 ]]; then
+    echo "All ${#URLS[@]} files downloaded and extracted successfully"
+fi

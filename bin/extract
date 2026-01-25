@@ -129,11 +129,20 @@ case "$FILE" in
         require_tool "tar"
         tar "${TAR_FLAGS}Jf" "$FILE" -C "$TARGET_DIR"
         ;;
-    *.zst|*.zstd)
+    *.zst)
         require_tool "zstd" "brew install zstd"
         zstd -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.zst}")"
         ;;
-    *.tar.zst|*.tar.zstd)
+    *.zstd)
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.zstd}")"
+        ;;
+    *.tar.zst)
+        require_tool "tar"
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" | tar "${TAR_FLAGS}f" - -C "$TARGET_DIR"
+        ;;
+    *.tar.zstd)
         require_tool "tar"
         require_tool "zstd" "brew install zstd"
         zstd -dc "$FILE" | tar "${TAR_FLAGS}f" - -C "$TARGET_DIR"

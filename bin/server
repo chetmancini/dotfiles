@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# Simple HTTP server with automatic browser opening
+
+print_help() {
+    echo "Usage: server [options] [port]"
+    echo "Start a simple HTTP server in the current directory."
+    echo ""
+    echo "Options:"
+    echo "  -n, --no-browser    Don't open browser automatically"
+    echo "  -d, --dir DIR       Serve from DIR instead of current directory"
+    echo "  -h, --help          Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  port                Port to serve on (default: 8000)"
+    echo ""
+    echo "Examples:"
+    echo "  server              # Serve current dir on port 8000"
+    echo "  server 3000         # Serve current dir on port 3000"
+    echo "  server -n 8080      # Serve on 8080 without opening browser"
+    echo "  server -d ./dist    # Serve ./dist directory"
+    exit 0
+}
+
+# Defaults
+PORT=8000
+OPEN_BROWSER=1
+SERVE_DIR="."
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -n|--no-browser)
+            OPEN_BROWSER=0
+            shift
+            ;;
+        -d|--dir)
+            SERVE_DIR="$2"
+            shift 2
+            ;;
+        *)
+            # Assume it's a port number
+            PORT="$1"
+            shift
+            ;;
+    esac
+done
+
+# Validate port is a number
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+    echo "Error: Port must be a number, got '$PORT'"
+    exit 1
+fi
+
+# Validate port range
+if [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+    echo "Error: Port must be between 1 and 65535"
+    exit 1
+fi
+
+# Warn about privileged ports
+if [[ "$PORT" -lt 1024 ]]; then
+    echo "Warning: Ports below 1024 require root privileges"
+fi
+
+# Validate directory exists
+if [[ ! -d "$SERVE_DIR" ]]; then
+    echo "Error: Directory '$SERVE_DIR' does not exist"
+    exit 1
+fi
+
+# Check if port is already in use
+if lsof -i :"$PORT" &>/dev/null; then
+    echo "Error: Port $PORT is already in use"
+    echo "Process using port $PORT:"
+    lsof -i :"$PORT" | head -2
+    exit 1
+fi
+
+# Check if Python is available
+if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
+    echo "Error: Python is required but not installed"
+    exit 1
+fi
+
+# Determine Python command
+if command -v python3 &>/dev/null; then
+    PYTHON_CMD="python3"
+else
+    PYTHON_CMD="python"
+fi
+
+# Change to serve directory
+cd "$SERVE_DIR" || exit 1
+
+echo "Starting HTTP server..."
+echo "  Directory: $(pwd)"
+echo "  URL: http://localhost:$PORT/"
+echo "  Press Ctrl+C to stop"
+echo ""
+
+# Open browser after a short delay (in background)
+if [[ "$OPEN_BROWSER" -eq 1 ]]; then
+    (
+        sleep 0.5
+        if [[ "$(uname)" == "Darwin" ]]; then
+            open "http://localhost:$PORT/"
+        elif command -v xdg-open &>/dev/null; then
+            xdg-open "http://localhost:$PORT/"
+        fi
+    ) &
+fi
+
+# Start the server (this blocks until Ctrl+C)
+$PYTHON_CMD -m http.server "$PORT"
