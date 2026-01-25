@@ -168,7 +168,7 @@ alias -g L="|less"
 alias -g TL='| tail -20'
 alias -g NUL="> /dev/null 2>&1"
 
-alias h='history | grep $1'
+h() { history | grep "$1"; }
 alias c='clear'
 #alias ll='ls -la'
 alias ls='eza --icons '
@@ -271,8 +271,8 @@ function cpmsg() {
 ##############################
 #. ~/dotfiles/z.sh
 
-
-source ~/dotfiles/api_keys.sh
+# Source API keys if file exists (gitignored, see api_keys.sh.template)
+[ -f ~/dotfiles/api_keys.sh ] && source ~/dotfiles/api_keys.sh
 
 
 ##############################
@@ -284,21 +284,8 @@ function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
 
 function strip_quotes() { sed 's/\"//g' $@; }
 
-# Launch a server in the current dir with an optional port defaulting to 8000
-function server() {
-    local port="${1:-8000}"
-    open "http://localhost:${port}/"
-    python -m http.server "$port"
-}
-
-# Kill a process with a name.
-function killByName() {
-  if [ -z "$1" ]; then
-    echo "Usage: killByName <process_name>"
-    return 1
-  fi
-  ps aux | grep -i "$1" | grep -v grep | awk '{ print $2 }' | xargs sudo kill -TERM
-}
+# These commands are now in bin/ with better error handling:
+#   server, killbyname, dtgz
 
 
 function removeFromPath() {
@@ -335,16 +322,6 @@ function xtitle()      # Adds some text in the terminal frame.
 function svim {
     sudo vim $@
 }
-function dtgz {
-    if [ $# -gt 0 ]; then
-        for l in $@; do
-            curl $l | tar -xz
-        done
-    else
-        echo "Usage: dtgz url [url2, url3, ...]" 1>&2
-    fi
-}
-
 
 # Find a file with a pattern in name:
 function ff() { find . -type f -iname '*'$*'*' -ls ; }
@@ -435,8 +412,8 @@ if command -v fzf &> /dev/null; then
 fi
 if command -v zoxide &> /dev/null; then
   eval "$(zoxide init zsh)"
-  # Use zoxide for cd (function instead of alias for better compatibility)
-  cd() { z "$@"; }
+  # Use zoxide for cd with fallback to builtin cd if zoxide fails
+  cd() { z "$@" 2>/dev/null || builtin cd "$@"; }
 fi
 #stats on startup
 if command -v fastfetch &> /dev/null; then
@@ -467,6 +444,31 @@ pyenv() {
   eval "$(command pyenv init -)"
   pyenv "$@"
 }
+
+# Lazy-load nvm (saves ~200ms on shell startup)
+export NVM_DIR="$HOME/.nvm"
+if [ -d "$NVM_DIR" ]; then
+  nvm() {
+    unset -f nvm node npm npx
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    nvm "$@"
+  }
+  node() {
+    unset -f nvm node npm npx
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    node "$@"
+  }
+  npm() {
+    unset -f nvm node npm npx
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    npm "$@"
+  }
+  npx() {
+    unset -f nvm node npm npx
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    npx "$@"
+  }
+fi
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"

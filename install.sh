@@ -156,7 +156,7 @@ if [ -d "$DOTFILES_DIR/oh-my-zsh" ]; then
 else
     if ask_yes_no "Clone Oh My Zsh repository?"; then
         print_step "Cloning oh-my-zsh..."
-        git clone git://github.com/robbyrussell/oh-my-zsh.git "$DOTFILES_DIR/oh-my-zsh"
+        git clone https://github.com/ohmyzsh/ohmyzsh.git "$DOTFILES_DIR/oh-my-zsh"
         print_success "Oh My Zsh cloned successfully"
     else
         print_warning "Skipped Oh My Zsh installation"

@@ -1,0 +1,113 @@
+#!/bin/bash
+
+# Kill processes by name with confirmation
+
+print_help() {
+    echo "Usage: killbyname [options] <pattern>"
+    echo "Find and kill processes matching a pattern."
+    echo ""
+    echo "Options:"
+    echo "  -f, --force       Skip confirmation prompt"
+    echo "  -s, --signal SIG  Signal to send (default: TERM)"
+    echo "  -h, --help        Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  killbyname node           # Kill processes matching 'node'"
+    echo "  killbyname -f chrome      # Kill without confirmation"
+    echo "  killbyname -s KILL nginx  # Send SIGKILL instead of SIGTERM"
+    exit 0
+}
+
+# Defaults
+FORCE=0
+SIGNAL="TERM"
+PATTERN=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -f|--force)
+            FORCE=1
+            shift
+            ;;
+        -s|--signal)
+            SIGNAL="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Use -h for help"
+            exit 1
+            ;;
+        *)
+            PATTERN="$1"
+            shift
+            ;;
+    esac
+done
+
+# Validate pattern provided
+if [[ -z "$PATTERN" ]]; then
+    echo "Error: No pattern specified"
+    echo "Usage: killbyname <pattern>"
+    exit 1
+fi
+
+# Find matching processes (exclude grep and this script)
+PROCS=$(ps aux | grep -i "$PATTERN" | grep -v grep | grep -v "killbyname.*$PATTERN")
+
+if [[ -z "$PROCS" ]]; then
+    echo "No processes found matching '$PATTERN'"
+    exit 1
+fi
+
+# Extract PIDs
+PIDS=$(echo "$PROCS" | awk '{ print $2 }')
+COUNT=$(echo "$PIDS" | wc -l | tr -d ' ')
+
+# Show what we found
+echo "Found $COUNT process(es) matching '$PATTERN':"
+echo ""
+echo "$PROCS" | head -20
+if [[ $COUNT -gt 20 ]]; then
+    echo "... and $((COUNT - 20)) more"
+fi
+echo ""
+
+# Confirm unless forced
+if [[ $FORCE -eq 0 ]]; then
+    echo -n "Send SIG$SIGNAL to these processes? [y/N] "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        exit 0
+    fi
+fi
+
+# Kill the processes
+FAILED=0
+for pid in $PIDS; do
+    if kill -"$SIGNAL" "$pid" 2>/dev/null; then
+        echo "Sent SIG$SIGNAL to PID $pid"
+    else
+        # Try with sudo
+        if sudo kill -"$SIGNAL" "$pid" 2>/dev/null; then
+            echo "Sent SIG$SIGNAL to PID $pid (via sudo)"
+        else
+            echo "Failed to kill PID $pid"
+            FAILED=$((FAILED + 1))
+        fi
+    fi
+done
+
+if [[ $FAILED -gt 0 ]]; then
+    echo ""
+    echo "Warning: Failed to kill $FAILED process(es)"
+    exit 1
+fi
+
+echo ""
+echo "Done"
