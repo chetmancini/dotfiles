@@ -1,19 +1,31 @@
 #!/bin/bash
 
+# Detect OS
+OS=$(uname -s)
+
 # Function to display help
 print_help() {
     echo "Usage: my_ip [-i interface] [-v | -q]"
-    echo "Retrieve IP and ISP information for a specified network interface."
+    echo "Retrieve IP address for a specified network interface."
     echo "Options:"
-    echo "  -i interface  Specify the network interface (default: eth0)"
+    if [[ "$OS" == "Darwin" ]]; then
+        echo "  -i interface  Specify the network interface (default: en0)"
+    else
+        echo "  -i interface  Specify the network interface (default: eth0)"
+    fi
     echo "  -v            Verbose mode (default)"
     echo "  -q            Quiet mode (minimal output)"
     echo "  -h            Display this help message"
     exit 0
 }
 
-# Default values
-INTERFACE="eth0"
+# Set default interface based on OS
+if [[ "$OS" == "Darwin" ]]; then
+    INTERFACE="en0"
+else
+    INTERFACE="eth0"
+fi
+
 VERBOSE=1
 
 # Parse options
@@ -27,34 +39,44 @@ while getopts "i:vqh" opt; do
     esac
 done
 
-# Check if the interface exists
-if ! ip link show "$INTERFACE" &>/dev/null; then
+# Check if the interface exists (platform-specific)
+check_interface() {
+    local iface="$1"
+    if [[ "$OS" == "Darwin" ]]; then
+        ifconfig "$iface" &>/dev/null
+    else
+        ip link show "$iface" &>/dev/null
+    fi
+}
+
+if ! check_interface "$INTERFACE"; then
     echo "Error: Network interface '$INTERFACE' not found."
     exit 1
 fi
 
-# Function to retrieve IP and ISP information
+# Function to retrieve IP information (platform-specific)
 get_ip_info() {
     local interface="$1"
     local ip_info
-    local isp_info
 
-    # Retrieve IP address
-    ip_info=$(ip -4 addr show "$interface" | awk '/inet / {print $2}' | cut -d/ -f1)
-    # Retrieve ISP (peer) info for point-to-point interfaces
-    isp_info=$(ip -4 addr show "$interface" | awk '/peer/ {print $4}')
+    if [[ "$OS" == "Darwin" ]]; then
+        # macOS: use ipconfig
+        ip_info=$(ipconfig getifaddr "$interface" 2>/dev/null)
+    else
+        # Linux: use ip command
+        ip_info=$(ip -4 addr show "$interface" | awk '/inet / {print $2}' | cut -d/ -f1)
+    fi
 
     # Handle cases where data might be missing
-    if [ -z "$ip_info" ]; then
+    if [[ -z "$ip_info" ]]; then
         echo "Error: Unable to retrieve IP address for interface '$interface'."
         exit 1
     fi
 
     # Display results
-    if [ "$VERBOSE" -eq 1 ]; then
+    if [[ "$VERBOSE" -eq 1 ]]; then
         echo "Interface: $interface"
         echo "IP Address: $ip_info"
-        [ -n "$isp_info" ] && echo "ISP/Peer Address: $isp_info"
     else
         echo "$ip_info"
     fi
