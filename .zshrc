@@ -226,6 +226,7 @@ alias fzfp='fzf --preview "bat --color=always --style=header,grid --line-range :
 #######################
 # Git Aliases to make it all shorter
 ########################
+unalias gs 2>/dev/null  # Ensure ghostscript doesn't override
 alias gs='git status -sb'
 alias gd='git diff'
 alias gb='git branch -vv'
@@ -273,6 +274,11 @@ function cpmsg() {
 
 # Source API keys if file exists (gitignored, see api_keys.sh.template)
 [ -f ~/dotfiles/api_keys.sh ] && source ~/dotfiles/api_keys.sh
+
+# Auto-add SSH keys to agent (uses macOS Keychain for passphrases)
+if [[ "$(uname)" == "Darwin" ]]; then
+  ssh-add --apple-load-keychain 2>/dev/null
+fi
 
 
 ##############################
