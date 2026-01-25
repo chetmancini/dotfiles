@@ -149,6 +149,14 @@ show_github_notifications() {
         return
     fi
 
+    # Check if jq is installed (required for parsing notifications)
+    if ! command -v jq &>/dev/null; then
+        print_section "GitHub Notifications"
+        print_error "jq is not installed. Install with: brew install jq"
+        echo ""
+        return
+    fi
+
     # Check if gh is authenticated
     if ! gh auth status &>/dev/null; then
         print_section "GitHub Notifications"
