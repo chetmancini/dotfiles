@@ -85,7 +85,6 @@ brew "sbt"
 #==============================================================================
 # Development - Python
 #==============================================================================
-brew "poetry"
 brew "pyenv"
 brew "ruff"
 brew "uv"                   # Fast pip replacement
@@ -96,7 +95,6 @@ brew "uv"                   # Fast pip replacement
 brew "oven-sh/bun/bun"
 brew "n"                    # Node version manager
 brew "pnpm"
-brew "yarn"
 
 #==============================================================================
 # Databases

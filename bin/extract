@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Function to check if a specific tool is installed
 require_tool() {
