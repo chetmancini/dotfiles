@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Function to check if required dependencies are installed
-check_dependencies() {
-    local deps=("tar" "bunzip2" "unrar" "gunzip" "unzip" "uncompress" "7z")
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" &>/dev/null; then
-            echo "Error: '$dep' is not installed. Please install it to proceed."
-            exit 1
-        fi
-    done
+# Function to check if a specific tool is installed
+require_tool() {
+    local tool="$1"
+    local install_hint="${2:-}"
+    if ! command -v "$tool" &>/dev/null; then
+        echo "Error: '$tool' is not installed."
+        [[ -n "$install_hint" ]] && echo "Install with: $install_hint"
+        exit 1
+    fi
 }
 
 # Function to print help message
@@ -26,17 +26,18 @@ print_help() {
 
 # Parse options and set verbose or quiet mode
 VERBOSE=1
-while getopts "vq" opt; do
+while getopts "vqh" opt; do
     case $opt in
         v) VERBOSE=1 ;; # Verbose mode
         q) VERBOSE=0 ;; # Quiet mode
+        h) print_help ;;
         *) print_help ;;
     esac
 done
 shift $((OPTIND - 1))
 
 # Check if a file was provided
-if [ -z "$1" ]; then
+if [[ -z "$1" ]]; then
     print_help
 fi
 
@@ -44,17 +45,19 @@ fi
 FILE="$1"
 TARGET_DIR="${2:-.}"
 
-# Check dependencies
-check_dependencies
-
 # Check if the file exists
-if [ ! -f "$FILE" ]; then
+if [[ ! -f "$FILE" ]]; then
     echo "Error: '$FILE' is not a valid file"
     exit 1
 fi
 
+# Create target directory if it doesn't exist
+if [[ ! -d "$TARGET_DIR" ]]; then
+    mkdir -p "$TARGET_DIR"
+fi
+
 # Determine verbosity flags
-if [ "$VERBOSE" -eq 1 ]; then
+if [[ "$VERBOSE" -eq 1 ]]; then
     TAR_FLAGS="xv"
 else
     TAR_FLAGS="x"
@@ -62,21 +65,87 @@ fi
 
 # Extract the file based on its extension
 case "$FILE" in
-    *.tar.bz2)   tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"     ;;
-    *.tar.gz)    tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"     ;;
-    *.bz2)       bunzip2 "$FILE" -c > "$TARGET_DIR/${FILE%.bz2}" ;;
-    *.rar)       unrar x -y "$FILE" "$TARGET_DIR" > /dev/null 2>&1 ;;
-    *.gz)        gunzip -c "$FILE" > "$TARGET_DIR/${FILE%.gz}" ;;
-    *.tar)       tar "${TAR_FLAGS}f" "$FILE" -C "$TARGET_DIR"      ;;
-    *.tbz2)      tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"     ;;
-    *.tgz)       tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"     ;;
-    *.zip)       unzip "$FILE" -d "$TARGET_DIR" > /dev/null 2>&1 ;;
-    *.Z)         uncompress -c "$FILE" > "$TARGET_DIR/${FILE%.Z}" ;;
-    *.7z)        7z x "$FILE" -o"$TARGET_DIR" > /dev/null 2>&1 ;;
-    *)           echo "Error: '$FILE' cannot be extracted via >extract<" ;;
+    *.tar.bz2)
+        require_tool "tar"
+        tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.tar.gz)
+        require_tool "tar"
+        tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.bz2)
+        require_tool "bunzip2" "brew install bzip2"
+        bunzip2 -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.bz2}")"
+        ;;
+    *.rar)
+        require_tool "unrar" "brew install unrar"
+        if [[ "$VERBOSE" -eq 1 ]]; then
+            unrar x -y "$FILE" "$TARGET_DIR"
+        else
+            unrar x -y "$FILE" "$TARGET_DIR" > /dev/null 2>&1
+        fi
+        ;;
+    *.gz)
+        require_tool "gunzip"
+        gunzip -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.gz}")"
+        ;;
+    *.tar)
+        require_tool "tar"
+        tar "${TAR_FLAGS}f" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.tbz2)
+        require_tool "tar"
+        tar "${TAR_FLAGS}jf" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.tgz)
+        require_tool "tar"
+        tar "${TAR_FLAGS}zf" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.zip)
+        require_tool "unzip"
+        if [[ "$VERBOSE" -eq 1 ]]; then
+            unzip "$FILE" -d "$TARGET_DIR"
+        else
+            unzip -q "$FILE" -d "$TARGET_DIR"
+        fi
+        ;;
+    *.Z)
+        require_tool "uncompress" "brew install ncompress"
+        uncompress -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.Z}")"
+        ;;
+    *.7z)
+        require_tool "7z" "brew install p7zip"
+        if [[ "$VERBOSE" -eq 1 ]]; then
+            7z x "$FILE" -o"$TARGET_DIR"
+        else
+            7z x "$FILE" -o"$TARGET_DIR" > /dev/null 2>&1
+        fi
+        ;;
+    *.xz)
+        require_tool "xz"
+        xz -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.xz}")"
+        ;;
+    *.tar.xz)
+        require_tool "tar"
+        tar "${TAR_FLAGS}Jf" "$FILE" -C "$TARGET_DIR"
+        ;;
+    *.zst|*.zstd)
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.zst}")"
+        ;;
+    *.tar.zst|*.tar.zstd)
+        require_tool "tar"
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" | tar "${TAR_FLAGS}f" - -C "$TARGET_DIR"
+        ;;
+    *)
+        echo "Error: '$FILE' cannot be extracted via extract"
+        echo "Supported formats: .tar.bz2, .tar.gz, .tar.xz, .tar.zst, .bz2, .rar, .gz, .tar, .tbz2, .tgz, .zip, .Z, .7z, .xz, .zst"
+        exit 1
+        ;;
 esac
 
 # Notify the user of completion
-if [ "$VERBOSE" -eq 1 ]; then
+if [[ "$VERBOSE" -eq 1 ]]; then
     echo "Extraction of '$FILE' completed successfully to '$TARGET_DIR'."
 fi
