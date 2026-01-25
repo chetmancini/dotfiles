@@ -168,7 +168,7 @@ alias -g L="|less"
 alias -g TL='| tail -20'
 alias -g NUL="> /dev/null 2>&1"
 
-h() { history | grep "$1"; }
+hgrep() { history | grep "$1"; }
 alias c='clear'
 #alias ll='ls -la'
 alias ls='eza --icons '
