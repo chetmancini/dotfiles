@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Download and extract tar.gz files
 
@@ -86,20 +87,23 @@ for url in "${URLS[@]}"; do
         echo "Downloading: $url"
     fi
 
-    # Create temp file
+    # Create temp file with cleanup trap
     tmpfile=$(mktemp)
+    trap 'rm -f "$tmpfile"' EXIT INT TERM
 
     # Download with curl
     # -f: fail on HTTP errors
     # -S: show errors
     # -L: follow redirects
     if [[ $QUIET -eq 1 ]]; then
-        curl -fSL "$url" -o "$tmpfile" 2>/dev/null
+        curl_result=0
+        curl -fSL "$url" -o "$tmpfile" 2>/dev/null || curl_result=$?
     else
-        curl -fSL --progress-bar "$url" -o "$tmpfile"
+        curl_result=0
+        curl -fSL --progress-bar "$url" -o "$tmpfile" || curl_result=$?
     fi
 
-    if [[ $? -ne 0 ]]; then
+    if [[ $curl_result -ne 0 ]]; then
         echo "Error: Failed to download $url" 1>&2
         rm -f "$tmpfile"
         FAILED=$((FAILED + 1))

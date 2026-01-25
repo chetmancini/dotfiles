@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Kill processes by name with confirmation
 
@@ -92,14 +93,12 @@ FAILED=0
 for pid in $PIDS; do
     if kill -"$SIGNAL" "$pid" 2>/dev/null; then
         echo "Sent SIG$SIGNAL to PID $pid"
+    # Try with sudo if regular kill fails
+    elif sudo kill -"$SIGNAL" "$pid" 2>/dev/null; then
+        echo "Sent SIG$SIGNAL to PID $pid (via sudo)"
     else
-        # Try with sudo
-        if sudo kill -"$SIGNAL" "$pid" 2>/dev/null; then
-            echo "Sent SIG$SIGNAL to PID $pid (via sudo)"
-        else
-            echo "Failed to kill PID $pid"
-            FAILED=$((FAILED + 1))
-        fi
+        echo "Failed to kill PID $pid"
+        FAILED=$((FAILED + 1))
     fi
 done
 
