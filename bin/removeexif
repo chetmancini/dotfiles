@@ -2,5 +2,47 @@
 set -e
 set -u
 
-exec jhead -purejpg
+# removeexif: Strip EXIF metadata from JPEG files
+# Uses jhead to remove all non-image data from JPEGs
+
+require_tool() {
+    local tool="$1"
+    local install_hint="${2:-}"
+    if ! command -v "$tool" &>/dev/null; then
+        echo "Error: '$tool' is not installed."
+        [[ -n "$install_hint" ]] && echo "Install with: $install_hint"
+        exit 1
+    fi
+}
+
+print_help() {
+    echo "Usage: removeexif <file>..."
+    echo "Strip EXIF metadata from JPEG files."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  removeexif photo.jpg"
+    echo "  removeexif *.jpg"
+    exit 0
+}
+
+# Parse options
+if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    print_help
+fi
+
+require_tool "jhead" "brew install jhead"
+
+# Validate all files exist before processing
+for file in "$@"; do
+    if [[ ! -f "$file" ]]; then
+        echo "Error: '$file' is not a valid file"
+        exit 1
+    fi
+done
+
+# Process files
+exec jhead -purejpg "$@"
 

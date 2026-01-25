@@ -2,13 +2,44 @@
 set -e
 set -u
 
-process_list="$(ps -eo 'pid command')"
-if [[ $# != 0 ]]; then
-  process_list="$(echo "$process_list" | grep -Fiw "$@")"
+# running: List running processes, optionally filtered by name
+# Highlights PIDs in the output for readability
+
+print_help() {
+    echo "Usage: running [pattern]"
+    echo "List running processes, optionally filtered by a pattern."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  pattern       Optional pattern to filter processes (case-insensitive)"
+    echo ""
+    echo "Examples:"
+    echo "  running           List all processes"
+    echo "  running node      List processes matching 'node'"
+    echo "  running python    List processes matching 'python'"
+    exit 0
+}
+
+if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+    print_help
 fi
 
+process_list="$(ps -eo 'pid command')"
+if [[ $# != 0 ]]; then
+    # Filter by pattern, but handle case where no matches found
+    filtered="$(echo "$process_list" | grep -Fiw "$@" || true)"
+    if [[ -z "$filtered" ]]; then
+        echo "No processes found matching '$*'"
+        exit 0
+    fi
+    process_list="$filtered"
+fi
+
+# Filter out this script and grep itself, then highlight PIDs
 echo "$process_list" |
-  grep -Fv "${BASH_SOURCE[0]}" |
-  grep -Fv grep |
-  GREP_COLOR='00;35' grep -E --colour=auto '^\s*[[:digit:]]+'
+    grep -Fv "${BASH_SOURCE[0]}" |
+    grep -Fv grep |
+    grep -E --color=auto '^\s*[[:digit:]]+' || true
 

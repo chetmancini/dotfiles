@@ -2,10 +2,55 @@
 set -e
 set -u
 
+# flushdns: Flush the DNS cache on macOS or Linux
+
+print_help() {
+    echo "Usage: flushdns"
+    echo "Flush the DNS resolver cache."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Supported platforms:"
+    echo "  - macOS (dscacheutil + mDNSResponder)"
+    echo "  - Linux with systemd (systemd-resolve)"
+    exit 0
+}
+
+if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+    print_help
+fi
+
 if [[ "$(uname)" == 'Darwin' ]]; then
-  sudo dscacheutil -flushcache
-  sudo killall -HUP mDNSResponder
+    echo "Flushing DNS cache on macOS..."
+    if sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder; then
+        echo "DNS cache flushed successfully."
+    else
+        echo "Error: Failed to flush DNS cache." >&2
+        exit 1
+    fi
+elif [[ "$(uname)" == 'Linux' ]]; then
+    echo "Flushing DNS cache on Linux..."
+    if command -v systemd-resolve &>/dev/null; then
+        if sudo systemd-resolve --flush-caches; then
+            echo "DNS cache flushed successfully."
+        else
+            echo "Error: Failed to flush DNS cache." >&2
+            exit 1
+        fi
+    elif command -v resolvectl &>/dev/null; then
+        if sudo resolvectl flush-caches; then
+            echo "DNS cache flushed successfully."
+        else
+            echo "Error: Failed to flush DNS cache." >&2
+            exit 1
+        fi
+    else
+        echo "Error: No supported DNS cache utility found (systemd-resolve or resolvectl)." >&2
+        exit 1
+    fi
 else
-  echo 'not supported yet'
+    echo "Error: Unsupported platform '$(uname)'." >&2
+    exit 1
 fi
 

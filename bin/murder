@@ -1,83 +1,141 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# murder: Gracefully kill processes by PID, name, or port
+# Tries increasingly aggressive signals: SIGTERM -> SIGINT -> SIGHUP -> SIGKILL
+
+require 'open3'
 
 SIGNALS = [
-  [15, 3],
-  [2, 3],
-  [1, 4],
-  [9, 0]
-]
+  [15, 3], # SIGTERM, wait 3s
+  [2, 3],  # SIGINT, wait 3s
+  [1, 4],  # SIGHUP, wait 4s
+  [9, 0]   # SIGKILL, no wait
+].freeze
 
-def i?(arg)
-  arg.to_i != 0
+def require_tool(tool, install_hint = nil)
+  _, status = Open3.capture2('command', '-v', tool)
+  return if status.success?
+
+  warn "Error: '#{tool}' is not installed."
+  warn "Install with: #{install_hint}" if install_hint
+  exit 1
+end
+
+def numeric?(arg)
+  arg.to_i.to_s == arg || arg.to_i != 0
 end
 
 def running?(pid)
-  `ps -p #{pid}`.lines.length == 2
+  _, status = Open3.capture2('ps', '-p', pid.to_s)
+  status.success?
 end
 
 def go_ahead?
-  %w(y yes yas).include? $stdin.gets.strip.downcase
+  %w[y yes yas].include?($stdin.gets&.strip&.downcase)
 end
 
-def kill(pid, code)
-  `kill -#{code} #{pid}`
+def kill_process(pid, code)
+  _, status = Open3.capture2('kill', "-#{code}", pid.to_s)
+  status.success?
 end
 
 def murder_pid(pid)
+  pid = pid.to_s
+  unless running?(pid)
+    warn "Process #{pid} is not running."
+    return
+  end
+
   SIGNALS.each do |signal|
-    break unless running? pid
+    break unless running?(pid)
 
     code, wait = signal
-
-    kill(pid, code)
+    kill_process(pid, code)
     sleep 0.5
-    sleep(wait) if running? pid
+    sleep(wait) if running?(pid)
+  end
+
+  if running?(pid)
+    warn "Warning: Process #{pid} could not be killed."
+  else
+    puts "Process #{pid} terminated."
   end
 end
 
 def murder_names(name)
-  running = `ps -eo 'pid command' | grep -Fiw '#{name}' | grep -Fv grep`
-  running.lines.each do |line|
-    pid, fullname = line.split(nil, 2)
+  # Use pgrep for more reliable process matching
+  stdout, status = Open3.capture2('pgrep', '-fil', name)
+
+  if !status.success? || stdout.strip.empty?
+    puts "No processes found matching '#{name}'."
+    return
+  end
+
+  stdout.lines.each do |line|
+    pid, *cmd_parts = line.strip.split
+    fullname = cmd_parts.join(' ')
 
     next if Process.pid == pid.to_i
 
-    print "murder #{fullname.chomp} (pid #{pid})? "
+    print "murder #{fullname} (pid #{pid})? "
     murder_pid(pid) if go_ahead?
   end
 end
 
 def murder_port(arg)
-  lsofs = `lsof -i #{arg}`
-  lsofs.lines.drop(1).each do |line|
-    pid = line.split(nil, 3)[1]
+  require_tool('lsof')
 
-    fullname = `ps -eo 'command' #{pid}`.lines.drop(1).first
+  stdout, status = Open3.capture2('lsof', '-i', arg)
 
-    print "murder #{fullname.chomp} (pid #{pid})? "
+  if !status.success? || stdout.lines.length <= 1
+    puts "No processes found listening on port #{arg}."
+    return
+  end
+
+  stdout.lines.drop(1).each do |line|
+    parts = line.split
+    pid = parts[1]
+    process_name = parts[0]
+
+    print "murder #{process_name} (pid #{pid})? "
     murder_pid(pid) if go_ahead?
   end
 end
 
+def print_help
+  puts 'murder: Gracefully kill processes by PID, name, or port'
+  puts ''
+  puts 'Usage:'
+  puts '  murder <pid>     Kill process by PID'
+  puts '  murder <name>    Kill processes matching name'
+  puts '  murder :<port>   Kill processes listening on port'
+  puts ''
+  puts 'Options:'
+  puts '  -h, --help       Show this help message'
+  puts ''
+  puts 'Examples:'
+  puts '  murder 1234      Kill process with PID 1234'
+  puts '  murder ruby      Kill processes with "ruby" in command'
+  puts '  murder :3000     Kill processes listening on port 3000'
+end
+
 def main(arg)
-  is_pid = i?(arg)
-  is_port = arg[0] == ':' && i?(arg.slice(1, arg.size))
+  is_pid = numeric?(arg)
+  is_port = arg.start_with?(':') && numeric?(arg[1..])
 
   if is_pid
-    murder_pid arg
+    murder_pid(arg)
   elsif is_port
-    murder_port arg
+    murder_port(arg)
   else
-    murder_names arg
+    murder_names(arg)
   end
 end
 
-if ARGV.size < 1
-  puts 'usage:'
-  puts 'murder 123    # kill by pid'
-  puts 'murder ruby   # kill by process name'
-  puts 'murder :3000  # kill by port'
-  exit 1
+if ARGV.empty? || ARGV[0] == '-h' || ARGV[0] == '--help'
+  print_help
+  exit(ARGV.empty? ? 1 : 0)
 else
   main(ARGV[0])
 end

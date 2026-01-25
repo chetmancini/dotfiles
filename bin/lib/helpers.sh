@@ -57,6 +57,11 @@ run_with_spinner() {
     # Run command in background, capture output
     local tmpfile
     tmpfile=$(mktemp)
+
+    # Set up cleanup trap for temp file
+    # shellcheck disable=SC2064
+    trap "rm -f '$tmpfile'" EXIT INT TERM
+
     "$@" > "$tmpfile" 2>&1 &
     pid=$!
 
@@ -75,7 +80,8 @@ run_with_spinner() {
     printf "\b \b"
     printf "\r"
 
-    # Clean up
+    # Clean up (trap will also clean up on signals)
     rm -f "$tmpfile"
+    trap - EXIT INT TERM
     return $status
 }
