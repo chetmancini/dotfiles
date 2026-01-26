@@ -143,6 +143,8 @@ export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
 export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules:/usr/local/share/npm/bin"
 export NPM_PATH=/usr/local/share/npm/bin
+export NPM_GLOBAL_BIN="$HOME/.npm/bin"
+export PNPM_HOME="$HOME/Library/pnpm"
 export UV_PATH="$HOME/.local/bin"
 export BUN_INSTALL="$HOME/.bun"
 export MYSQL_HOME=/usr/local/mysql/bin
@@ -153,7 +155,7 @@ export MODULAR_HOME="$HOME/.modular"
 export WINDSURF_PATH="$HOME/.codeium/windsurf/bin"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$LMSTUDIO_PATH:$PATH
+export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$PNPM_HOME:$NPM_GLOBAL_BIN:$MYSQL_HOME:$UV_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$WINDSURF_PATH:$NODE_PATH:$LMSTUDIO_PATH:$PATH
 export CLASSPATH=$HOME/lib/jars
 
 
