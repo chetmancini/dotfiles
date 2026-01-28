@@ -251,16 +251,30 @@ __git_files () {
 #############################
 # Random git commands for my usual branch protocol of 1234storynum_title_of_feature
 #############################
+# Cross-platform clipboard copy
+_clipboard_copy() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        pbcopy
+    elif command -v xclip &>/dev/null; then
+        xclip -selection clipboard
+    elif command -v xsel &>/dev/null; then
+        xsel --clipboard
+    else
+        echo "Error: No clipboard utility found (pbcopy, xclip, or xsel)" >&2
+        return 1
+    fi
+}
+
 function cpbranch() {
     if git rev-parse --git-dir > /dev/null 2>&1; then
-        git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy
+        git rev-parse --abbrev-ref HEAD | tr -d '\n' | _clipboard_copy
     else
         echo "not in a repo" >&2
     fi
 }
 function cpmsg() {
     if git rev-parse --git-dir > /dev/null 2>&1; then
-        echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
+        echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | _clipboard_copy
     else
         echo "not in a repo" >&2
     fi
@@ -367,7 +381,12 @@ function sysinfo()
     else
         free -h
     fi
-    echo -e "\n${RED}Local IP Address:${NC}" ; ipconfig getifaddr en0 2>/dev/null || echo "Not connected"
+    echo -e "\n${RED}Local IP Address:${NC}"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        ipconfig getifaddr en0 2>/dev/null || echo "Not connected"
+    else
+        ip -4 addr show scope global | awk '/inet / {print $2}' | cut -d/ -f1 | head -1 || echo "Not connected"
+    fi
     echo -e "\n${RED}Public IP Address:${NC}" ; curl -s ifconfig.me 2>/dev/null || echo "Not connected"
     echo
 }
