@@ -151,6 +151,8 @@ export PERSONAL_BIN=$HOME/dotfiles/bin
 export MODULAR_HOME="$HOME/.modular"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
+export OPENCODE_PATH="$HOME/.opencode/bin"
+export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
 # Build PATH dynamically, only adding directories that exist
 path_add() {
@@ -178,6 +180,8 @@ path_add \
     "$PNPM_HOME" \
     "$BUN_INSTALL/bin" \
     "$JAVA_HOME/bin" \
+    "$OPENCODE_PATH" \
+    "$ANTIGRAVITY_PATH" \
     "$HOME/bin"
 
 export PATH
@@ -541,8 +545,4 @@ if command -v cmatrix &> /dev/null; then
     fi
   }
 fi
-
-# Added by Antigravity
-export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"
-
 
