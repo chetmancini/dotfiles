@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-set -e
-set -u
+# shellcheck shell=bash
+set -euo pipefail
 
 # running: List running processes, optionally filtered by name
+#
 # Highlights PIDs in the output for readability
 
 print_help() {

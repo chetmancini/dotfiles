@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
 # good-morning: Run a configurable set of tasks to start the day
 #
 # Configuration file: ~/.config/good-morning/config
 # If no config file exists, uses sensible defaults
-
-set -e
 
 # Get the directory where this script lives
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

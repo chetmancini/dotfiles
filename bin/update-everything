@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
 # update-everything: Update all software and pull latest code
 #
 # Configuration file: ~/.config/good-morning/config
 # Can be run standalone or called from good-morning
-
-set -e
 
 # Get the directory where this script lives
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

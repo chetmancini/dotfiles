@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-set -e
-set -u
+# shellcheck shell=bash
+set -euo pipefail
 
-# Delete local branches whose upstream tracking branch is gone
-# (remote branch was deleted after merge/close)
+# git-rm-gone: Delete local branches whose upstream tracking branch is gone
+#
+# Removes branches where the remote branch was deleted after merge/close
 
 # Handle branches with prefixes (* for current, + for worktree)
 gone_branches=$(git branch -vv | grep ': gone]' | sed 's/^[* +]*//' | awk '{print $1}')

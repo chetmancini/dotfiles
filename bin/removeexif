@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-set -e
-set -u
+# shellcheck shell=bash
+set -euo pipefail
 
 # removeexif: Strip EXIF metadata from JPEG files
+#
 # Uses jhead to remove all non-image data from JPEGs
 
 require_tool() {

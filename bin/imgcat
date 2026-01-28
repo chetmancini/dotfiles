@@ -1,5 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
+# imgcat: Display images in the terminal
+#
 # tmux requires unrecognized OSC sequences to be wrapped with DCS tmux;
 # <sequence> ST, and for all ESCs in <sequence> to be replaced with ESC ESC. It
 # only accepts ESC backslash for ST.

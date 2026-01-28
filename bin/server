@@ -1,7 +1,10 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
-# Simple HTTP server with automatic browser opening
+# server: Simple HTTP server with automatic browser opening
+#
+# Starts a Python HTTP server and optionally opens the browser
 
 print_help() {
     echo "Usage: server [options] [port]"

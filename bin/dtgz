@@ -1,7 +1,8 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
-# Download and extract tar.gz files
+# dtgz: Download and extract tar.gz files
 
 print_help() {
     echo "Usage: dtgz [options] <url> [url2 ...]"

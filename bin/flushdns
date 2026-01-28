@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-set -e
-set -u
+# shellcheck shell=bash
+set -euo pipefail
 
 # flushdns: Flush the DNS cache on macOS or Linux
+#
+# Supports macOS (dscacheutil + mDNSResponder) and Linux (systemd-resolve/resolvectl)
 
 print_help() {
     echo "Usage: flushdns"

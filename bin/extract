@@ -1,5 +1,10 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# extract: Extract various archive formats
+#
+# Supports: tar.gz, tar.bz2, tar.xz, zip, rar, 7z, and more
 
 # Function to check if a specific tool is installed
 require_tool() {

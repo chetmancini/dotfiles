@@ -1,6 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
 
-# Detect OS
+# my_ip: Display IP address information
+#
+# Detects OS and shows local and public IP addresses
+
 OS=$(uname -s)
 
 # Function to display help
