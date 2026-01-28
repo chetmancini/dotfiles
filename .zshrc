@@ -60,7 +60,7 @@ source $ZSH/oh-my-zsh.sh
 
 ##############################
 # Variables
-##########################oh-m####
+##############################
 # ZSH Options
 DEFAULT_USER="chet"
 setopt AUTO_CD
@@ -83,10 +83,7 @@ setopt CORRECT
 # beeps are annoying
 setopt NO_BEEP
 
-# Java/Ant Options
-#export JAVA_OPTS="-Xmx2048m -Xms512m -XX:MaxPermSize=512m -d64"
-#export ANT_ARGS="-logger org.apache.tools.ant.listener.AnsiColorLogger"
-#export ANT_OPTS="-Xmx2048m -Xms512m"
+
 
 ##############################
 # Editor Settings
@@ -205,15 +202,7 @@ alias urlencode='python3 -c "import sys; from urllib.parse import quote_plus; pr
 alias top='xtitle Processes on $HOST && top'
 alias make='xtitle Making $(basename $PWD) ; make'
 
-# Amazon Elastic Map Reduce (EMR) ssh tunnel, use like # ssh-emr
-# hadoop@ec2-blah.blah.blah.amazonaws.com
-# # This creates
-# alias ssh-emr='ssh -L 9100:localhost:9100 -L 9101:localhost:9101 -L 9102:localhost:9102 -L 9200:localhost:80 -L 9026:localhost:9026 -L 4040:localhost:4040 -i ~/.ssh/hadoop.pem'
-# alias ssh-emr-tools='ssh -L 25000:localhost:25000 -L 25010:localhost:25010 -L 25020:localhost:25020 -L 8888:localhost:8888 -i ~/.ssh/hadoop.pem'
-# alias ssh-emr-spark='ssh -L 18080:localhost:18080 -L 4040:localhost:4040 -L 9200:localhost:80 -L 8080:localhost:8080 -i ~/.ssh/hadoop.pem'
 
-# alias start_mysql='mysql.server start'
-# alias stop_mysql='mysql.server stop'
 
 alias start_postgres='postgres -D /usr/local/var/postgres'
 alias stop_postgres='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
@@ -264,17 +253,23 @@ __git_files () {
 # Random git commands for my usual branch protocol of 1234storynum_title_of_feature
 #############################
 function cpbranch() {
-    git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy
+    else
+        echo "not in a repo" >&2
+    fi
 }
 function cpmsg() {
-    echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "[#`git rev-parse --abbrev-ref HEAD | cut -d'_' -f 1`] CM: " | tr -d '\n' | pbcopy
+    else
+        echo "not in a repo" >&2
+    fi
 }
 
 ##############################
 # Execute on launch
 ##############################
-#. ~/dotfiles/z.sh
-
 # Source API keys if file exists (gitignored, see api_keys.sh.template)
 [ -f ~/dotfiles/api_keys.sh ] && source ~/dotfiles/api_keys.sh
 
@@ -504,10 +499,4 @@ fi
 # Added by Antigravity
 export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"
 
-# pnpm
-export PNPM_HOME="/Users/chet/Library/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-# pnpm end
+
