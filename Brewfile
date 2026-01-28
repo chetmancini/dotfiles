@@ -136,7 +136,6 @@ cask "lm-studio"
 cask "opencode-desktop"     # AI coding assistant
 cask "openlens"             # Kubernetes IDE
 cask "postman"
-cask "windsurf"
 cask "zed"                  # Editor
 
 #==============================================================================
