@@ -152,7 +152,35 @@ export MODULAR_HOME="$HOME/.modular"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
-export PATH=$HOME/bin:$JAVA_HOME/bin:$BUN_INSTALL/bin:$PNPM_HOME:$NPM_GLOBAL_BIN:$MYSQL_HOME:$UV_PATH:$ZEROBREW_PATH:$USR_LOCAL_HOME:$USR_LOCAL_SBIN:$NPM_PATH:$PERSONAL_BIN:$BREW_PATH:$MODULAR_HOME/bin:$NODE_PATH:$LMSTUDIO_PATH:$PATH
+# Build PATH dynamically, only adding directories that exist
+path_add() {
+    for dir in "$@"; do
+        if [[ -d "$dir" ]]; then
+            PATH="$dir:$PATH"
+        fi
+    done
+}
+
+# Add paths in order (later entries have higher priority)
+path_add \
+    "$LMSTUDIO_PATH" \
+    "$NODE_PATH" \
+    "$MODULAR_HOME/bin" \
+    "$BREW_PATH" \
+    "$PERSONAL_BIN" \
+    "$NPM_PATH" \
+    "$USR_LOCAL_SBIN" \
+    "$USR_LOCAL_HOME" \
+    "$ZEROBREW_PATH" \
+    "$UV_PATH" \
+    "$MYSQL_HOME" \
+    "$NPM_GLOBAL_BIN" \
+    "$PNPM_HOME" \
+    "$BUN_INSTALL/bin" \
+    "$JAVA_HOME/bin" \
+    "$HOME/bin"
+
+export PATH
 export CLASSPATH=$HOME/lib/jars
 
 
