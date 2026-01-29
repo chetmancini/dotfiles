@@ -108,6 +108,9 @@ brew "sqlite"
 #==============================================================================
 # AI Tools
 #==============================================================================
+brew "anomalyco/tap/gifgrep"  # Clawdbot skill: GIF search
+brew "anomalyco/tap/goplaces" # Clawdbot skill: Google Places
+brew "anomalyco/tap/imsg"     # Clawdbot skill: iMessage
 brew "anomalyco/tap/opencode" # AI coding assistant CLI
 brew "huggingface-cli"      # HuggingFace model downloads
 brew "llm"                  # CLI for LLMs
