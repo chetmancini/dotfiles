@@ -265,7 +265,7 @@ echo "The api_keys.sh file stores environment variables and API keys."
 echo "This file is gitignored to keep secrets out of version control."
 echo ""
 
-if [ -f "$HOME/dotfiles/api_keys.sh" ]; then
+if [ -f "$DOTFILES_DIR/api_keys.sh" ]; then
     print_success "api_keys.sh already exists"
 else
     if [ -f "$DOTFILES_DIR/api_keys.sh.template" ]; then

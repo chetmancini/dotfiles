@@ -138,7 +138,7 @@ export BREW_PATH=/opt/homebrew/bin
 export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
 export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
-export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
+# NODE_PATH removed - deprecated in modern Node.js/npm
 export NPM_PATH=/usr/local/share/npm/bin
 export NPM_GLOBAL_BIN="$HOME/.npm-global/bin"
 export PNPM_HOME="$HOME/Library/pnpm"
@@ -166,7 +166,6 @@ path_add() {
 # Add paths in order (later entries have higher priority)
 path_add \
     "$LMSTUDIO_PATH" \
-    "$NODE_PATH" \
     "$MODULAR_HOME/bin" \
     "$BREW_PATH" \
     "$PERSONAL_BIN" \
@@ -215,13 +214,7 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../../'
 alias grep='grep --color=auto'
-alias be='bundle exec'
-alias berake='bundle exec rake'
-alias trinidad='bundle exec trinidad'
-alias rconsole='bundle exec rails console'
-alias rdebug-ide='bundle exec rdebug-ide'
-alias cuke='bundle exec cucumber -c'
-alias rs='bundle exec rspec --color --format documentation'
+# Rails aliases removed - Ruby/Rails tooling not installed
 alias vi='nvim'
 alias wget='wget -c'
 alias x='exit'
@@ -235,8 +228,9 @@ alias make='xtitle Making $(basename $PWD) ; make'
 
 
 
-alias start_postgres='postgres -D /usr/local/var/postgres'
-alias stop_postgres='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
+# PostgreSQL aliases - use Homebrew service commands instead
+alias start_postgres='brew services start postgresql@16'
+alias stop_postgres='brew services stop postgresql@16'
 
 alias start_memcached='/usr/local/opt/memcached/bin/memcached'
 alias stop_memcached='killall memcached'
@@ -321,10 +315,8 @@ function cpmsg() {
 # Source 1Password-backed API keys (can override above, see api_keys_1password.sh.template)
 [ -f ~/dotfiles/api_keys_1password.sh ] && source ~/dotfiles/api_keys_1password.sh
 
-# Auto-add SSH keys to agent (uses macOS Keychain for passphrases)
-if [[ "$(uname)" == "Darwin" ]]; then
-  ssh-add --apple-load-keychain 2>/dev/null
-fi
+# SSH keys are managed by macOS Keychain automatically
+# No need to call ssh-add on every shell startup
 
 
 ##############################
@@ -472,13 +464,19 @@ if command -v zoxide &> /dev/null; then
   # Use zoxide for cd with fallback to builtin cd if zoxide fails
   cd() { z "$@" 2>/dev/null || builtin cd "$@"; }
 fi
-#stats on startup
-if command -v fastfetch &> /dev/null; then
+# System info on login shells only (not every new terminal tab)
+# Run 'fastfetch' manually to see system info
+if [[ -o login ]] && command -v fastfetch &> /dev/null; then
   fastfetch
 fi
 
+# Lazy-load thefuck (saves ~100ms on shell startup)
 if command -v thefuck &> /dev/null; then
-  eval $(thefuck --alias)
+  fuck() {
+    unset -f fuck
+    eval $(thefuck --alias)
+    fuck "$@"
+  }
 fi
 
 # if command -v magic &> /dev/null; then

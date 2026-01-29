@@ -74,14 +74,6 @@
     path = ~/dotfiles/.gitconfig-personal
 [includeIf "gitdir:~/norm/"]
     path = ~/dotfiles/.gitconfig-work
-[filter "media"]
-	clean = git media clean %f
-	smudge = git media smudge %f
-	required = true
-[filter "hawser"]
-	clean = git hawser clean %f
-	smudge = git hawser smudge %f
-	required = true
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
@@ -92,7 +84,6 @@
 [credential]
 	helper =
 	helper = /usr/local/share/gcm-core/git-credential-manager
-	#helper = /usr/local/share/gcm-core/git-credential-manager
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [credential "https://github.com"]
