@@ -318,6 +318,9 @@ function cpmsg() {
 # Source API keys if file exists (gitignored, see api_keys.sh.template)
 [ -f ~/dotfiles/api_keys.sh ] && source ~/dotfiles/api_keys.sh
 
+# Source 1Password-backed API keys (can override above, see api_keys_1password.sh.template)
+[ -f ~/dotfiles/api_keys_1password.sh ] && source ~/dotfiles/api_keys_1password.sh
+
 # Auto-add SSH keys to agent (uses macOS Keychain for passphrases)
 if [[ "$(uname)" == "Darwin" ]]; then
   ssh-add --apple-load-keychain 2>/dev/null
