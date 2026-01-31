@@ -152,6 +152,7 @@ export MODULAR_HOME="$HOME/.modular"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
 export OPENCODE_PATH="$HOME/.opencode/bin"
+export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
 # Build PATH dynamically, only adding directories that exist
@@ -166,6 +167,7 @@ path_add() {
 # Add paths in order (later entries have higher priority)
 path_add \
     "$LMSTUDIO_PATH" \
+    "$LMSTUDIO_CACHE_PATH" \
     "$MODULAR_HOME/bin" \
     "$BREW_PATH" \
     "$PERSONAL_BIN" \
@@ -546,4 +548,3 @@ if command -v cmatrix &> /dev/null; then
     fi
   }
 fi
-
