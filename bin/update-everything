@@ -25,6 +25,7 @@ DEFAULT_PULL_REPOS=true
 DEFAULT_DOCKER_PRUNE=true
 DEFAULT_CHECK_MACOS_UPDATES=true
 DEFAULT_UPDATE_NVIM_PLUGINS=true
+DEFAULT_PARALLEL=true
 
 # Load configuration or use defaults
 load_config() {
@@ -36,6 +37,7 @@ load_config() {
     DOCKER_PRUNE="$DEFAULT_DOCKER_PRUNE"
     CHECK_MACOS_UPDATES="$DEFAULT_CHECK_MACOS_UPDATES"
     UPDATE_NVIM_PLUGINS="$DEFAULT_UPDATE_NVIM_PLUGINS"
+    PARALLEL="$DEFAULT_PARALLEL"
 
     if [ -f "$CONFIG_FILE" ]; then
         # shellcheck source=/dev/null
@@ -43,123 +45,207 @@ load_config() {
     fi
 }
 
-# Homebrew tasks
+# Temporary directory for parallel output
+TEMP_DIR=""
+setup_temp_dir() {
+    TEMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TEMP_DIR"' EXIT INT TERM
+}
+
+# Homebrew tasks (must run sequentially: update -> upgrade -> cleanup)
 run_brew_tasks() {
-    if [ "$RUN_BREW_UPDATE" = true ]; then
-        print_section "Updating Homebrew..."
-        if brew update; then
-            print_success "Homebrew updated"
-        else
-            print_error "Failed to update Homebrew"
-        fi
-        echo ""
-    fi
+    local output_file="$TEMP_DIR/brew.out"
 
-    if [ "$RUN_BREW_UPGRADE" = true ]; then
-        print_section "Upgrading packages..."
-        if brew upgrade; then
-            print_success "Packages upgraded"
-        else
-            print_error "Failed to upgrade packages"
+    {
+        if [ "$RUN_BREW_UPDATE" = true ]; then
+            echo "section:Updating Homebrew..."
+            if brew update > /dev/null 2>&1; then
+                echo "success:Homebrew updated"
+            else
+                echo "error:Failed to update Homebrew"
+            fi
         fi
-        echo ""
-    fi
 
-    if [ "$RUN_BREW_CLEANUP" = true ]; then
-        print_section "Cleaning up Homebrew..."
-        if brew cleanup; then
-            print_success "Homebrew cleaned up"
-        else
-            print_error "Failed to cleanup Homebrew"
+        if [ "$RUN_BREW_UPGRADE" = true ]; then
+            echo "section:Upgrading packages..."
+            if brew upgrade > /dev/null 2>&1; then
+                echo "success:Packages upgraded"
+            else
+                echo "error:Failed to upgrade packages"
+            fi
         fi
-        echo ""
-    fi
+
+        if [ "$RUN_BREW_CLEANUP" = true ]; then
+            echo "section:Cleaning up Homebrew..."
+            if brew cleanup > /dev/null 2>&1; then
+                echo "success:Homebrew cleaned up"
+            else
+                echo "error:Failed to cleanup Homebrew"
+            fi
+        fi
+    } > "$output_file"
+}
+
+# Print output from a task file
+print_task_output() {
+    local output_file="$1"
+    [ -f "$output_file" ] || return 0
+
+    while IFS=: read -r type message; do
+        case "$type" in
+            section) print_section "$message"; echo "" ;;
+            success) print_success "$message" ;;
+            error) print_error "$message" ;;
+            info) print_info "$message" ;;
+        esac
+    done < "$output_file"
 }
 
 # Check for macOS updates (just report, don't install)
 check_macos_updates() {
-    if [ "$CHECK_MACOS_UPDATES" != true ]; then
-        return
-    fi
+    local output_file="$TEMP_DIR/macos.out"
 
-    # Only run on macOS
-    if [ "$(uname)" != "Darwin" ]; then
-        return
-    fi
-
-    print_section "Checking for macOS updates..."
-
-    # softwareupdate -l lists available updates
-    updates=$(softwareupdate -l 2>&1)
-
-    if echo "$updates" | grep -q "No new software available"; then
-        print_success "macOS is up to date"
-    else
-        # Count updates (lines starting with *)
-        update_count=$(echo "$updates" | grep -c "^\*" || true)
-        if [ "$update_count" -gt 0 ]; then
-            print_error "$update_count macOS update(s) available"
-            echo "$updates" | grep "^\*" | while read -r line; do
-                print_info "  $line"
-            done
-            print_info "  Run 'softwareupdate -i -a' to install all updates"
-        else
-            print_success "macOS is up to date"
+    {
+        if [ "$CHECK_MACOS_UPDATES" != true ]; then
+            exit 0
         fi
-    fi
-    echo ""
+
+        # Only run on macOS
+        if [ "$(uname)" != "Darwin" ]; then
+            exit 0
+        fi
+
+        echo "section:Checking for macOS updates..."
+
+        # softwareupdate -l lists available updates
+        updates=$(softwareupdate -l 2>&1)
+
+        if echo "$updates" | grep -q "No new software available"; then
+            echo "success:macOS is up to date"
+        else
+            # Count updates (lines starting with *)
+            update_count=$(echo "$updates" | grep -c "^\*" || true)
+            if [ "$update_count" -gt 0 ]; then
+                echo "error:$update_count macOS update(s) available"
+                echo "$updates" | grep "^\*" | while read -r line; do
+                    echo "info:  $line"
+                done
+                echo "info:  Run 'softwareupdate -i -a' to install all updates"
+            else
+                echo "success:macOS is up to date"
+            fi
+        fi
+    } > "$output_file"
 }
 
 # Docker cleanup
 run_docker_prune() {
-    if [ "$DOCKER_PRUNE" != true ]; then
-        return
-    fi
+    local output_file="$TEMP_DIR/docker.out"
 
-    # Check if Docker is installed and running
-    if ! command -v docker &>/dev/null; then
-        return
-    fi
+    {
+        if [ "$DOCKER_PRUNE" != true ]; then
+            exit 0
+        fi
 
-    if ! docker info &>/dev/null; then
-        print_section "Docker cleanup..."
-        print_info "Docker is not running, skipping"
-        echo ""
-        return
-    fi
+        # Check if Docker is installed and running
+        if ! command -v docker &>/dev/null; then
+            exit 0
+        fi
 
-    print_section "Cleaning up Docker..."
+        if ! docker info &>/dev/null; then
+            echo "section:Docker cleanup..."
+            echo "info:Docker is not running, skipping"
+            exit 0
+        fi
 
-    # Get space before cleanup
-    space_before=$(docker system df --format '{{.Reclaimable}}' 2>/dev/null | head -1)
+        echo "section:Cleaning up Docker..."
 
-    if docker system prune -f &>/dev/null; then
-        print_success "Docker cleaned up (was reclaimable: $space_before)"
-    else
-        print_error "Failed to clean up Docker"
-    fi
-    echo ""
+        # Get space before cleanup
+        space_before=$(docker system df --format '{{.Reclaimable}}' 2>/dev/null | head -1)
+
+        if docker system prune -f &>/dev/null; then
+            echo "success:Docker cleaned up (was reclaimable: $space_before)"
+        else
+            echo "error:Failed to clean up Docker"
+        fi
+    } > "$output_file"
 }
 
 # Update Neovim plugins via Lazy
 update_nvim_plugins() {
-    if [ "$UPDATE_NVIM_PLUGINS" != true ]; then
-        return
-    fi
+    local output_file="$TEMP_DIR/nvim.out"
 
-    # Check if nvim is installed
-    if ! command -v nvim &>/dev/null; then
-        return
-    fi
+    {
+        if [ "$UPDATE_NVIM_PLUGINS" != true ]; then
+            exit 0
+        fi
 
-    print_section "Updating Neovim plugins..."
+        # Check if nvim is installed
+        if ! command -v nvim &>/dev/null; then
+            exit 0
+        fi
 
-    if run_with_spinner "Syncing plugins..." nvim --headless "+Lazy! sync" +qa; then
-        print_success "Neovim plugins updated"
-    else
-        print_error "Failed to update Neovim plugins"
-    fi
-    echo ""
+        echo "section:Updating Neovim plugins..."
+
+        if nvim --headless "+Lazy! sync" +qa 2>/dev/null; then
+            echo "success:Neovim plugins updated"
+        else
+            echo "error:Failed to update Neovim plugins"
+        fi
+    } > "$output_file"
+}
+
+# Pull a single repo (used for parallel execution)
+# Arguments: repo_path output_file
+pull_single_repo() {
+    local repo="$1"
+    local output_file="$2"
+    local repo_name
+    repo_name=$(basename "$repo")
+
+    (
+        cd "$repo"
+
+        # Check if there are uncommitted changes
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            echo "error:$repo_name has uncommitted changes, skipping" >> "$output_file"
+            exit 0
+        fi
+
+        # Fetch latest
+        if ! git fetch origin 2>/dev/null; then
+            echo "error:$repo_name: failed to fetch" >> "$output_file"
+            exit 0
+        fi
+
+        # Detect the primary branch (try main first, then master)
+        if git show-ref --verify --quiet "refs/remotes/origin/main"; then
+            branch="main"
+        elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
+            branch="master"
+        else
+            echo "error:$repo_name: no main/master branch found" >> "$output_file"
+            exit 0
+        fi
+
+        current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+        if [ "$current_branch" = "$branch" ]; then
+            # On main branch, just pull
+            if git pull --ff-only origin "$branch" 2>/dev/null; then
+                echo "success:$repo_name: pulled latest on $branch" >> "$output_file"
+            else
+                echo "error:$repo_name: failed to pull (might need rebase)" >> "$output_file"
+            fi
+        else
+            # On a different branch, fetch main
+            if git fetch origin "$branch:$branch" 2>/dev/null; then
+                echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
+            else
+                echo "info:$repo_name: $branch is up to date (currently on $current_branch)" >> "$output_file"
+            fi
+        fi
+    )
 }
 
 # Pull latest from main on all git repos in configured directories
@@ -168,68 +254,28 @@ pull_repos() {
         return
     fi
 
-    print_section "Pulling latest in repos..."
-    echo ""
+    local output_file="$TEMP_DIR/repos.out"
+    touch "$output_file"
+    local pids=()
 
     for repos_dir in "${REPOS_DIRS[@]}"; do
         if [ ! -d "$repos_dir" ]; then
-            print_info "Skipping $repos_dir (not found)"
+            echo "info:Skipping $repos_dir (not found)" >> "$output_file"
             continue
         fi
 
-        print_info "Scanning $repos_dir..."
-
         for repo in "$repos_dir"/*/; do
             if [ -d "$repo/.git" ]; then
-                repo_name=$(basename "$repo")
-
-                (
-                    cd "$repo"
-
-                    # Check if there are uncommitted changes
-                    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-                        print_error "$repo_name has uncommitted changes, skipping"
-                        exit 0
-                    fi
-
-                    # Fetch latest
-                    if ! git fetch origin 2>/dev/null; then
-                        print_error "$repo_name: failed to fetch"
-                        exit 0
-                    fi
-
-                    # Detect the primary branch (try main first, then master)
-                    if git show-ref --verify --quiet "refs/remotes/origin/main"; then
-                        branch="main"
-                    elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
-                        branch="master"
-                    else
-                        print_error "$repo_name: no main/master branch found"
-                        exit 0
-                    fi
-
-                    current_branch=$(git rev-parse --abbrev-ref HEAD)
-
-                    if [ "$current_branch" = "$branch" ]; then
-                        # On main branch, just pull
-                        if git pull --ff-only origin "$branch" 2>/dev/null; then
-                            print_success "$repo_name: pulled latest on $branch"
-                        else
-                            print_error "$repo_name: failed to pull (might need rebase)"
-                        fi
-                    else
-                        # On a different branch, fetch main
-                        if git fetch origin "$branch:$branch" 2>/dev/null; then
-                            print_success "$repo_name: updated $branch (currently on $current_branch)"
-                        else
-                            print_info "$repo_name: $branch is up to date (currently on $current_branch)"
-                        fi
-                    fi
-                )
+                pull_single_repo "$repo" "$output_file" &
+                pids+=($!)
             fi
         done
     done
-    echo ""
+
+    # Wait for all repo pulls to complete
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
 }
 
 print_help() {
@@ -241,11 +287,12 @@ print_help() {
     echo "  -h, --help       Show this help message"
     echo "  -v, --verbose    Show verbose output"
     echo "  --dry-run        Show what would be done without executing"
+    echo "  --sequential     Run tasks sequentially instead of in parallel"
     echo ""
     echo "Configuration:"
     echo "  Config file location: ~/.config/good-morning/config"
     echo ""
-    echo "Tasks:"
+    echo "Tasks (run in parallel by default):"
     echo "  - Check for macOS updates"
     echo "  - brew update / upgrade / cleanup"
     echo "  - Docker system prune"
@@ -259,6 +306,7 @@ dry_run() {
     echo "Dry run - would execute the following:"
     echo ""
     echo "Configuration:"
+    echo "  PARALLEL=$PARALLEL"
     echo "  REPOS_DIRS=${REPOS_DIRS[*]}"
     echo "  RUN_BREW_UPDATE=$RUN_BREW_UPDATE"
     echo "  RUN_BREW_UPGRADE=$RUN_BREW_UPGRADE"
@@ -315,6 +363,81 @@ dry_run() {
 
 SHOW_HEADER=true
 
+# Run all tasks in parallel
+run_parallel() {
+    local pids=()
+
+    # Start all tasks in background
+    check_macos_updates &
+    pids+=($!)
+
+    run_brew_tasks &
+    pids+=($!)
+
+    run_docker_prune &
+    pids+=($!)
+
+    update_nvim_plugins &
+    pids+=($!)
+
+    pull_repos &
+    pids+=($!)
+
+    # Wait for all tasks to complete
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+
+    # Print results in order
+    print_task_output "$TEMP_DIR/macos.out"
+    print_task_output "$TEMP_DIR/brew.out"
+    print_task_output "$TEMP_DIR/docker.out"
+    print_task_output "$TEMP_DIR/nvim.out"
+
+    # Repos output is handled differently (printed within pull_repos via print_task_output pattern)
+    if [ -f "$TEMP_DIR/repos.out" ] && [ -s "$TEMP_DIR/repos.out" ]; then
+        print_section "Pulling latest in repos..."
+        echo ""
+        while IFS=: read -r type message; do
+            case "$type" in
+                success) print_success "$message" ;;
+                error) print_error "$message" ;;
+                info) print_info "$message" ;;
+            esac
+        done < "$TEMP_DIR/repos.out"
+        echo ""
+    fi
+}
+
+# Run all tasks sequentially (original behavior)
+run_sequential() {
+    check_macos_updates
+    print_task_output "$TEMP_DIR/macos.out"
+
+    run_brew_tasks
+    print_task_output "$TEMP_DIR/brew.out"
+
+    run_docker_prune
+    print_task_output "$TEMP_DIR/docker.out"
+
+    update_nvim_plugins
+    print_task_output "$TEMP_DIR/nvim.out"
+
+    pull_repos
+    if [ -f "$TEMP_DIR/repos.out" ] && [ -s "$TEMP_DIR/repos.out" ]; then
+        print_section "Pulling latest in repos..."
+        echo ""
+        while IFS=: read -r type message; do
+            case "$type" in
+                success) print_success "$message" ;;
+                error) print_error "$message" ;;
+                info) print_info "$message" ;;
+            esac
+        done < "$TEMP_DIR/repos.out"
+        echo ""
+    fi
+}
+
 # Main
 main() {
     # Parse arguments
@@ -334,6 +457,10 @@ main() {
             --dry-run)
                 dry_run
                 ;;
+            --sequential)
+                PARALLEL=false
+                shift
+                ;;
             *)
                 echo "Unknown option: $1"
                 echo "Run 'update-everything --help' for usage."
@@ -343,6 +470,7 @@ main() {
     done
 
     load_config
+    setup_temp_dir
 
     if [ "$SHOW_HEADER" = true ]; then
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -351,11 +479,11 @@ main() {
         echo ""
     fi
 
-    check_macos_updates
-    run_brew_tasks
-    run_docker_prune
-    update_nvim_plugins
-    pull_repos
+    if [ "$PARALLEL" = true ]; then
+        run_parallel
+    else
+        run_sequential
+    fi
 
     if [ "$SHOW_HEADER" = true ]; then
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
