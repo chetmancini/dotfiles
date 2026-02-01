@@ -17,8 +17,7 @@ CONFIG_DIR="$HOME/.config/good-morning"
 CONFIG_FILE="$CONFIG_DIR/config"
 
 # Default configuration
-DEFAULT_REPOS_DIR="$HOME/norm"
-DEFAULT_MAIN_BRANCH="main"
+DEFAULT_REPOS_DIRS=("$HOME/code" "$HOME/norm")
 DEFAULT_RUN_BREW_UPDATE=true
 DEFAULT_RUN_BREW_UPGRADE=true
 DEFAULT_RUN_BREW_CLEANUP=true
@@ -26,13 +25,10 @@ DEFAULT_PULL_REPOS=true
 DEFAULT_DOCKER_PRUNE=true
 DEFAULT_CHECK_MACOS_UPDATES=true
 DEFAULT_UPDATE_NVIM_PLUGINS=true
-DEFAULT_PULL_DOTFILES=true
-DEFAULT_DOTFILES_DIR="$HOME/dotfiles"
 
 # Load configuration or use defaults
 load_config() {
-    REPOS_DIR="$DEFAULT_REPOS_DIR"
-    MAIN_BRANCH="$DEFAULT_MAIN_BRANCH"
+    REPOS_DIRS=("${DEFAULT_REPOS_DIRS[@]}")
     RUN_BREW_UPDATE="$DEFAULT_RUN_BREW_UPDATE"
     RUN_BREW_UPGRADE="$DEFAULT_RUN_BREW_UPGRADE"
     RUN_BREW_CLEANUP="$DEFAULT_RUN_BREW_CLEANUP"
@@ -40,8 +36,6 @@ load_config() {
     DOCKER_PRUNE="$DEFAULT_DOCKER_PRUNE"
     CHECK_MACOS_UPDATES="$DEFAULT_CHECK_MACOS_UPDATES"
     UPDATE_NVIM_PLUGINS="$DEFAULT_UPDATE_NVIM_PLUGINS"
-    PULL_DOTFILES="$DEFAULT_PULL_DOTFILES"
-    DOTFILES_DIR="$DEFAULT_DOTFILES_DIR"
 
     if [ -f "$CONFIG_FILE" ]; then
         # shellcheck source=/dev/null
@@ -168,108 +162,72 @@ update_nvim_plugins() {
     echo ""
 }
 
-# Pull latest dotfiles
-pull_dotfiles() {
-    if [ "$PULL_DOTFILES" != true ]; then
-        return
-    fi
-
-    if [ ! -d "$DOTFILES_DIR/.git" ]; then
-        print_section "Pulling dotfiles..."
-        print_error "Dotfiles directory not found or not a git repo: $DOTFILES_DIR"
-        echo ""
-        return
-    fi
-
-    print_section "Pulling dotfiles..."
-
-    # Check for uncommitted changes using git status (more reliable than diff-index)
-    if [ -n "$(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null)" ]; then
-        print_error "Dotfiles has uncommitted changes, skipping"
-        echo ""
-        return
-    fi
-
-    # Fetch and pull
-    if git -C "$DOTFILES_DIR" fetch origin 2>/dev/null; then
-        current_branch=$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD)
-        if git -C "$DOTFILES_DIR" pull --ff-only origin "$current_branch" 2>/dev/null; then
-            print_success "Dotfiles updated (branch: $current_branch)"
-        else
-            print_info "Dotfiles up to date or needs manual merge"
-        fi
-    else
-        print_error "Failed to fetch dotfiles"
-    fi
-    echo ""
-}
-
-# Pull latest from main on all git repos
+# Pull latest from main on all git repos in configured directories
 pull_repos() {
     if [ "$PULL_REPOS" != true ]; then
         return
     fi
 
-    if [ ! -d "$REPOS_DIR" ]; then
-        print_error "Repos directory not found: $REPOS_DIR"
-        return
-    fi
-
-    print_section "Pulling latest from $MAIN_BRANCH in $REPOS_DIR..."
+    print_section "Pulling latest in repos..."
     echo ""
 
-    for repo in "$REPOS_DIR"/*/; do
-        if [ -d "$repo/.git" ]; then
-            repo_name=$(basename "$repo")
-            print_info "Processing $repo_name..."
+    for repos_dir in "${REPOS_DIRS[@]}"; do
+        if [ ! -d "$repos_dir" ]; then
+            print_info "Skipping $repos_dir (not found)"
+            continue
+        fi
 
-            (
-                cd "$repo"
+        print_info "Scanning $repos_dir..."
 
-                # Check if there are uncommitted changes
-                if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-                    print_error "$repo_name has uncommitted changes, skipping"
-                    exit 0
-                fi
+        for repo in "$repos_dir"/*/; do
+            if [ -d "$repo/.git" ]; then
+                repo_name=$(basename "$repo")
 
-                # Fetch latest
-                if ! git fetch origin 2>/dev/null; then
-                    print_error "$repo_name: failed to fetch"
-                    exit 0
-                fi
+                (
+                    cd "$repo"
 
-                # Check if main branch exists
-                if ! git show-ref --verify --quiet "refs/remotes/origin/$MAIN_BRANCH"; then
-                    # Try master if main doesn't exist
-                    if git show-ref --verify --quiet "refs/remotes/origin/master"; then
+                    # Check if there are uncommitted changes
+                    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+                        print_error "$repo_name has uncommitted changes, skipping"
+                        exit 0
+                    fi
+
+                    # Fetch latest
+                    if ! git fetch origin 2>/dev/null; then
+                        print_error "$repo_name: failed to fetch"
+                        exit 0
+                    fi
+
+                    # Detect the primary branch (try main first, then master)
+                    if git show-ref --verify --quiet "refs/remotes/origin/main"; then
+                        branch="main"
+                    elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
                         branch="master"
                     else
                         print_error "$repo_name: no main/master branch found"
                         exit 0
                     fi
-                else
-                    branch="$MAIN_BRANCH"
-                fi
 
-                current_branch=$(git rev-parse --abbrev-ref HEAD)
+                    current_branch=$(git rev-parse --abbrev-ref HEAD)
 
-                if [ "$current_branch" = "$branch" ]; then
-                    # On main branch, just pull
-                    if git pull --ff-only origin "$branch" 2>/dev/null; then
-                        print_success "$repo_name: pulled latest on $branch"
+                    if [ "$current_branch" = "$branch" ]; then
+                        # On main branch, just pull
+                        if git pull --ff-only origin "$branch" 2>/dev/null; then
+                            print_success "$repo_name: pulled latest on $branch"
+                        else
+                            print_error "$repo_name: failed to pull (might need rebase)"
+                        fi
                     else
-                        print_error "$repo_name: failed to pull (might need rebase)"
+                        # On a different branch, fetch main
+                        if git fetch origin "$branch:$branch" 2>/dev/null; then
+                            print_success "$repo_name: updated $branch (currently on $current_branch)"
+                        else
+                            print_info "$repo_name: $branch is up to date (currently on $current_branch)"
+                        fi
                     fi
-                else
-                    # On a different branch, fetch main
-                    if git fetch origin "$branch:$branch" 2>/dev/null; then
-                        print_success "$repo_name: updated $branch (currently on $current_branch)"
-                    else
-                        print_info "$repo_name: $branch is up to date (currently on $current_branch)"
-                    fi
-                fi
-            )
-        fi
+                )
+            fi
+        done
     done
     echo ""
 }
@@ -292,8 +250,7 @@ print_help() {
     echo "  - brew update / upgrade / cleanup"
     echo "  - Docker system prune"
     echo "  - Update Neovim plugins"
-    echo "  - Pull latest dotfiles"
-    echo "  - Pull latest main branch on all git repos"
+    echo "  - Pull latest main branch on all git repos in ~/code and ~/norm"
     exit 0
 }
 
@@ -302,8 +259,7 @@ dry_run() {
     echo "Dry run - would execute the following:"
     echo ""
     echo "Configuration:"
-    echo "  REPOS_DIR=$REPOS_DIR"
-    echo "  MAIN_BRANCH=$MAIN_BRANCH"
+    echo "  REPOS_DIRS=${REPOS_DIRS[*]}"
     echo "  RUN_BREW_UPDATE=$RUN_BREW_UPDATE"
     echo "  RUN_BREW_UPGRADE=$RUN_BREW_UPGRADE"
     echo "  RUN_BREW_CLEANUP=$RUN_BREW_CLEANUP"
@@ -311,8 +267,6 @@ dry_run() {
     echo "  DOCKER_PRUNE=$DOCKER_PRUNE"
     echo "  CHECK_MACOS_UPDATES=$CHECK_MACOS_UPDATES"
     echo "  UPDATE_NVIM_PLUGINS=$UPDATE_NVIM_PLUGINS"
-    echo "  PULL_DOTFILES=$PULL_DOTFILES"
-    echo "  DOTFILES_DIR=$DOTFILES_DIR"
     echo ""
 
     if [ "$CHECK_MACOS_UPDATES" = true ]; then
@@ -341,20 +295,20 @@ dry_run() {
             echo "Would run: nvim plugin update (nvim not installed)"
         fi
     fi
-    if [ "$PULL_DOTFILES" = true ]; then
-        echo "Would pull: dotfiles from $DOTFILES_DIR"
-    fi
     if [ "$PULL_REPOS" = true ]; then
-        echo "Would pull latest from $MAIN_BRANCH in:"
-        if [ -d "$REPOS_DIR" ]; then
-            for repo in "$REPOS_DIR"/*/; do
-                if [ -d "$repo/.git" ]; then
-                    echo "  - $(basename "$repo")"
-                fi
-            done
-        else
-            echo "  (directory $REPOS_DIR not found)"
-        fi
+        echo "Would pull latest (main or master) in:"
+        for repos_dir in "${REPOS_DIRS[@]}"; do
+            if [ -d "$repos_dir" ]; then
+                echo "  $repos_dir:"
+                for repo in "$repos_dir"/*/; do
+                    if [ -d "$repo/.git" ]; then
+                        echo "    - $(basename "$repo")"
+                    fi
+                done
+            else
+                echo "  $repos_dir (not found)"
+            fi
+        done
     fi
     exit 0
 }
@@ -400,7 +354,6 @@ main() {
     check_macos_updates
     run_brew_tasks
     run_docker_prune
-    pull_dotfiles
     update_nvim_plugins
     pull_repos
 

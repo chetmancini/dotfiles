@@ -68,10 +68,9 @@ update-everything --verbose # Detailed output
 **Updates:**
 - Homebrew (update, upgrade, cleanup)
 - macOS software (check only)
-- Git repositories in `~/norm`
+- Git repositories in `~/code` and `~/norm`
 - Docker (system prune)
 - Neovim plugins
-- Dotfiles repository
 
 ---
 
@@ -287,7 +286,7 @@ Scripts share a config file at `~/.config/good-morning/config`:
 WEATHER_LOCATION="San Francisco"
 CALENDAR_DAYS=7
 GITHUB_NOTIFICATIONS=true
-UPDATE_REPOS_DIR="$HOME/norm"
+REPOS_DIRS=("$HOME/code" "$HOME/norm")
 ```
 
 Generate default config:
