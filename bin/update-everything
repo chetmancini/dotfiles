@@ -68,7 +68,7 @@ run_brew_tasks() {
 
         if [ "$RUN_BREW_UPGRADE" = true ]; then
             echo "section:Upgrading packages..."
-            if brew upgrade > /dev/null 2>&1; then
+            if brew upgrade --greedy > /dev/null 2>&1; then
                 echo "success:Packages upgraded"
             else
                 echo "error:Failed to upgrade packages"
@@ -324,7 +324,7 @@ dry_run() {
         echo "Would run: brew update"
     fi
     if [ "$RUN_BREW_UPGRADE" = true ]; then
-        echo "Would run: brew upgrade"
+        echo "Would run: brew upgrade --greedy"
     fi
     if [ "$RUN_BREW_CLEANUP" = true ]; then
         echo "Would run: brew cleanup"
