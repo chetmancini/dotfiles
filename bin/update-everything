@@ -68,7 +68,7 @@ run_brew_tasks() {
 
         if [ "$RUN_BREW_UPGRADE" = true ]; then
             echo "section:Upgrading packages..."
-            if brew upgrade --greedy > /dev/null 2>&1; then
+            if brew upgrade > /dev/null 2>&1; then
                 echo "success:Packages upgraded"
             else
                 echo "error:Failed to upgrade packages"
@@ -324,7 +324,7 @@ dry_run() {
         echo "Would run: brew update"
     fi
     if [ "$RUN_BREW_UPGRADE" = true ]; then
-        echo "Would run: brew upgrade --greedy"
+        echo "Would run: brew upgrade"
     fi
     if [ "$RUN_BREW_CLEANUP" = true ]; then
         echo "Would run: brew cleanup"
@@ -363,30 +363,73 @@ dry_run() {
 
 SHOW_HEADER=true
 
+# Mark a task as complete (for progress tracking)
+mark_complete() {
+    touch "$TEMP_DIR/done_$1"
+}
+
+# Count completed tasks
+count_completed() {
+    find "$TEMP_DIR" -name "done_*" 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Show progress while waiting for tasks
+wait_with_progress() {
+    local pids=("$@")
+    local total=${#pids[@]}
+    local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+
+    while true; do
+        local running=0
+        for pid in "${pids[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                ((running++))
+            fi
+        done
+
+        if [ "$running" -eq 0 ]; then
+            break
+        fi
+
+        local completed
+        completed=$(count_completed)
+        printf "\r  %s Running tasks... (%d/%d complete) " "${spin_chars:i++%${#spin_chars}:1}" "$completed" "$total"
+        sleep 0.1
+    done
+
+    # Clear progress line
+    printf "\r%-50s\r" " "
+}
+
 # Run all tasks in parallel
 run_parallel() {
     local pids=()
+    local task_names=()
 
-    # Start all tasks in background
-    check_macos_updates &
+    # Start all tasks in background (each marks itself complete when done)
+    { check_macos_updates; mark_complete "macos"; } &
     pids+=($!)
+    task_names+=("macos")
 
-    run_brew_tasks &
+    { run_brew_tasks; mark_complete "brew"; } &
     pids+=($!)
+    task_names+=("brew")
 
-    run_docker_prune &
+    { run_docker_prune; mark_complete "docker"; } &
     pids+=($!)
+    task_names+=("docker")
 
-    update_nvim_plugins &
+    { update_nvim_plugins; mark_complete "nvim"; } &
     pids+=($!)
+    task_names+=("nvim")
 
-    pull_repos &
+    { pull_repos; mark_complete "repos"; } &
     pids+=($!)
+    task_names+=("repos")
 
-    # Wait for all tasks to complete
-    for pid in "${pids[@]}"; do
-        wait "$pid" 2>/dev/null || true
-    done
+    # Wait with progress indicator
+    wait_with_progress "${pids[@]}"
 
     # Print results in order
     print_task_output "$TEMP_DIR/macos.out"
