@@ -380,6 +380,10 @@ wait_with_progress() {
     local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     local i=0
 
+    # Task names mapping to done files
+    local -a task_names=("macOS updates" "Homebrew" "Docker" "Neovim" "Repos")
+    local -a done_files=("done_macos" "done_brew" "done_docker" "done_nvim" "done_repos")
+
     while true; do
         local running=0
         for pid in "${pids[@]}"; do
@@ -394,7 +398,21 @@ wait_with_progress() {
 
         local completed
         completed=$(count_completed)
-        printf "\r  %s Running tasks... (%d/%d complete) " "${spin_chars:i++%${#spin_chars}:1}" "$completed" "$total"
+
+        # Build list of running task names
+        local running_tasks=""
+        local idx=0
+        for done_file in "${done_files[@]}"; do
+            if [ ! -f "$TEMP_DIR/$done_file" ]; then
+                running_tasks="$running_tasks, ${task_names[$idx]}"
+            fi
+            ((idx++))
+        done
+
+        # Remove leading comma and space
+        running_tasks="${running_tasks#, }"
+
+        printf "\r  %s Running: %s (%d/%d complete) " "${spin_chars:i++%${#spin_chars}:1}" "$running_tasks" "$completed" "$total"
         sleep 0.1
     done
 
