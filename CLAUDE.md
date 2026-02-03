@@ -67,6 +67,13 @@ brew bundle dump --file=~/dotfiles/Brewfile --force
 
 # Remove packages not in Brewfile
 brew bundle cleanup --file=~/dotfiles/Brewfile
+
+# Check Brewfile drift (brew-sync)
+brew-sync                           # Check for drift
+brew-sync --add                     # Add missing packages to Brewfile
+brew-sync --remove                  # Remove uninstalled packages from Brewfile
+brew-sync --update                  # Regenerate Brewfile from installed packages
+brew-sync --dry-run                 # Preview changes without applying
 ```
 
 ### Applying Changes
@@ -91,7 +98,7 @@ This repository includes configurations for:
 - `Brewfile` - Homebrew package manifest (formulae, casks, fonts)
 - `install.sh` - Setup script for new machines
 - `chetmancini.zsh-theme` - Custom oh-my-zsh theme
-- `bin/` - Custom utility scripts (extract, imgcat, murder, removeexif, etc.)
+- `bin/` - Custom utility scripts (extract, imgcat, murder, removeexif, brew-sync, etc.)
 - `nvim/` - LazyVim-based neovim configuration
 - `yazi/` - File browser configuration
 - `ghostty/` - Ghostty terminal configuration
