@@ -13,6 +13,7 @@ tap "oven-sh/bun"
 brew "ack"                            # Grep-like tool for programmers
 brew "ast-grep"             # Code search/refactor
 brew "bat"                  # Better cat
+brew "semgrep"              # Code analysis/search
 brew "brotli"                           # Lossless compression
 brew "btop"                 # Resource monitor
 brew "cmake"                            # Cross-platform make
@@ -61,6 +62,7 @@ brew "aws-vault"            # AWS credentials manager
 brew "emacs"                             # Text editor
 brew "gh"                   # GitHub CLI
 brew "git-delta"            # Better git diffs
+brew "mise"                 # Polyglot version manager
 brew "git-lfs"                           # Large file storage
 brew "mob"                  # Mob programming tool
 brew "neovim"                            # Hyperextensible Vim
