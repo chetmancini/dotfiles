@@ -206,14 +206,22 @@ pull_single_repo() {
     (
         cd "$repo"
 
-        # Check if there are uncommitted changes
+        # Check if there are uncommitted changes and stash them
+        local stashed=false
         if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-            echo "error:$repo_name has uncommitted changes, skipping" >> "$output_file"
-            exit 0
+            if git stash push -m "update-everything auto-stash" 2>/dev/null; then
+                stashed=true
+            else
+                echo "error:$repo_name: failed to stash changes, skipping" >> "$output_file"
+                exit 0
+            fi
         fi
 
         # Fetch latest
         if ! git fetch origin 2>/dev/null; then
+            if [ "$stashed" = true ]; then
+                git stash pop 2>/dev/null || true
+            fi
             echo "error:$repo_name: failed to fetch" >> "$output_file"
             exit 0
         fi
@@ -224,25 +232,59 @@ pull_single_repo() {
         elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
             branch="master"
         else
+            if [ "$stashed" = true ]; then
+                git stash pop 2>/dev/null || true
+            fi
             echo "error:$repo_name: no main/master branch found" >> "$output_file"
             exit 0
         fi
 
         current_branch=$(git rev-parse --abbrev-ref HEAD)
+        local stash_note=""
+        if [ "$stashed" = true ]; then
+            stash_note=" (stashed changes restored)"
+        fi
 
         if [ "$current_branch" = "$branch" ]; then
             # On main branch, just pull
             if git pull --ff-only origin "$branch" 2>/dev/null; then
-                echo "success:$repo_name: pulled latest on $branch" >> "$output_file"
+                if [ "$stashed" = true ]; then
+                    if git stash pop 2>/dev/null; then
+                        echo "success:$repo_name: pulled latest on $branch$stash_note" >> "$output_file"
+                    else
+                        echo "error:$repo_name: pulled latest on $branch but failed to restore stash (conflicts?)" >> "$output_file"
+                    fi
+                else
+                    echo "success:$repo_name: pulled latest on $branch" >> "$output_file"
+                fi
             else
+                if [ "$stashed" = true ]; then
+                    git stash pop 2>/dev/null || true
+                fi
                 echo "error:$repo_name: failed to pull (might need rebase)" >> "$output_file"
             fi
         else
             # On a different branch, fetch main
             if git fetch origin "$branch:$branch" 2>/dev/null; then
-                echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
+                if [ "$stashed" = true ]; then
+                    if git stash pop 2>/dev/null; then
+                        echo "success:$repo_name: updated $branch (currently on $current_branch)$stash_note" >> "$output_file"
+                    else
+                        echo "error:$repo_name: updated $branch but failed to restore stash (conflicts?)" >> "$output_file"
+                    fi
+                else
+                    echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
+                fi
             else
-                echo "info:$repo_name: $branch is up to date (currently on $current_branch)" >> "$output_file"
+                if [ "$stashed" = true ]; then
+                    if git stash pop 2>/dev/null; then
+                        echo "info:$repo_name: $branch is up to date (currently on $current_branch)$stash_note" >> "$output_file"
+                    else
+                        echo "error:$repo_name: $branch is up to date but failed to restore stash (conflicts?)" >> "$output_file"
+                    fi
+                else
+                    echo "info:$repo_name: $branch is up to date (currently on $current_branch)" >> "$output_file"
+                fi
             fi
         fi
     )
