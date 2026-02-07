@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# repo-report: Health check for all your git repos
+#
+# Scans directories for repos with uncommitted changes,
+# unpushed commits, or stale branches
+
+# Get the directory where this script lives
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared helpers
+source "$SCRIPT_DIR/lib/helpers.sh"
+
+print_help() {
+    echo "Usage: repo-report [options] [directories...]"
+    echo ""
+    echo "Health check for all your git repos."
+    echo ""
+    echo "Arguments:"
+    echo "  directories     Directories to scan (default: ~/code ~/norm)"
+    echo ""
+    echo "Options:"
+    echo "  -d, --dirty     Only show repos with issues"
+    echo "  -q, --quiet     One-line-per-repo summary"
+    echo "  -h, --help      Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  repo-report                  # Scan ~/code and ~/norm"
+    echo "  repo-report ~/projects       # Scan specific directory"
+    echo "  repo-report -d               # Only show dirty repos"
+    exit 0
+}
+
+DIRTY_ONLY=false
+QUIET=false
+DIRS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -d|--dirty)
+            DIRTY_ONLY=true
+            shift
+            ;;
+        -q|--quiet)
+            QUIET=true
+            shift
+            ;;
+        *)
+            DIRS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Default directories
+if [[ ${#DIRS[@]} -eq 0 ]]; then
+    [[ -d "$HOME/code" ]] && DIRS+=("$HOME/code")
+    [[ -d "$HOME/norm" ]] && DIRS+=("$HOME/norm")
+fi
+
+if [[ ${#DIRS[@]} -eq 0 ]]; then
+    echo "No directories to scan. Pass directories as arguments."
+    exit 1
+fi
+
+total_repos=0
+dirty_repos=0
+clean_repos=0
+
+check_repo() {
+    local repo_path="$1"
+    local repo_name
+    repo_name=$(basename "$repo_path")
+    local issues=()
+
+    # Check for uncommitted changes
+    local status
+    status=$(git -C "$repo_path" status --porcelain 2>/dev/null)
+    if [[ -n "$status" ]]; then
+        local modified added deleted untracked
+        modified=$(echo "$status" | grep -c "^ M\| ^M" 2>/dev/null || true)
+        added=$(echo "$status" | grep -c "^A " 2>/dev/null || true)
+        deleted=$(echo "$status" | grep -c "^.D\|^D " 2>/dev/null || true)
+        untracked=$(echo "$status" | grep -c "^??" 2>/dev/null || true)
+
+        local parts=()
+        [[ "$modified" -gt 0 ]] && parts+=("${modified} modified")
+        [[ "$added" -gt 0 ]] && parts+=("${added} staged")
+        [[ "$deleted" -gt 0 ]] && parts+=("${deleted} deleted")
+        [[ "$untracked" -gt 0 ]] && parts+=("${untracked} untracked")
+        issues+=("dirty: $(IFS=', '; echo "${parts[*]}")")
+    fi
+
+    # Check for unpushed commits
+    local branch
+    branch=$(git -C "$repo_path" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [[ -n "$branch" && "$branch" != "HEAD" ]]; then
+        local upstream
+        upstream=$(git -C "$repo_path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null || true)
+        if [[ -n "$upstream" ]]; then
+            local ahead
+            ahead=$(git -C "$repo_path" rev-list --count "$upstream..HEAD" 2>/dev/null || echo "0")
+            local behind
+            behind=$(git -C "$repo_path" rev-list --count "HEAD..$upstream" 2>/dev/null || echo "0")
+            [[ "$ahead" -gt 0 ]] && issues+=("${ahead} unpushed commits")
+            [[ "$behind" -gt 0 ]] && issues+=("${behind} commits behind upstream")
+        fi
+    fi
+
+    # Check for stale branches (merged but not deleted)
+    local stale_count
+    stale_count=$(git -C "$repo_path" branch --merged 2>/dev/null | grep -cv "^\*\|main\|master\|develop" 2>/dev/null || echo "0")
+    [[ "$stale_count" -gt 0 ]] && issues+=("${stale_count} stale branches")
+
+    # Check for stashed changes
+    local stash_count
+    stash_count=$(git -C "$repo_path" stash list 2>/dev/null | wc -l | xargs)
+    [[ "$stash_count" -gt 0 ]] && issues+=("${stash_count} stashed changes")
+
+    total_repos=$((total_repos + 1))
+
+    if [[ ${#issues[@]} -eq 0 ]]; then
+        clean_repos=$((clean_repos + 1))
+        if [[ "$DIRTY_ONLY" == false ]]; then
+            if [[ "$QUIET" == true ]]; then
+                echo -e "${GREEN}✓${NC} $repo_name ($branch)"
+            else
+                print_success "$repo_name ($branch) — clean"
+            fi
+        fi
+    else
+        dirty_repos=$((dirty_repos + 1))
+        if [[ "$QUIET" == true ]]; then
+            echo -e "${RED}✗${NC} $repo_name ($branch): $(IFS=', '; echo "${issues[*]}")"
+        else
+            print_error "$repo_name ($branch)"
+            for issue in "${issues[@]}"; do
+                echo -e "    ${YELLOW}⚠${NC}  $issue"
+            done
+        fi
+    fi
+}
+
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}  Repo Report${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+
+for dir in "${DIRS[@]}"; do
+    if [[ ! -d "$dir" ]]; then
+        print_error "Directory not found: $dir"
+        continue
+    fi
+
+    print_section "$(basename "$dir")/ ($(cd "$dir" && pwd))"
+
+    # Find git repos (1 level deep)
+    found_any=false
+    for repo in "$dir"/*/; do
+        [[ -d "$repo/.git" ]] || continue
+        found_any=true
+        check_repo "$repo"
+    done
+
+    # Also check if dir itself is a repo
+    if [[ -d "$dir/.git" ]]; then
+        found_any=true
+        check_repo "$dir"
+    fi
+
+    if [[ "$found_any" == false ]]; then
+        echo "  No git repos found"
+    fi
+    echo ""
+done
+
+# Summary
+echo -e "${BLUE}━━━ Summary ━━━${NC}"
+echo -e "  Total: $total_repos  ${GREEN}Clean: $clean_repos${NC}  ${RED}Dirty: $dirty_repos${NC}"

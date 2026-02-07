@@ -352,6 +352,29 @@ function setjdk() {
 ##############################
 # fun
 ##############################
+
+# Show current WiFi password (macOS only)
+function wifi-password() {
+    if [[ "$(uname)" != "Darwin" ]]; then
+        echo "macOS only" >&2
+        return 1
+    fi
+    local ssid
+    ssid=$(/System/Library/PrivateFrameworks/Apple80211.framework/Resources/airport -I | awk -F': ' '/ SSID/{print $2}')
+    if [[ -z "$ssid" ]]; then
+        echo "Not connected to WiFi" >&2
+        return 1
+    fi
+    echo "SSID: $ssid"
+    security find-generic-password -D "AirPort network password" -wa "$ssid"
+}
+
+# Quick weather from wttr.in
+function weather() {
+    local location="${1:-}"
+    curl -s "wttr.in/${location}?F"
+}
+
 function xtitle()      # Adds some text in the terminal frame.
 {
     case "$TERM" in

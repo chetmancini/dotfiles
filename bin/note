@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# note: Quick scratch notes from the terminal
+#
+# Append notes, search, or open in editor
+
+NOTES_DIR="${NOTES_DIR:-$HOME/notes}"
+NOTES_FILE="$NOTES_DIR/scratch.md"
+
+print_help() {
+    echo "Usage: note [options] [text...]"
+    echo ""
+    echo "Quick scratch notes from the terminal."
+    echo ""
+    echo "Commands:"
+    echo "  note <text>           Append a note with timestamp"
+    echo "  note                  Open notes in \$EDITOR"
+    echo "  note --today          Show today's notes"
+    echo "  note --search <term>  Search notes"
+    echo "  note --list           List last 20 notes"
+    echo "  note --edit           Open notes in \$EDITOR"
+    echo "  note --path           Print notes file path"
+    echo "  -h, --help            Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  NOTES_DIR    Directory for notes (default: ~/notes)"
+    echo ""
+    echo "Examples:"
+    echo "  note remember to update the API key"
+    echo "  note \"meeting at 3pm with design team\""
+    echo "  note --today"
+    echo "  note --search api"
+    exit 0
+}
+
+ensure_notes_dir() {
+    if [[ ! -d "$NOTES_DIR" ]]; then
+        mkdir -p "$NOTES_DIR"
+    fi
+    if [[ ! -f "$NOTES_FILE" ]]; then
+        echo "# Scratch Notes" > "$NOTES_FILE"
+        echo "" >> "$NOTES_FILE"
+    fi
+}
+
+add_note() {
+    ensure_notes_dir
+    local timestamp
+    timestamp=$(date "+%Y-%m-%d %H:%M")
+    local text="$*"
+
+    echo "- **[$timestamp]** $text" >> "$NOTES_FILE"
+    echo "Noted: $text"
+}
+
+show_today() {
+    ensure_notes_dir
+    local today
+    today=$(date "+%Y-%m-%d")
+
+    local found
+    found=$(grep "$today" "$NOTES_FILE" 2>/dev/null || true)
+
+    if [[ -n "$found" ]]; then
+        echo "Notes from today ($today):"
+        echo ""
+        echo "$found"
+    else
+        echo "No notes from today."
+    fi
+}
+
+search_notes() {
+    ensure_notes_dir
+    local term="$1"
+
+    if command -v rg &>/dev/null; then
+        rg --color=always "$term" "$NOTES_FILE" || echo "No matches for '$term'"
+    else
+        grep --color=always -i "$term" "$NOTES_FILE" || echo "No matches for '$term'"
+    fi
+}
+
+list_notes() {
+    ensure_notes_dir
+    echo "Last 20 notes:"
+    echo ""
+    grep "^- \*\*\[" "$NOTES_FILE" 2>/dev/null | tail -20 || echo "No notes yet."
+}
+
+open_in_editor() {
+    ensure_notes_dir
+    ${EDITOR:-vim} "$NOTES_FILE"
+}
+
+# Main
+if [[ $# -eq 0 ]]; then
+    open_in_editor
+    exit 0
+fi
+
+case "$1" in
+    -h|--help)
+        print_help
+        ;;
+    --today)
+        show_today
+        ;;
+    --search)
+        if [[ $# -lt 2 ]]; then
+            echo "Usage: note --search <term>"
+            exit 1
+        fi
+        search_notes "$2"
+        ;;
+    --list)
+        list_notes
+        ;;
+    --edit)
+        open_in_editor
+        ;;
+    --path)
+        echo "$NOTES_FILE"
+        ;;
+    *)
+        add_note "$@"
+        ;;
+esac

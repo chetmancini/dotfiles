@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# git-standup: Show what you (or your team) committed recently
+#
+# Great for daily standups — see what happened yesterday
+
+print_help() {
+    echo "Usage: git-standup [options] [days]"
+    echo ""
+    echo "Show what you committed recently."
+    echo ""
+    echo "Arguments:"
+    echo "  days            Number of days to look back (default: 1)"
+    echo ""
+    echo "Options:"
+    echo "  -a, --author    Filter by author (default: git user.name)"
+    echo "  -A, --all       Show all authors"
+    echo "  -t, --team      Scan all repos in ~/code and ~/norm"
+    echo "  -h, --help      Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  git-standup              # What did I do yesterday?"
+    echo "  git-standup 3            # Last 3 days"
+    echo "  git-standup --team       # Scan all repos"
+    echo "  git-standup -A           # All authors in current repo"
+    echo "  git-standup -a 'Alice'   # Specific author"
+    exit 0
+}
+
+DAYS=1
+AUTHOR=""
+ALL_AUTHORS=false
+TEAM_MODE=false
+
+# Colors
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+MAGENTA='\033[0;35m'
+DIM='\033[2m'
+NC='\033[0m'
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -a|--author)
+            AUTHOR="$2"
+            shift 2
+            ;;
+        -A|--all)
+            ALL_AUTHORS=true
+            shift
+            ;;
+        -t|--team)
+            TEAM_MODE=true
+            shift
+            ;;
+        *)
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                DAYS="$1"
+            else
+                echo "Unknown option: $1"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Default author is git user
+if [[ -z "$AUTHOR" && "$ALL_AUTHORS" == false ]]; then
+    AUTHOR=$(git config user.name 2>/dev/null || echo "$USER")
+fi
+
+# Adjust for weekends: if today is Monday and days=1, look back to Friday
+if [[ "$DAYS" -eq 1 ]]; then
+    day_of_week=$(date +%u)  # 1=Monday ... 7=Sunday
+    if [[ "$day_of_week" -eq 1 ]]; then
+        DAYS=3  # Monday: look back to Friday
+    fi
+fi
+
+since_date=$(date -v-"${DAYS}"d +%Y-%m-%d 2>/dev/null || date -d "${DAYS} days ago" +%Y-%m-%d 2>/dev/null)
+
+show_repo_log() {
+    local repo_path="$1"
+    local repo_name
+    repo_name=$(basename "$repo_path")
+
+    local author_flag=""
+    if [[ -n "$AUTHOR" ]]; then
+        author_flag="--author=$AUTHOR"
+    fi
+
+    local log_output
+    log_output=$(git -C "$repo_path" log \
+        --since="$since_date" \
+        --format="%C(magenta)%h%Creset %C(green)%ad%Creset %s %C(dim cyan)<%an>%Creset" \
+        --date=short \
+        --all \
+        $author_flag 2>/dev/null || true)
+
+    if [[ -n "$log_output" ]]; then
+        echo -e "${YELLOW}▶ ${repo_name}${NC}"
+        echo "$log_output" | while IFS= read -r line; do
+            echo "  $line"
+        done
+        echo ""
+        return 0
+    fi
+    return 1
+}
+
+if [[ "$TEAM_MODE" == true ]]; then
+    echo -e "${CYAN}Standup report since ${since_date}${NC}"
+    if [[ -n "$AUTHOR" ]]; then
+        echo -e "${DIM}Author: ${AUTHOR}${NC}"
+    else
+        echo -e "${DIM}All authors${NC}"
+    fi
+    echo ""
+
+    found_any=false
+    for dir in "$HOME/code" "$HOME/norm"; do
+        [[ -d "$dir" ]] || continue
+        for repo in "$dir"/*/; do
+            [[ -d "$repo/.git" ]] || continue
+            if show_repo_log "$repo"; then
+                found_any=true
+            fi
+        done
+    done
+
+    if [[ "$found_any" == false ]]; then
+        echo "  No commits found in the last ${DAYS} day(s)."
+    fi
+else
+    # Single repo mode
+    if ! git rev-parse --git-dir &>/dev/null; then
+        echo "Not in a git repository. Use --team to scan ~/code and ~/norm."
+        exit 1
+    fi
+
+    echo -e "${CYAN}Standup since ${since_date}${NC}"
+    if [[ -n "$AUTHOR" ]]; then
+        echo -e "${DIM}Author: ${AUTHOR}${NC}"
+    else
+        echo -e "${DIM}All authors${NC}"
+    fi
+    echo ""
+
+    if ! show_repo_log "."; then
+        echo "  No commits found in the last ${DAYS} day(s)."
+    fi
+fi
