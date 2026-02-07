@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# portpid: Show what process is listening on a port
+#
+# Quick way to find and optionally kill processes by port
+
+print_help() {
+    echo "Usage: portpid <port> [options]"
+    echo ""
+    echo "Show what process is listening on a port."
+    echo ""
+    echo "Arguments:"
+    echo "  port            Port number to check"
+    echo ""
+    echo "Options:"
+    echo "  -k, --kill      Kill the process after showing it"
+    echo "  -h, --help      Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  portpid 3000           # What's on port 3000?"
+    echo "  portpid 8080 --kill    # Show and kill whatever's on 8080"
+    exit 0
+}
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+KILL_MODE=false
+PORT=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            ;;
+        -k|--kill)
+            KILL_MODE=true
+            shift
+            ;;
+        *)
+            if [[ "$1" =~ ^:?[0-9]+$ ]]; then
+                PORT="${1#:}"  # Strip leading colon if present
+            else
+                echo "Error: Expected a port number, got '$1'"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$PORT" ]]; then
+    print_help
+    exit 1
+fi
+
+# Validate port range
+if [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+    echo "Error: Port must be between 1 and 65535"
+    exit 1
+fi
+
+# Find processes on the port
+output=$(lsof -i :"$PORT" -P -n 2>/dev/null || true)
+
+if [[ -z "$output" ]] || [[ $(echo "$output" | wc -l) -le 1 ]]; then
+    echo -e "${GREEN}Port $PORT is free${NC} — nothing listening"
+    exit 0
+fi
+
+echo -e "${YELLOW}Port $PORT is in use:${NC}"
+echo ""
+
+# Parse and display nicely
+echo "$output" | head -1 | awk '{printf "  %-16s %-8s %-8s %-8s %s\n", $1, $2, $3, $8, $9}'
+echo "  ────────────────────────────────────────────────"
+
+# Collect unique PIDs
+declare -A seen_pids
+echo "$output" | tail -n +2 | while IFS= read -r line; do
+    pid=$(echo "$line" | awk '{print $2}')
+    process=$(echo "$line" | awk '{print $1}')
+    user=$(echo "$line" | awk '{print $3}')
+    state=$(echo "$line" | awk '{print $8}')
+    name=$(echo "$line" | awk '{print $9}')
+
+    printf "  ${CYAN}%-16s${NC} pid=%-6s user=%-8s %s %s\n" "$process" "$pid" "$user" "$state" "$name"
+done
+
+echo ""
+
+if [[ "$KILL_MODE" == true ]]; then
+    # Get unique PIDs (skip header)
+    pids=$(echo "$output" | tail -n +2 | awk '{print $2}' | sort -u)
+    for pid in $pids; do
+        process=$(echo "$output" | awk -v p="$pid" '$2 == p {print $1; exit}')
+        echo -e "  ${RED}Killing${NC} $process (pid $pid)..."
+        kill "$pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    # Verify
+    remaining=$(lsof -i :"$PORT" -P -n 2>/dev/null | tail -n +2 || true)
+    if [[ -z "$remaining" ]]; then
+        echo -e "  ${GREEN}Port $PORT is now free${NC}"
+    else
+        echo -e "  ${YELLOW}Process still running, try: kill -9 <pid>${NC}"
+    fi
+else
+    # Show kill hint
+    pids=$(echo "$output" | tail -n +2 | awk '{print $2}' | sort -u | tr '\n' ' ')
+    echo -e "  ${CYAN}Tip:${NC} portpid $PORT --kill  ${YELLOW}or${NC}  kill $pids"
+fi
