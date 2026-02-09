@@ -216,6 +216,12 @@ create_symlink \
     "Neovim" \
     "LazyVim-based Neovim configuration with plugins and keymaps"
 
+create_symlink \
+    "$DOTFILES_DIR/mise" \
+    "$HOME/.config/mise" \
+    "Mise" \
+    "Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code"
+
 #==============================================================================
 # Step 4: Git configuration
 #==============================================================================
