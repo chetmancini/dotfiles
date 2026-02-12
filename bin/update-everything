@@ -52,6 +52,44 @@ setup_temp_dir() {
     trap 'rm -rf "$TEMP_DIR"' EXIT INT TERM
 }
 
+# Emit a concise Homebrew upgrade report from outdated snapshots.
+# Arguments: label before_verbose_file after_names_file
+emit_brew_upgrade_report() {
+    local label="$1"
+    local before_file="$2"
+    local after_file="$3"
+    local updated_count=0
+    local line name target_version
+    local -a updated_entries=()
+
+    [ -f "$before_file" ] || return 0
+
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+
+        # brew outdated --verbose format is "<name> (...) <target>" (or "!= <target>" for some casks)
+        name="${line%% *}"
+        target_version="${line##* }"
+
+        if [ -f "$after_file" ] && grep -qx "$name" "$after_file"; then
+            continue
+        fi
+
+        updated_entries+=("$name $target_version")
+        ((updated_count++))
+    done < "$before_file"
+
+    if [ "$updated_count" -eq 0 ]; then
+        echo "info:$label updated: none"
+        return 0
+    fi
+
+    echo "info:$label updated: $updated_count"
+    for entry in "${updated_entries[@]}"; do
+        echo "info:  - $entry"
+    done
+}
+
 # Homebrew tasks (must run sequentially: update -> upgrade -> cleanup)
 run_brew_tasks() {
     local output_file="$TEMP_DIR/brew.out"
@@ -68,8 +106,20 @@ run_brew_tasks() {
 
         if [ "$RUN_BREW_UPGRADE" = true ]; then
             echo "section:Upgrading packages..."
+            local formula_before="$TEMP_DIR/brew_formula_before.out"
+            local formula_after="$TEMP_DIR/brew_formula_after.out"
+            local cask_before="$TEMP_DIR/brew_cask_before.out"
+            local cask_after="$TEMP_DIR/brew_cask_after.out"
+
+            brew outdated --formula --verbose > "$formula_before" 2>/dev/null || true
+            brew outdated --cask --verbose > "$cask_before" 2>/dev/null || true
+
             if brew upgrade > /dev/null 2>&1; then
+                brew outdated --formula > "$formula_after" 2>/dev/null || true
+                brew outdated --cask > "$cask_after" 2>/dev/null || true
                 echo "success:Packages upgraded"
+                emit_brew_upgrade_report "Packages" "$formula_before" "$formula_after"
+                emit_brew_upgrade_report "Apps" "$cask_before" "$cask_after"
             else
                 echo "error:Failed to upgrade packages"
             fi
