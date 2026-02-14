@@ -3,6 +3,7 @@
 
 # Taps
 tap "anomalyco/tap"
+tap "datadog/pack"
 tap "github/gh"
 tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
@@ -42,6 +43,7 @@ brew "little-cms2"                        # Color management
 brew "ossp-uuid"                          # UUID generator
 brew "pkg-config"                         # Package metadata
 brew "procs"                # Better ps
+brew "pup"                  # HTML parser CLI
 brew "readline"                           # Line editing library
 brew "ripgrep"              # Fast grep (rg)
 brew "rust"                               # Systems programming language
