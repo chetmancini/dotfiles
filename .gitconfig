@@ -81,9 +81,6 @@
 	required = true
 [oh-my-zsh]
 	git-commit-alias = 88659ed193cd1af0ba3679c9de3c85f21003f3d4
-[credential]
-	helper =
-	helper = /usr/local/share/gcm-core/git-credential-manager
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [credential "https://github.com"]
@@ -94,3 +91,5 @@
 	helper = !/opt/homebrew/bin/gh auth git-credential
 [coderabbit]
 	machineId = cli/c236e7dd59ab4076bf99c21de2a1cbf7
+[credential]
+	helper = osxkeychain
