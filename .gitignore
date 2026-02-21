@@ -10,6 +10,7 @@ replstate.xml
 intent_specific.sh
 simon_specific.sh
 carta_specific.sh
+norm_specific.sh
 api_keys.sh
 api_keys_1password.sh
 /.oh-my-zsh

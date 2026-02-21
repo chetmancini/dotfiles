@@ -319,6 +319,7 @@ function cpmsg() {
 
 # SSH keys are managed by macOS Keychain automatically
 # No need to call ssh-add on every shell startup
+[ -f ~/dotfiles/norm_specific.sh ] && source ~/dotfiles/norm_specific.sh
 
 
 ##############################
