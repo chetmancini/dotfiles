@@ -4,6 +4,7 @@
 # Taps
 tap "anomalyco/tap"
 tap "datadog/pack"
+tap "datadog-labs/pack"
 tap "github/gh"
 tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
@@ -119,6 +120,8 @@ brew "anomalyco/tap/opencode"   # AI coding assistant CLI
 brew "huggingface-cli"          # HuggingFace model downloads
 brew "llm"                      # CLI for LLMs
 brew "ollama"                   # Run LLMs locally
+brew "datadog-labs/pack/pup"    # Datadog Pup CLI
+brew "schpet/tap/linear"        # Linear CLI
 
 #==============================================================================
 # Helpers
