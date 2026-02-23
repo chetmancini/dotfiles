@@ -2,6 +2,7 @@
 theme = tokyonight
 #background = #000000
 background-opacity = 0.9
+unfocused-split-opacity = 0.5
 background-blur-radius = 20
 
 font-family = JetBrainsMonoNL Nerd Font
@@ -10,6 +11,8 @@ cursor-style-blink = false
 shell-integration-features = no-cursor
 
 macos-titlebar-style = tabs
+
+copy-on-select = clipboard
 
 confirm-close-surface = false
 window-decoration = true
