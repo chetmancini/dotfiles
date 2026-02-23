@@ -91,6 +91,7 @@ setopt NO_BEEP
 setopt VI
 export EDITOR="nvim"
 bindkey -v
+export KEYTIMEOUT=1  # 10ms delay for multi-char sequences (eliminates ESC lag in vi mode)
 
 # vi style incremental search
 bindkey '^R' history-incremental-search-backward
@@ -394,7 +395,7 @@ function svim {
 }
 
 # Find a file with a pattern in name:
-function ff() { find . -type f -iname '*'$*'*' -ls ; }
+function ff() { fd --type f --ignore-case "$*" ; }
 
 function my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
 function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
@@ -575,3 +576,9 @@ fi
 
 autoload -U +X bashcompinit && bashcompinit
 complete -o nospace -C /opt/homebrew/bin/terraform terraform
+
+# Must be sourced last — after all zle/bindkey calls
+[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+[ -f /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
+  source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
