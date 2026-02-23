@@ -56,7 +56,9 @@ plugins=(
     web-search
 )
 
-source $ZSH/oh-my-zsh.sh
+if [[ -s "$ZSH/oh-my-zsh.sh" ]]; then
+  source "$ZSH/oh-my-zsh.sh"
+fi
 
 ##############################
 # Variables
