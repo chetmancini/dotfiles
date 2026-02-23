@@ -164,9 +164,31 @@ else
 fi
 
 #==============================================================================
-# Step 2: Homebrew packages
+# Step 2: Tmux Plugin Manager (TPM)
 #==============================================================================
-print_header "Step 2: Homebrew Packages"
+print_header "Step 2: Tmux Plugin Manager"
+
+echo "TPM manages tmux plugins like tmux-resurrect (session save/restore)"
+echo "and tmux-continuum (automatic session persistence across reboots)."
+echo ""
+
+if [ -d "$HOME/.tmux/plugins/tpm" ]; then
+    print_success "TPM is already installed"
+else
+    if ask_yes_no "Install Tmux Plugin Manager (TPM)?"; then
+        print_step "Cloning TPM..."
+        git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+        print_success "TPM installed"
+        print_info "After setup, press prefix + I in tmux to install plugins"
+    else
+        print_warning "Skipped TPM installation"
+    fi
+fi
+
+#==============================================================================
+# Step 3: Homebrew packages
+#==============================================================================
+print_header "Step 3: Homebrew Packages"
 
 echo "The Brewfile contains a list of CLI tools, applications, and fonts"
 echo "that will be installed via Homebrew."
@@ -188,9 +210,9 @@ else
 fi
 
 #==============================================================================
-# Step 3: Config directory symlinks
+# Step 4: Config directory symlinks
 #==============================================================================
-print_header "Step 3: Config Directory Symlinks"
+print_header "Step 4: Config Directory Symlinks"
 
 echo "These symlinks set up application configurations in ~/.config/"
 echo ""
@@ -223,9 +245,9 @@ create_symlink \
     "Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code"
 
 #==============================================================================
-# Step 4: Git configuration
+# Step 5: Git configuration
 #==============================================================================
-print_header "Step 4: Git Configuration"
+print_header "Step 5: Git Configuration"
 
 echo "These symlinks set up git configuration files."
 echo ""
@@ -243,9 +265,9 @@ create_symlink \
     "Global patterns to ignore across all repositories (e.g., .DS_Store)"
 
 #==============================================================================
-# Step 5: Shell configuration
+# Step 6: Shell configuration
 #==============================================================================
-print_header "Step 5: Shell Configuration"
+print_header "Step 6: Shell Configuration"
 
 echo "These symlinks set up your shell environment."
 echo ""
@@ -263,9 +285,9 @@ create_symlink \
     "Terminal multiplexer config for managing multiple terminal sessions"
 
 #==============================================================================
-# Step 6: API Keys Template
+# Step 7: API Keys Template
 #==============================================================================
-print_header "Step 6: API Keys Setup"
+print_header "Step 7: API Keys Setup"
 
 echo "The api_keys.sh file stores environment variables and API keys."
 echo "This file is gitignored to keep secrets out of version control."
@@ -306,6 +328,7 @@ echo -e "${BOLD}Next steps:${NC}"
 echo "  1. Restart your terminal or run: source ~/.zshrc"
 echo "  2. If you created api_keys.sh, edit it to add your API keys"
 echo "  3. Open Neovim to let LazyVim install plugins automatically"
-echo "  4. Run 'brew-sync --check' to verify Brewfile is in sync"
+echo "  4. In tmux, press prefix + I to install tmux plugins"
+echo "  5. Run 'brew-sync --check' to verify Brewfile is in sync"
 echo ""
 print_success "Happy coding!"
