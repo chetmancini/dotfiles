@@ -5,7 +5,8 @@ set -e
 # Dotfiles Installation Wizard
 #==============================================================================
 
-DOTFILES_DIR="$HOME/dotfiles"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$SCRIPT_DIR"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 # Colors for output

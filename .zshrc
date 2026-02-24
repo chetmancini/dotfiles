@@ -158,11 +158,15 @@ export OPENCODE_PATH="$HOME/.opencode/bin"
 export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
+# Keep PATH unique when this file is sourced multiple times.
+typeset -U path PATH
+
 # Build PATH dynamically, only adding directories that exist
 path_add() {
+    local dir
     for dir in "$@"; do
         if [[ -d "$dir" ]]; then
-            PATH="$dir:$PATH"
+            path=("$dir" "${path[@]}")
         fi
     done
 }
@@ -266,14 +270,15 @@ alias glog='git log'
 alias ghist='git hist'
 alias gpush='git push'
 alias gpushod='git push origin develop'
-alias gpushom='git push origin master'
+alias gpushom='git push origin main'
 alias gdiff='git diff --color'
 alias gmerge='git merge'
 alias gff='git merge --ff-only'
 alias gpull='git pull --prune'
 alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 alias gamend="git commit --amend -C HEAD"
-alias gclean="git checkout . && git clean -f"
+alias gclean='git clean -nd'
+alias gcleanf='git checkout . && git clean -f'
 
 __git_files () {
     _wanted files expl 'local files' _files
@@ -339,18 +344,35 @@ function strip_quotes() { sed 's/\"//g' $@; }
 
 
 function removeFromPath() {
-    export PATH=$(echo $PATH | sed -E -e "s;:$1;;" -e "s;$1:?;;")
+    local target="$1"
+    local dir
+    local -a new_path
+
+    [[ -z "$target" ]] && return 0
+
+    for dir in "${path[@]}"; do
+        [[ "$dir" == "$target" ]] || new_path+=("$dir")
+    done
+
+    path=("${new_path[@]}")
+    export PATH
 }
 
 function setjdk() {
-  if [ $# -ne 0 ]; then
-   removeFromPath '/System/Library/Frameworks/JavaVM.framework/Home/bin'
-   if [ -n "${JAVA_HOME+x}" ]; then
-    removeFromPath $JAVA_HOME
-   fi
-   export JAVA_HOME=`/usr/libexec/java_home -v $@`
-   export PATH=$JAVA_HOME/bin:$PATH
+  local new_java_home
+
+  (( $# == 0 )) && return 0
+
+  removeFromPath '/System/Library/Frameworks/JavaVM.framework/Home/bin'
+  if [[ -n "${JAVA_HOME:-}" ]]; then
+    removeFromPath "$JAVA_HOME"
+    removeFromPath "$JAVA_HOME/bin"
   fi
+
+  new_java_home="$(/usr/libexec/java_home -v "$@")" || return 1
+  export JAVA_HOME="$new_java_home"
+  path=("$JAVA_HOME/bin" "${path[@]}")
+  export PATH
 }
 
 ##############################
@@ -460,7 +482,7 @@ if command -v fzf &> /dev/null; then
   eval "$(fzf --zsh)"
 
   # Fuzzy cd into directory
-  fcd() { cd "$(find . -type d 2>/dev/null | fzf --preview 'ls -la {}')" }
+  fcd() { cd "$(command find . -type d 2>/dev/null | fzf --preview 'ls -la {}')" }
 
   # Fuzzy kill process
   fkill() {

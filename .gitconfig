@@ -16,7 +16,7 @@
     st = status
     ri = rebase --interactive
     rc = rebase --continue
-    rom = rebase origin/master
+    rom = rebase origin/main
     mt = mergetool
     type = cat-file -t
     dump = cat-file -p
