@@ -80,7 +80,7 @@
 	process = git-lfs filter-process
 	required = true
 [oh-my-zsh]
-	git-commit-alias = 67cd8c4673512d08238461f7ce00715da01665d4
+	git-commit-alias = 5c4f27b7166360bd23709f24642b247eac30a147
 [credential "https://dev.azure.com"]
 	useHttpPath = true
 [credential "https://github.com"]
