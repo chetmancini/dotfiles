@@ -157,6 +157,7 @@ export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
 export OPENCODE_PATH="$HOME/.opencode/bin"
 export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
+export TURSO_PATH="$HOME/.turso"
 #export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
@@ -190,6 +191,7 @@ path_add \
     "$JAVA_HOME/bin" \
     "$OPENCODE_PATH" \
     "$ANTIGRAVITY_PATH" \
+    "$TURSO_PATH" \
     "$HOME/bin"
 
 export PATH
@@ -606,3 +608,8 @@ complete -o nospace -C /opt/homebrew/bin/terraform terraform
   source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 [ -f /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
   source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# Added by Antigravity
+export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"
+
+. "$HOME/.turso/env"
