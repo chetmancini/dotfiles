@@ -6,6 +6,11 @@ set -euo pipefail
 #
 # Configuration file: ~/.config/good-morning/config
 # If no config file exists, uses sensible defaults
+#
+# Dependencies:
+#   Required:  update-everything, dashboard  (sibling scripts in bin/)
+#   Built-in:  df, awk
+#   See update-everything and dashboard for their individual dependencies
 
 # Get the directory where this script lives
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

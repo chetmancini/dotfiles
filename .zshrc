@@ -158,7 +158,7 @@ export OPENCODE_PATH="$HOME/.opencode/bin"
 export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 export TURSO_PATH="$HOME/.turso"
-#export PATH=/usr/local/anaconda3/bin:/opt/homebrew/anaconda3/bin:$PATH
+export PYENV_ROOT="$HOME/.pyenv"
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
 
@@ -192,9 +192,12 @@ path_add \
     "$OPENCODE_PATH" \
     "$ANTIGRAVITY_PATH" \
     "$TURSO_PATH" \
+    "$PYENV_ROOT/bin" \
     "$HOME/bin"
 
 export PATH
+# Source tool-managed env files after PATH is built (may set additional vars)
+[[ -f "$HOME/.turso/env" ]] && . "$HOME/.turso/env"
 export CLASSPATH=$HOME/lib/jars
 
 
@@ -203,8 +206,6 @@ export CLASSPATH=$HOME/lib/jars
 ##############################
 # Aliases
 ##############################
-#alias docker="docker $(docker-machine config default)"
-
 alias -g L="|less"
 alias -g TL='| tail -20'
 alias -g NUL="> /dev/null 2>&1"
@@ -225,7 +226,6 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../../'
 alias grep='grep --color=auto'
-# Rails aliases removed - Ruby/Rails tooling not installed
 alias vi='nvim'
 alias wget='wget -c'
 alias x='exit'
@@ -239,9 +239,13 @@ alias make='xtitle Making $(basename $PWD) ; make'
 
 
 
-# PostgreSQL aliases - use Homebrew service commands instead
-alias start_postgres='brew services start postgresql@16'
-alias stop_postgres='brew services stop postgresql@16'
+# PostgreSQL aliases - auto-detect installed major version
+_pg_version=$(ls /opt/homebrew/opt/ 2>/dev/null | grep -E '^postgresql@[0-9]+$' | sort -V | tail -1)
+if [[ -n "$_pg_version" ]]; then
+  alias start_postgres="brew services start $_pg_version"
+  alias stop_postgres="brew services stop $_pg_version"
+fi
+unset _pg_version
 
 alias start_memcached='/usr/local/opt/memcached/bin/memcached'
 alias stop_memcached='killall memcached'
@@ -339,7 +343,7 @@ function lt() { eza -la --sort=modified "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
 
-function strip_quotes() { sed 's/\"//g' $@; }
+function strip_quotes() { sed 's/\"//g' "$@"; }
 
 # These commands are now in bin/ with better error handling:
 #   server, killbyname, dtgz
@@ -532,9 +536,6 @@ if command -v thefuck &> /dev/null; then
   }
 fi
 
-# if command -v magic &> /dev/null; then
-  # eval "$(magic completion --shell zsh)"
-# fi
 # Cached compinit - only regenerate once per day
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
@@ -545,8 +546,6 @@ fi
 
 
 # Lazy-load pyenv (saves ~100ms on shell startup)
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
 pyenv() {
   unset -f pyenv
   eval "$(command pyenv init -)"
@@ -608,8 +607,3 @@ complete -o nospace -C /opt/homebrew/bin/terraform terraform
   source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 [ -f /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
   source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
-# Added by Antigravity
-export PATH="/Users/chet/.antigravity/antigravity/bin:$PATH"
-
-. "$HOME/.turso/env"
