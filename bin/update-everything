@@ -6,6 +6,13 @@ set -euo pipefail
 #
 # Configuration file: ~/.config/good-morning/config
 # Can be run standalone or called from good-morning
+#
+# Dependencies:
+#   Required:  brew (Homebrew), git
+#   Optional (tasks are skipped if the tool is absent or not running):
+#     docker          Docker cleanup
+#     nvim            Neovim plugin updates
+#     softwareupdate  macOS system updates (built-in, macOS only)
 
 # Get the directory where this script lives
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

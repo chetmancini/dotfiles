@@ -5,6 +5,15 @@ set -euo pipefail
 # extract: Extract various archive formats
 #
 # Supports: tar.gz, tar.bz2, tar.xz, zip, rar, 7z, and more
+#
+# Dependencies (format-specific; only the tool for the requested format is required):
+#   Built-in: tar, gunzip, unzip  (macOS/Linux)
+#   .bz2      bunzip2   brew install bzip2
+#   .rar      unrar     brew install unrar
+#   .Z        uncompress brew install ncompress
+#   .7z       7z        brew install p7zip
+#   .xz       xz        brew install xz
+#   .zst/.zstd zstd     brew install zstd
 
 # Function to check if a specific tool is installed
 require_tool() {
