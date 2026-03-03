@@ -81,8 +81,6 @@ echo ""
 echo "$output" | head -1 | awk '{printf "  %-16s %-8s %-8s %-8s %s\n", $1, $2, $3, $8, $9}'
 echo "  ────────────────────────────────────────────────"
 
-# Collect unique PIDs
-declare -A seen_pids
 echo "$output" | tail -n +2 | while IFS= read -r line; do
     pid=$(echo "$line" | awk '{print $2}')
     process=$(echo "$line" | awk '{print $1}')
