@@ -582,6 +582,9 @@ fi
 # Docker CLI completions (compinit called once above)
 fpath=($HOME/.docker/completions $fpath)
 
+# Mise
+eval "$(mise activate zsh)"
+
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
 
 ##############################
