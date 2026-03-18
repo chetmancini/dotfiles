@@ -4,7 +4,13 @@ _ssh_indicator() {
   fi
 }
 
-PROMPT='%{$fg_bold[red]%}λ $(_ssh_indicator)%{$fg_bold[green]%}%p %{$fg[cyan]%}%c %{$fg_bold[blue]%}$(git_prompt_info)%{$fg_bold[blue]%} % %{$reset_color%}'
+_devenv_indicator() {
+  if [[ -n "$DEVENV_WORKSPACE" ]]; then
+    echo "%{$fg_bold[blue]%}[$DEVENV_WORKSPACE]%{$reset_color%} "
+  fi
+}
+
+PROMPT='%{$fg_bold[red]%}λ $(_ssh_indicator)$(_devenv_indicator)%{$fg_bold[green]%}%p %{$fg[cyan]%}%c %{$fg_bold[blue]%}$(git_prompt_info)%{$fg_bold[blue]%} % %{$reset_color%}'
 
 ZSH_THEME_GIT_PROMPT_PREFIX="git:(%{$fg[red]%}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%{$reset_color%}"
