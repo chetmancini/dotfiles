@@ -13,6 +13,9 @@ git clone https://github.com/chetmancini/dotfiles.git ~/dotfiles
 # Run install script
 cd ~/dotfiles
 ./install.sh
+
+# Verify the installed state
+doctor
 ```
 
 ## What's Included
@@ -63,6 +66,11 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - zoxide for smart directory jumping
 - fzf integration for fuzzy finding
 
+### Bootstrap
+- `install.sh` supports interactive and headless installs (`--yes`, `--skip-brew`, etc.)
+- `doctor` verifies symlinks, theme wiring, TPM, and repo health checks
+- GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
+
 ### Git
 - Conventional commit aliases: `git feat`, `git fix`, `git chore`, etc.
 - Conditional includes for work vs personal repos
@@ -83,7 +91,8 @@ fzfp        # fzf with bat preview
 1. Add to `Brewfile`
 2. Run `brew bundle`
 3. If config needed, add symlink to `install.sh`
-4. Add any shell integration to `.zshrc`
+4. Add validation to `doctor`
+5. Add any shell integration to `.zshrc`
 
 ## Structure
 
@@ -94,11 +103,13 @@ fzfp        # fzf with bat preview
 ├── .tmux.conf          # tmux config
 ├── Brewfile            # Homebrew packages
 ├── install.sh          # Setup script
+├── chetmancini.zsh-theme  # Custom oh-my-zsh theme
 ├── bin/                # Custom scripts (see bin/README.md)
 ├── nvim/               # Neovim (LazyVim)
+├── vim/                # Legacy Vim runtime
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
-├── oh-my-zsh/          # oh-my-zsh (submodule)
+├── oh-my-zsh/          # Cloned install dependency
 └── api_keys.sh         # API keys (gitignored)
 ```
 

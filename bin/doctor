@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# shellcheck source=bin/lib/helpers.sh
+source "$SCRIPT_DIR/lib/helpers.sh"
+
+STRICT=false
+CHECK_TOOLS=true
+FAILURES=0
+WARNINGS=0
+
+print_help() {
+    cat <<'EOF'
+Usage: doctor [options]
+
+Verify that dotfiles are installed correctly for the current HOME directory.
+
+Options:
+  --strict      Treat warnings as failures for command availability checks
+  --skip-tools  Skip checking whether external commands are installed
+  -h, --help    Show this help message
+EOF
+}
+
+record_failure() {
+    print_error "$1"
+    FAILURES=$((FAILURES + 1))
+}
+
+record_warning() {
+    print_info "warning: $1"
+    WARNINGS=$((WARNINGS + 1))
+}
+
+check_symlink() {
+    local label="$1"
+    local target="$2"
+    local expected="$3"
+
+    if [ ! -L "$target" ]; then
+        record_failure "$label is not a symlink: $target"
+        return
+    fi
+
+    if [ "$(readlink "$target")" != "$expected" ]; then
+        record_failure "$label points to $(readlink "$target") instead of $expected"
+        return
+    fi
+
+    print_success "$label -> $expected"
+}
+
+check_path_exists() {
+    local label="$1"
+    local target="$2"
+
+    if [ ! -e "$target" ]; then
+        record_failure "$label is missing: $target"
+        return
+    fi
+
+    print_success "$label exists: $target"
+}
+
+check_command() {
+    local command_name="$1"
+
+    if command -v "$command_name" >/dev/null 2>&1; then
+        print_success "Command available: $command_name"
+        return
+    fi
+
+    if [ "$STRICT" = true ]; then
+        record_failure "Missing command: $command_name"
+    else
+        record_warning "Missing command: $command_name"
+    fi
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --strict)
+                STRICT=true
+                shift
+                ;;
+            --skip-tools)
+                CHECK_TOOLS=false
+                shift
+                ;;
+            -h|--help)
+                print_help
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                print_help
+                exit 1
+                ;;
+        esac
+    done
+}
+
+print_header() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  Dotfiles Doctor${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
+run_installed_state_checks() {
+    print_section "Checking installed symlinks"
+    echo ""
+
+    check_symlink "Yazi config" "$HOME/.config/yazi" "$DOTFILES_DIR/yazi"
+    check_symlink "Ghostty config" "$HOME/.config/ghostty" "$DOTFILES_DIR/ghostty"
+    check_symlink "Neovim config" "$HOME/.config/nvim" "$DOTFILES_DIR/nvim"
+    check_symlink "Mise config" "$HOME/.config/mise" "$DOTFILES_DIR/mise"
+    check_symlink "Git config" "$HOME/.gitconfig" "$DOTFILES_DIR/.gitconfig"
+    check_symlink "Global gitignore" "$HOME/.gitignore" "$DOTFILES_DIR/.gitignore"
+    check_symlink "Zsh config" "$HOME/.zshrc" "$DOTFILES_DIR/.zshrc"
+    check_symlink "Bash config" "$HOME/.bashrc" "$DOTFILES_DIR/.bashrc"
+    check_symlink "Bash profile" "$HOME/.bash_profile" "$DOTFILES_DIR/.bash_profile"
+    check_symlink "tmux config" "$HOME/.tmux.conf" "$DOTFILES_DIR/.tmux.conf"
+    check_symlink "Vim config" "$HOME/.vimrc" "$DOTFILES_DIR/.vimrc"
+    check_symlink "Vim runtime" "$HOME/.vim" "$DOTFILES_DIR/vim"
+    echo ""
+}
+
+run_dependency_checks() {
+    print_section "Checking bootstrap dependencies"
+    echo ""
+
+    check_path_exists "Oh My Zsh checkout" "$DOTFILES_DIR/oh-my-zsh"
+    check_symlink \
+        "Oh My Zsh theme" \
+        "$DOTFILES_DIR/oh-my-zsh/custom/themes/chetmancini.zsh-theme" \
+        "$DOTFILES_DIR/chetmancini.zsh-theme"
+    check_path_exists "TPM" "$HOME/.tmux/plugins/tpm"
+
+    if [ -f "$DOTFILES_DIR/api_keys.sh" ] || [ -f "$DOTFILES_DIR/api_keys_1password.sh" ]; then
+        print_success "API key bootstrap file present"
+    else
+        record_warning "No api_keys.sh or api_keys_1password.sh present"
+    fi
+
+    echo ""
+}
+
+run_repo_checks() {
+    print_section "Checking repo health"
+    echo ""
+
+    if command -v zsh >/dev/null 2>&1; then
+        if zsh -n "$DOTFILES_DIR/.zshrc"; then
+            print_success ".zshrc parses with zsh"
+        else
+            record_failure ".zshrc failed zsh syntax check"
+        fi
+    else
+        record_warning "Skipping zsh syntax check because zsh is unavailable"
+    fi
+
+    if bash -n "$DOTFILES_DIR/install.sh"; then
+        print_success "install.sh parses with bash"
+    else
+        record_failure "install.sh failed bash syntax check"
+    fi
+
+    echo ""
+}
+
+run_tool_checks() {
+    if [ "$CHECK_TOOLS" != true ]; then
+        print_section "Skipping command checks"
+        echo ""
+        print_info "Use doctor without --skip-tools to validate required commands"
+        echo ""
+        return
+    fi
+
+    print_section "Checking key commands"
+    echo ""
+
+    check_command git
+    check_command zsh
+    check_command tmux
+    check_command nvim
+    check_command eza
+    check_command bat
+    check_command fd
+    check_command rg
+    check_command fzf
+    check_command yazi
+    check_command zoxide
+    check_command mise
+    echo ""
+}
+
+print_summary() {
+    print_section "Summary"
+    echo ""
+
+    if [ "$WARNINGS" -gt 0 ]; then
+        print_info "Warnings: $WARNINGS"
+    fi
+
+    if [ "$FAILURES" -gt 0 ]; then
+        print_error "Failures: $FAILURES"
+        exit 1
+    fi
+
+    print_success "Dotfiles look healthy"
+}
+
+parse_args "$@"
+print_header
+print_info "Dotfiles directory: $DOTFILES_DIR"
+print_info "Home directory: $HOME"
+echo ""
+
+run_installed_state_checks
+run_dependency_checks
+run_repo_checks
+run_tool_checks
+print_summary

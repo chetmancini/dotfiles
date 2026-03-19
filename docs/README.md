@@ -8,6 +8,7 @@ Personal dotfiles for macOS development environment.
 git clone https://github.com/chetmancini/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ./install.sh
+doctor
 ```
 
 ## Applications
@@ -62,7 +63,9 @@ Key integrations:
 ├── .gitconfig          # Git configuration
 ├── Brewfile            # Homebrew packages
 ├── install.sh          # Setup script
+├── chetmancini.zsh-theme  # Custom oh-my-zsh theme
 ├── nvim/               # Neovim (LazyVim)
+├── vim/                # Legacy Vim runtime
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
 ├── bin/                # Utility scripts
@@ -78,13 +81,24 @@ The `install.sh` script creates symlinks:
 | `~/dotfiles/yazi` | `~/.config/yazi` |
 | `~/dotfiles/ghostty` | `~/.config/ghostty` |
 | `~/dotfiles/nvim` | `~/.config/nvim` |
+| `~/dotfiles/vim` | `~/.vim` |
 | `~/dotfiles/.gitconfig` | `~/.gitconfig` |
+| `~/dotfiles/.gitignore` | `~/.gitignore` |
 | `~/dotfiles/.zshrc` | `~/.zshrc` |
+| `~/dotfiles/.bashrc` | `~/.bashrc` |
+| `~/dotfiles/.bash_profile` | `~/.bash_profile` |
 | `~/dotfiles/.tmux.conf` | `~/.tmux.conf` |
+| `~/dotfiles/.vimrc` | `~/.vimrc` |
+| `~/dotfiles/chetmancini.zsh-theme` | `~/dotfiles/oh-my-zsh/custom/themes/chetmancini.zsh-theme` |
 
 Homebrew packages are installed via:
 ```bash
 brew bundle --file=~/dotfiles/Brewfile
+```
+
+Validate the installed state with:
+```bash
+doctor
 ```
 
 ## Applying Changes
