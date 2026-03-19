@@ -1,64 +1,48 @@
 
-#Path to your oh-my-zsh configuration.
+# Path to the oh-my-zsh checkout used for sourced plugins.
 export ZSH=$HOME/dotfiles/oh-my-zsh
-
-######################
-# oh-my-zsh
-######################
-ZSH_THEME="chetmancini"
 
 alias zshconfig="vim ~/dotfiles/.zshrc"
 alias ohmyzsh="vim ~/dotfiles/oh-my-zsh"
 
-# Set to this to use case-sensitive completion
-# CASE_SENSITIVE="true"
+autoload -Uz add-zsh-hook colors
+colors
 
-# Comment this out to disable weekly auto-update checks
-# DISABLE_AUTO_UPDATE="true"
+typeset -g GIT_PROMPT_INFO=""
 
-# Uncomment following line if you want to disable colors in ls
-# DISABLE_LS_COLORS="true"
+_update_git_prompt_info() {
+  local ref status_text
 
-# Uncomment following line if you want to disable autosetting terminal title.
-# DISABLE_AUTO_TITLE="true"
+  GIT_PROMPT_INFO=""
 
-# Uncomment following line if you want red dots to be displayed while waiting for completion
+  GIT_OPTIONAL_LOCKS=0 command git rev-parse --git-dir >/dev/null 2>&1 || return
+
+  ref=$(GIT_OPTIONAL_LOCKS=0 command git symbolic-ref --quiet --short HEAD 2>/dev/null) \
+    || ref=$(GIT_OPTIONAL_LOCKS=0 command git describe --tags --exact-match HEAD 2>/dev/null) \
+    || ref=$(GIT_OPTIONAL_LOCKS=0 command git rev-parse --short HEAD 2>/dev/null) \
+    || return
+
+  status_text=$(GIT_OPTIONAL_LOCKS=0 command git status --porcelain --ignore-submodules=dirty 2>/dev/null)
+
+  if [[ -n "$status_text" ]]; then
+    GIT_PROMPT_INFO="git:(%{$fg[red]%}${ref:gs/%/%%}%{$reset_color%}%{$fg[blue]%}) %{$fg[yellow]%}✗%{$reset_color%}"
+  else
+    GIT_PROMPT_INFO="git:(%{$fg[red]%}${ref:gs/%/%%}%{$reset_color%}%{$fg[blue]%})"
+  fi
+}
+
+git_prompt_info() {
+  echo -n "$GIT_PROMPT_INFO"
+}
+
+add-zsh-hook precmd _update_git_prompt_info
+
+[ -f ~/dotfiles/chetmancini.zsh-theme ] && source ~/dotfiles/chetmancini.zsh-theme
+[ -f "$ZSH/plugins/history-substring-search/history-substring-search.zsh" ] && \
+  source "$ZSH/plugins/history-substring-search/history-substring-search.zsh"
+
 COMPLETION_WAITING_DOTS="true"
-
 zstyle ':completion:*' hosts off
-
-# Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# removed: emacs rbenv sublime rvm
-plugins=(
-    1password
-    battery
-    brew
-    bundler
-    bun
-    command-not-found
-    dbt
-    docker-compose
-    encode64
-    eza
-    history
-    history-substring-search
-    gh
-    git-commit
-    gitfast
-    macos
-    pip
-    python
-    redis-cli
-    thefuck
-    tldr
-    web-search
-)
-
-if [[ -s "$ZSH/oh-my-zsh.sh" ]]; then
-  source "$ZSH/oh-my-zsh.sh"
-fi
 
 ##############################
 # Variables
@@ -98,8 +82,15 @@ export KEYTIMEOUT=1  # 10ms delay for multi-char sequences (eliminates ESC lag i
 # vi style incremental search
 bindkey '^R' history-incremental-search-backward
 bindkey '^S' history-incremental-search-forward
-bindkey '^P' history-search-backward
-bindkey '^N' history-search-forward
+if (( $+functions[history-substring-search-up] )); then
+  bindkey '^P' history-substring-search-up
+  bindkey '^N' history-substring-search-down
+  [[ -n "${terminfo[kcuu1]:-}" ]] && bindkey "${terminfo[kcuu1]}" history-substring-search-up
+  [[ -n "${terminfo[kcud1]:-}" ]] && bindkey "${terminfo[kcud1]}" history-substring-search-down
+else
+  bindkey '^P' history-search-backward
+  bindkey '^N' history-search-forward
+fi
 
 # Edit command line in $EDITOR (Ctrl-X Ctrl-E)
 autoload -Uz edit-command-line
@@ -342,6 +333,7 @@ function cpmsg() {
 function lt() { eza -la --sort=modified "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
+function take() { mkdir -p "$1" && builtin cd "$1"; }
 
 function strip_quotes() { sed 's/\"//g' "$@"; }
 
@@ -485,10 +477,16 @@ function y() {
 }
 
 if command -v fzf &> /dev/null; then
-  eval "$(fzf --zsh)"
+  if [[ -t 0 ]] && [[ -t 1 ]]; then
+    eval "$(fzf --zsh)"
+  fi
 
   # Fuzzy cd into directory
-  fcd() { cd "$(command find . -type d 2>/dev/null | fzf --preview 'ls -la {}')" }
+  fcd() {
+    local dir
+    dir=$(fd --type d . 2>/dev/null | fzf --preview 'eza --all --long --icons {}')
+    [ -n "$dir" ] && builtin cd "$dir"
+  }
 
   # Fuzzy kill process
   fkill() {
@@ -511,9 +509,14 @@ if command -v fzf &> /dev/null; then
 
   # Fuzzy search file contents and open in editor
   fsearch() {
-    local file line
-    read -r file line <<< $(rg --line-number --no-heading . 2>/dev/null | fzf --delimiter ':' --preview 'bat --color=always --highlight-line {2} {1}' | awk -F: '{print $1, $2}')
-    [ -n "$file" ] && $EDITOR "$file" +$line
+    local selection file line
+    selection=$(rg --line-number --no-heading . 2>/dev/null | \
+      fzf --delimiter ':' --preview 'bat --color=always --highlight-line {2} {1}')
+    [ -z "$selection" ] && return
+    file="${selection%%:*}"
+    line="${selection#*:}"
+    line="${line%%:*}"
+    "$EDITOR" "$file" "+$line"
   }
 fi
 if command -v zoxide &> /dev/null; then
@@ -583,9 +586,13 @@ fi
 fpath=($HOME/.docker/completions $fpath)
 
 # Mise
-eval "$(mise activate zsh)"
+if command -v mise &> /dev/null; then
+  eval "$(mise activate zsh)"
+fi
 
-[[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
+if [[ "$TERM_PROGRAM" == "kiro" ]] && command -v kiro &> /dev/null; then
+  . "$(kiro --locate-shell-integration-path zsh)"
+fi
 
 ##############################
 # Terminal Screensaver
@@ -602,8 +609,10 @@ if command -v cmatrix &> /dev/null; then
   }
 fi
 
-autoload -U +X bashcompinit && bashcompinit
-complete -o nospace -C /opt/homebrew/bin/terraform terraform
+if [ -x /opt/homebrew/bin/terraform ]; then
+  autoload -U +X bashcompinit && bashcompinit
+  complete -o nospace -C /opt/homebrew/bin/terraform terraform
+fi
 
 # Must be sourced last — after all zle/bindkey calls
 [ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
