@@ -11,7 +11,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 ### Configuration Loading Flow
 
 1. `.zshrc` is the main entry point for shell configuration
-2. Loads oh-my-zsh from `oh-my-zsh/` subdirectory (git submodule)
+2. Loads oh-my-zsh from `oh-my-zsh/`, which `install.sh` clones if missing
 3. Sources platform-specific configs (`mac_specific.sh` or `linux_specific.sh`)
 4. Sources `api_keys.sh` for environment variables (not tracked in git, see `api_keys.sh.template`)
 5. Initializes various tools at the end: fzf, zoxide, pyenv, nvm, etc.
@@ -30,10 +30,15 @@ The `install.sh` script creates symlinks from this repository to home directory:
 - `~/dotfiles/yazi` → `~/.config/yazi`
 - `~/dotfiles/ghostty` → `~/.config/ghostty`
 - `~/dotfiles/nvim` → `~/.config/nvim`
+- `~/dotfiles/vim` → `~/.vim`
 - `~/dotfiles/.gitconfig` → `~/.gitconfig`
 - `~/dotfiles/.gitignore` → `~/.gitignore`
 - `~/dotfiles/.zshrc` → `~/.zshrc`
+- `~/dotfiles/.bashrc` → `~/.bashrc`
+- `~/dotfiles/.bash_profile` → `~/.bash_profile`
 - `~/dotfiles/.tmux.conf` → `~/.tmux.conf`
+- `~/dotfiles/.vimrc` → `~/.vimrc`
+- `~/dotfiles/chetmancini.zsh-theme` → `~/dotfiles/oh-my-zsh/custom/themes/chetmancini.zsh-theme`
 
 ### Git Configuration Structure
 
@@ -49,6 +54,12 @@ The `install.sh` script creates symlinks from this repository to home directory:
 ```bash
 # Initial setup (installs Homebrew packages and creates symlinks)
 ./install.sh
+
+# Headless/bootstrap mode
+./install.sh --yes --skip-brew --no-clear
+
+# Verify the installed state
+doctor
 
 # Or install just brew packages
 brew bundle --file=~/dotfiles/Brewfile
@@ -97,6 +108,7 @@ This repository includes configurations for:
 - `.zshrc` - Primary shell configuration with aliases, functions, and tool initialization
 - `Brewfile` - Homebrew package manifest (formulae, casks, fonts)
 - `install.sh` - Setup script for new machines
+- `bin/doctor` - Installation verification script
 - `chetmancini.zsh-theme` - Custom oh-my-zsh theme
 - `bin/` - Custom utility scripts (extract, imgcat, murder, removeexif, brew-sync, etc.)
 - `nvim/` - LazyVim-based neovim configuration
@@ -134,10 +146,10 @@ LazyVim-based configuration located in `nvim/`:
 
 ## Notes for Modifications
 
-- The oh-my-zsh directory is a git submodule - don't edit files directly in it
+- The oh-my-zsh directory is a cloned dependency - don't edit files directly in it
 - API keys go in `api_keys.sh` (not tracked) - use `api_keys.sh.template` as reference
 - When adding new tools, add them to `Brewfile` and run `brew bundle`
-- If tools need config, add symlinks to `install.sh`
+- If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
 - nvm and pyenv are lazy-loaded for faster shell startup

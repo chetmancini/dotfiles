@@ -1,0 +1,51 @@
+name: Smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh and shellcheck
+        run: sudo apt-get update && sudo apt-get install -y zsh shellcheck
+
+      - name: Check bash scripts
+        run: |
+          while IFS= read -r file; do
+            bash -n "$file"
+          done < <(rg -l '^#!/.*bash' .)
+
+      - name: ShellCheck bootstrap scripts
+        run: shellcheck -x install.sh bin/doctor mac_dev_install.sh
+
+      - name: Check zsh config
+        run: zsh -n .zshrc
+
+  install-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Prepare bootstrap fixtures
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/oh-my-zsh/custom/themes"
+          mkdir -p "$RUNNER_TEMP/home"
+
+      - name: Run installer
+        env:
+          HOME: ${{ runner.temp }}/home
+        run: ./install.sh --yes --skip-brew --skip-api-keys --no-clear
+
+      - name: Run doctor
+        env:
+          HOME: ${{ runner.temp }}/home
+        run: bin/doctor --skip-tools --strict

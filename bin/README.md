@@ -6,6 +6,7 @@ This directory contains custom utility scripts that enhance the command-line exp
 
 | Script | Language | Purpose |
 |--------|----------|---------|
+| [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`extract`](#extract) | Bash | Archive extraction utility |
 | [`imgcat`](#imgcat) | Bash | Display images in terminal |
 | [`removeexif`](#removeexif) | Bash | Remove EXIF metadata from images |
@@ -17,6 +18,25 @@ This directory contains custom utility scripts that enhance the command-line exp
 | [`pyexample.py`](#pyexamplepy) | Python | Example Python script with uv |
 
 ## Detailed Documentation
+
+### `doctor`
+
+Verify that dotfiles are installed correctly for the current `HOME`.
+
+**Usage:**
+```bash
+doctor
+doctor --skip-tools
+doctor --strict
+```
+
+**Features:**
+- Verifies expected symlinks and config directories
+- Confirms custom oh-my-zsh theme wiring and TPM presence
+- Runs lightweight repo health checks
+- Optionally checks key commands are installed
+
+---
 
 ### `extract`
 
@@ -225,7 +245,7 @@ Example Python script demonstrating uv usage for script execution.
 
 ## Installation
 
-All scripts are automatically available in your PATH through the dotfiles installation. The `install.sh` script creates symlinks from `~/dotfiles/bin/` to `~/bin/`.
+All scripts are automatically available in your PATH after installing `.zshrc`, which prepends `~/dotfiles/bin`.
 
 ## Contributing
 
