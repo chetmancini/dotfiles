@@ -61,6 +61,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 
 ### Shell (zsh)
 - Custom theme with git status (`chetmancini.zsh-theme`)
+- Lightweight shell startup that sources only the needed oh-my-zsh components
 - Vi mode with visual cursor indicator
 - Lazy-loaded pyenv and streamlined Node setup (`n`) for fast startup
 - zoxide for smart directory jumping

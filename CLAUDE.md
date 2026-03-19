@@ -11,7 +11,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 ### Configuration Loading Flow
 
 1. `.zshrc` is the main entry point for shell configuration
-2. Loads oh-my-zsh from `oh-my-zsh/`, which `install.sh` clones if missing
+2. Sources only the needed pieces from `oh-my-zsh/`, which `install.sh` clones if missing
 3. Sources platform-specific configs (`mac_specific.sh` or `linux_specific.sh`)
 4. Sources `api_keys.sh` for environment variables (not tracked in git, see `api_keys.sh.template`)
 5. Initializes various tools at the end: fzf, zoxide, pyenv, nvm, etc.
