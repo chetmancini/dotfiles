@@ -7,6 +7,7 @@ alias ohmyzsh="vim ~/dotfiles/oh-my-zsh"
 
 autoload -Uz add-zsh-hook colors
 colors
+setopt PROMPT_SUBST
 
 typeset -g GIT_PROMPT_INFO=""
 
