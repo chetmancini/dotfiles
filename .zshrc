@@ -149,6 +149,7 @@ export OPENCODE_PATH="$HOME/.opencode/bin"
 export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 export TURSO_PATH="$HOME/.turso"
+export BROWSER_USE_PATH="$HOME/.browser-use/bin"
 export PYENV_ROOT="$HOME/.pyenv"
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
@@ -183,6 +184,7 @@ path_add \
     "$OPENCODE_PATH" \
     "$ANTIGRAVITY_PATH" \
     "$TURSO_PATH" \
+    "$BROWSER_USE_PATH" \
     "$PYENV_ROOT/bin" \
     "$HOME/bin"
 
