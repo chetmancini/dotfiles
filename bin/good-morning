@@ -96,6 +96,12 @@ generate_config() {
 # RUN_BREW_UPGRADE=true
 # RUN_BREW_CLEANUP=true
 
+# npm global package updates
+# RUN_NPM_GLOBAL_UPDATE=true
+
+# Run git fetch across repos in parallel (true) or sequentially (false)
+# PARALLEL=true
+
 # Pull latest from repos
 # PULL_REPOS=true
 

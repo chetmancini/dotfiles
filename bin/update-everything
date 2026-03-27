@@ -28,10 +28,12 @@ DEFAULT_REPOS_DIRS=("$HOME/code" "$HOME/norm")
 DEFAULT_RUN_BREW_UPDATE=true
 DEFAULT_RUN_BREW_UPGRADE=true
 DEFAULT_RUN_BREW_CLEANUP=true
+DEFAULT_RUN_NPM_GLOBAL_UPDATE=true
 DEFAULT_PULL_REPOS=true
 DEFAULT_DOCKER_PRUNE=true
 DEFAULT_CHECK_MACOS_UPDATES=true
 DEFAULT_UPDATE_NVIM_PLUGINS=true
+# Controls whether repo git fetches run in parallel.
 DEFAULT_PARALLEL=true
 
 # Load configuration or use defaults
@@ -40,6 +42,7 @@ load_config() {
     RUN_BREW_UPDATE="$DEFAULT_RUN_BREW_UPDATE"
     RUN_BREW_UPGRADE="$DEFAULT_RUN_BREW_UPGRADE"
     RUN_BREW_CLEANUP="$DEFAULT_RUN_BREW_CLEANUP"
+    RUN_NPM_GLOBAL_UPDATE="$DEFAULT_RUN_NPM_GLOBAL_UPDATE"
     PULL_REPOS="$DEFAULT_PULL_REPOS"
     DOCKER_PRUNE="$DEFAULT_DOCKER_PRUNE"
     CHECK_MACOS_UPDATES="$DEFAULT_CHECK_MACOS_UPDATES"
@@ -97,48 +100,115 @@ emit_brew_upgrade_report() {
     done
 }
 
+timestamp() {
+    date "+%Y-%m-%d %H:%M:%S"
+}
+
+# Run a command and append all output to a log file with timestamps.
+# Arguments: log_file label cmd [args...]
+run_logged_command() {
+    local log_file="$1"
+    local label="$2"
+    shift 2
+    local status=0
+
+    {
+        echo "[$(timestamp)] START: $label"
+        if "$@"; then
+            status=0
+        else
+            status=$?
+        fi
+        echo "[$(timestamp)] END: $label (exit $status)"
+    } >> "$log_file" 2>&1
+
+    return "$status"
+}
+
 # Homebrew tasks (must run sequentially: update -> upgrade -> cleanup)
 run_brew_tasks() {
     local output_file="$TEMP_DIR/brew.out"
+    local log_file="$TEMP_DIR/brew.log"
 
     {
+        : > "$log_file"
+
         if [ "$RUN_BREW_UPDATE" = true ]; then
             echo "section:Updating Homebrew..."
-            if brew update > /dev/null 2>&1; then
+            echo "info:Homebrew log: $log_file"
+            echo "info:[$(timestamp)] Running brew update"
+            if run_logged_command "$log_file" "brew update" brew update; then
                 echo "success:Homebrew updated"
             else
                 echo "error:Failed to update Homebrew"
+                echo "info:Check log: $log_file"
             fi
         fi
 
         if [ "$RUN_BREW_UPGRADE" = true ]; then
             echo "section:Upgrading packages..."
+            echo "info:Homebrew log: $log_file"
+            echo "info:[$(timestamp)] Capturing outdated package snapshots"
             local formula_before="$TEMP_DIR/brew_formula_before.out"
             local formula_after="$TEMP_DIR/brew_formula_after.out"
             local cask_before="$TEMP_DIR/brew_cask_before.out"
             local cask_after="$TEMP_DIR/brew_cask_after.out"
 
-            brew outdated --formula --verbose > "$formula_before" 2>/dev/null || true
-            brew outdated --cask --verbose > "$cask_before" 2>/dev/null || true
+            brew outdated --formula --verbose > "$formula_before" 2>> "$log_file" || true
+            brew outdated --cask --verbose > "$cask_before" 2>> "$log_file" || true
 
-            if brew upgrade > /dev/null 2>&1; then
-                brew outdated --formula > "$formula_after" 2>/dev/null || true
-                brew outdated --cask > "$cask_after" 2>/dev/null || true
+            echo "info:[$(timestamp)] Running brew upgrade"
+            if run_logged_command "$log_file" "brew upgrade" brew upgrade; then
+                brew outdated --formula > "$formula_after" 2>> "$log_file" || true
+                brew outdated --cask > "$cask_after" 2>> "$log_file" || true
                 echo "success:Packages upgraded"
                 emit_brew_upgrade_report "Packages" "$formula_before" "$formula_after"
                 emit_brew_upgrade_report "Apps" "$cask_before" "$cask_after"
             else
                 echo "error:Failed to upgrade packages"
+                echo "info:Check log: $log_file"
             fi
         fi
 
         if [ "$RUN_BREW_CLEANUP" = true ]; then
             echo "section:Cleaning up Homebrew..."
-            if brew cleanup > /dev/null 2>&1; then
+            echo "info:Homebrew log: $log_file"
+            echo "info:[$(timestamp)] Running brew cleanup"
+            if run_logged_command "$log_file" "brew cleanup" brew cleanup; then
                 echo "success:Homebrew cleaned up"
             else
                 echo "error:Failed to cleanup Homebrew"
+                echo "info:Check log: $log_file"
             fi
+        fi
+    } > "$output_file"
+}
+
+run_npm_global_update() {
+    local output_file="$TEMP_DIR/npm.out"
+    local log_file="$TEMP_DIR/npm-global.log"
+
+    {
+        if [ "$RUN_NPM_GLOBAL_UPDATE" != true ]; then
+            exit 0
+        fi
+
+        echo "section:Updating global npm packages..."
+
+        if ! command -v npm &>/dev/null; then
+            echo "info:npm is not installed, skipping"
+            exit 0
+        fi
+
+        : > "$log_file"
+        echo "info:npm global update log: $log_file"
+        echo "info:[$(timestamp)] Running npm update -g"
+
+        if run_logged_command "$log_file" "npm update -g" npm update -g; then
+            echo "success:Global npm packages updated"
+        else
+            echo "error:Failed to update global npm packages"
+            echo "info:Check log: $log_file"
         fi
     } > "$output_file"
 }
@@ -252,36 +322,38 @@ update_nvim_plugins() {
     } > "$output_file"
 }
 
-# Pull a single repo (used for parallel execution)
-# Arguments: repo_path output_file
-pull_single_repo() {
+# Fetch a single repo (safe to run in parallel)
+# Arguments: repo_path output_file failed_file
+fetch_single_repo() {
     local repo="$1"
     local output_file="$2"
+    local failed_file="$3"
     local repo_name
     repo_name=$(basename "$repo")
 
     (
         cd "$repo"
 
-        # Check if there are uncommitted changes and stash them
-        local stashed=false
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-            if git stash push -m "update-everything auto-stash" 2>/dev/null; then
-                stashed=true
-            else
-                echo "error:$repo_name: failed to stash changes, skipping" >> "$output_file"
-                exit 0
-            fi
-        fi
-
-        # Fetch latest
         if ! git fetch origin 2>/dev/null; then
-            if [ "$stashed" = true ]; then
-                git stash pop 2>/dev/null || true
-            fi
             echo "error:$repo_name: failed to fetch" >> "$output_file"
+            echo "$repo" >> "$failed_file"
             exit 0
         fi
+    )
+}
+
+# Update a single repo after fetch (runs serially)
+# Arguments: repo_path output_file
+update_single_repo() {
+    local repo="$1"
+    local output_file="$2"
+    local repo_name
+    local branch
+    local current_branch
+    repo_name=$(basename "$repo")
+
+    (
+        cd "$repo"
 
         # Detect the primary branch (try main first, then master)
         if git show-ref --verify --quiet "refs/remotes/origin/main"; then
@@ -289,25 +361,28 @@ pull_single_repo() {
         elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
             branch="master"
         else
-            if [ "$stashed" = true ]; then
-                git stash pop 2>/dev/null || true
-            fi
             echo "error:$repo_name: no main/master branch found" >> "$output_file"
             exit 0
         fi
 
         current_branch=$(git rev-parse --abbrev-ref HEAD)
-        local stash_note=""
-        if [ "$stashed" = true ]; then
-            stash_note=" (stashed changes restored)"
-        fi
 
         if [ "$current_branch" = "$branch" ]; then
-            # On main branch, just pull
+            local stashed=false
+            # If we're on the primary branch with local changes, stash before pulling.
+            if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+                if git stash push -m "update-everything auto-stash" 2>/dev/null; then
+                    stashed=true
+                else
+                    echo "error:$repo_name: failed to stash changes, skipping pull" >> "$output_file"
+                    exit 0
+                fi
+            fi
+
             if git pull --ff-only origin "$branch" 2>/dev/null; then
                 if [ "$stashed" = true ]; then
                     if git stash pop 2>/dev/null; then
-                        echo "success:$repo_name: pulled latest on $branch$stash_note" >> "$output_file"
+                        echo "success:$repo_name: pulled latest on $branch (stashed changes restored)" >> "$output_file"
                     else
                         echo "error:$repo_name: pulled latest on $branch but failed to restore stash (conflicts?)" >> "$output_file"
                     fi
@@ -321,26 +396,22 @@ pull_single_repo() {
                 echo "error:$repo_name: failed to pull (might need rebase)" >> "$output_file"
             fi
         else
-            # On a different branch, fetch main
-            if git fetch origin "$branch:$branch" 2>/dev/null; then
-                if [ "$stashed" = true ]; then
-                    if git stash pop 2>/dev/null; then
-                        echo "success:$repo_name: updated $branch (currently on $current_branch)$stash_note" >> "$output_file"
+            # On a different branch, refresh the local primary branch pointer from origin.
+            if git show-ref --verify --quiet "refs/heads/$branch"; then
+                if git merge-base --is-ancestor "$branch" "origin/$branch" 2>/dev/null; then
+                    if git branch -f "$branch" "origin/$branch" 2>/dev/null; then
+                        echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
                     else
-                        echo "error:$repo_name: updated $branch but failed to restore stash (conflicts?)" >> "$output_file"
+                        echo "error:$repo_name: failed to update local $branch from origin/$branch" >> "$output_file"
                     fi
                 else
-                    echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
+                    echo "info:$repo_name: local $branch has diverged from origin/$branch; not updating pointer" >> "$output_file"
                 fi
             else
-                if [ "$stashed" = true ]; then
-                    if git stash pop 2>/dev/null; then
-                        echo "info:$repo_name: $branch is up to date (currently on $current_branch)$stash_note" >> "$output_file"
-                    else
-                        echo "error:$repo_name: $branch is up to date but failed to restore stash (conflicts?)" >> "$output_file"
-                    fi
+                if git branch "$branch" "origin/$branch" 2>/dev/null; then
+                    echo "success:$repo_name: created local $branch from origin/$branch (currently on $current_branch)" >> "$output_file"
                 else
-                    echo "info:$repo_name: $branch is up to date (currently on $current_branch)" >> "$output_file"
+                    echo "error:$repo_name: failed to create local $branch from origin/$branch" >> "$output_file"
                 fi
             fi
         fi
@@ -354,7 +425,11 @@ pull_repos() {
     fi
 
     local output_file="$TEMP_DIR/repos.out"
+    local failed_file="$TEMP_DIR/repos_fetch_failed.list"
+    : > "$failed_file"
     touch "$output_file"
+
+    local -a repos=()
     local pids=()
 
     for repos_dir in "${REPOS_DIRS[@]}"; do
@@ -365,15 +440,40 @@ pull_repos() {
 
         for repo in "$repos_dir"/*/; do
             if [ -d "$repo/.git" ]; then
-                pull_single_repo "$repo" "$output_file" &
-                pids+=($!)
+                repos+=("$repo")
             fi
         done
     done
 
-    # Wait for all repo pulls to complete
-    for pid in "${pids[@]}"; do
-        wait "$pid" 2>/dev/null || true
+    if [ "${#repos[@]}" -eq 0 ]; then
+        echo "info:No git repositories found" >> "$output_file"
+        return
+    fi
+
+    echo "section:Fetching remotes..." >> "$output_file"
+    if [ "$PARALLEL" = true ]; then
+        echo "info:Running git fetch in parallel across repositories" >> "$output_file"
+        for repo in "${repos[@]}"; do
+            fetch_single_repo "$repo" "$output_file" "$failed_file" &
+            pids+=($!)
+        done
+
+        for pid in "${pids[@]}"; do
+            wait "$pid" 2>/dev/null || true
+        done
+    else
+        echo "info:Running git fetch sequentially across repositories" >> "$output_file"
+        for repo in "${repos[@]}"; do
+            fetch_single_repo "$repo" "$output_file" "$failed_file"
+        done
+    fi
+
+    echo "section:Updating local branches..." >> "$output_file"
+    for repo in "${repos[@]}"; do
+        if grep -Fqx "$repo" "$failed_file"; then
+            continue
+        fi
+        update_single_repo "$repo" "$output_file"
     done
 }
 
@@ -386,30 +486,31 @@ print_help() {
     echo "  -h, --help       Show this help message"
     echo "  -v, --verbose    Show verbose output"
     echo "  --dry-run        Show what would be done without executing"
-    echo "  --sequential     Run tasks sequentially instead of in parallel"
+    echo "  --sequential     Run repo git fetches sequentially (default is parallel fetches)"
     echo ""
     echo "Configuration:"
     echo "  Config file location: ~/.config/good-morning/config"
     echo ""
-    echo "Tasks (run in parallel by default):"
+    echo "Tasks (run serially):"
     echo "  - Check for macOS updates"
     echo "  - brew update / upgrade / cleanup"
+    echo "  - npm update -g"
     echo "  - Docker system prune"
     echo "  - Update Neovim plugins"
-    echo "  - Pull latest main branch on all git repos in ~/code and ~/norm"
+    echo "  - Pull latest main branch on all git repos in ~/code and ~/norm (only git fetch is parallelized)"
     exit 0
 }
 
 dry_run() {
-    load_config
     echo "Dry run - would execute the following:"
     echo ""
     echo "Configuration:"
-    echo "  PARALLEL=$PARALLEL"
+    echo "  PARALLEL_GIT_FETCH=$PARALLEL"
     echo "  REPOS_DIRS=${REPOS_DIRS[*]}"
     echo "  RUN_BREW_UPDATE=$RUN_BREW_UPDATE"
     echo "  RUN_BREW_UPGRADE=$RUN_BREW_UPGRADE"
     echo "  RUN_BREW_CLEANUP=$RUN_BREW_CLEANUP"
+    echo "  RUN_NPM_GLOBAL_UPDATE=$RUN_NPM_GLOBAL_UPDATE"
     echo "  PULL_REPOS=$PULL_REPOS"
     echo "  DOCKER_PRUNE=$DOCKER_PRUNE"
     echo "  CHECK_MACOS_UPDATES=$CHECK_MACOS_UPDATES"
@@ -427,6 +528,13 @@ dry_run() {
     fi
     if [ "$RUN_BREW_CLEANUP" = true ]; then
         echo "Would run: brew cleanup"
+    fi
+    if [ "$RUN_NPM_GLOBAL_UPDATE" = true ]; then
+        if command -v npm &>/dev/null; then
+            echo "Would run: npm update -g"
+        else
+            echo "Would run: npm update -g (npm not installed)"
+        fi
     fi
     if [ "$DOCKER_PRUNE" = true ]; then
         if command -v docker &>/dev/null; then
@@ -461,121 +569,20 @@ dry_run() {
 }
 
 SHOW_HEADER=true
-
-# Mark a task as complete (for progress tracking)
-mark_complete() {
-    touch "$TEMP_DIR/done_$1"
-}
-
-# Count completed tasks
-count_completed() {
-    find "$TEMP_DIR" -name "done_*" 2>/dev/null | wc -l | tr -d ' '
-}
-
-# Show progress while waiting for tasks
-wait_with_progress() {
-    local pids=("$@")
-    local total=${#pids[@]}
-    local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local i=0
-
-    # Task names mapping to done files
-    local -a task_names=("macOS updates" "Homebrew" "Docker" "Neovim" "Repos")
-    local -a done_files=("done_macos" "done_brew" "done_docker" "done_nvim" "done_repos")
-
-    while true; do
-        local running=0
-        for pid in "${pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-                ((running++))
-            fi
-        done
-
-        if [ "$running" -eq 0 ]; then
-            break
-        fi
-
-        local completed
-        completed=$(count_completed)
-
-        # Build list of running task names
-        local running_tasks=""
-        local idx=0
-        for done_file in "${done_files[@]}"; do
-            if [ ! -f "$TEMP_DIR/$done_file" ]; then
-                running_tasks="$running_tasks, ${task_names[$idx]}"
-            fi
-            ((idx++))
-        done
-
-        # Remove leading comma and space
-        running_tasks="${running_tasks#, }"
-
-        printf "\r  %s Running: %s (%d/%d complete) " "${spin_chars:i++%${#spin_chars}:1}" "$running_tasks" "$completed" "$total"
-        sleep 0.1
-    done
-
-    # Clear progress line
-    printf "\r%-50s\r" " "
-}
-
-# Run all tasks in parallel
-run_parallel() {
-    local pids=()
-    local task_names=()
-
-    # Start all tasks in background (each marks itself complete when done)
-    { check_macos_updates; mark_complete "macos"; } &
-    pids+=($!)
-    task_names+=("macos")
-
-    { run_brew_tasks; mark_complete "brew"; } &
-    pids+=($!)
-    task_names+=("brew")
-
-    { run_docker_prune; mark_complete "docker"; } &
-    pids+=($!)
-    task_names+=("docker")
-
-    { update_nvim_plugins; mark_complete "nvim"; } &
-    pids+=($!)
-    task_names+=("nvim")
-
-    { pull_repos; mark_complete "repos"; } &
-    pids+=($!)
-    task_names+=("repos")
-
-    # Wait with progress indicator
-    wait_with_progress "${pids[@]}"
-
-    # Print results in order
-    print_task_output "$TEMP_DIR/macos.out"
-    print_task_output "$TEMP_DIR/brew.out"
-    print_task_output "$TEMP_DIR/docker.out"
-    print_task_output "$TEMP_DIR/nvim.out"
-
-    # Repos output is handled differently (printed within pull_repos via print_task_output pattern)
-    if [ -f "$TEMP_DIR/repos.out" ] && [ -s "$TEMP_DIR/repos.out" ]; then
-        print_section "Pulling latest in repos..."
-        echo ""
-        while IFS=: read -r type message; do
-            case "$type" in
-                success) print_success "$message" ;;
-                error) print_error "$message" ;;
-                info) print_info "$message" ;;
-            esac
-        done < "$TEMP_DIR/repos.out"
-        echo ""
-    fi
-}
+FORCE_SEQUENTIAL_FETCH=false
 
 # Run all tasks sequentially (original behavior)
 run_sequential() {
     check_macos_updates
     print_task_output "$TEMP_DIR/macos.out"
 
+    print_info "Homebrew command log: $TEMP_DIR/brew.log"
     run_brew_tasks
     print_task_output "$TEMP_DIR/brew.out"
+
+    print_info "npm global update log: $TEMP_DIR/npm-global.log"
+    run_npm_global_update
+    print_task_output "$TEMP_DIR/npm.out"
 
     run_docker_prune
     print_task_output "$TEMP_DIR/docker.out"
@@ -600,6 +607,8 @@ run_sequential() {
 
 # Main
 main() {
+    local dry_run_mode=false
+
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -615,10 +624,11 @@ main() {
                 shift
                 ;;
             --dry-run)
-                dry_run
+                dry_run_mode=true
+                shift
                 ;;
             --sequential)
-                PARALLEL=false
+                FORCE_SEQUENTIAL_FETCH=true
                 shift
                 ;;
             *)
@@ -630,6 +640,14 @@ main() {
     done
 
     load_config
+    if [ "$FORCE_SEQUENTIAL_FETCH" = true ]; then
+        PARALLEL=false
+    fi
+
+    if [ "$dry_run_mode" = true ]; then
+        dry_run
+    fi
+
     setup_temp_dir
 
     if [ "$SHOW_HEADER" = true ]; then
@@ -639,11 +657,7 @@ main() {
         echo ""
     fi
 
-    if [ "$PARALLEL" = true ]; then
-        run_parallel
-    else
-        run_sequential
-    fi
+    run_sequential
 
     if [ "$SHOW_HEADER" = true ]; then
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
