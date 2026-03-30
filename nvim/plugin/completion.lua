@@ -1,6 +1,8 @@
 require("blink.cmp").setup({
   fuzzy = {
-    implementation = "prefer_rust",
+    -- vim.pack installs blink.cmp without guaranteeing the Rust fuzzy binary is
+    -- built into the package path. For a portable startup, use the Lua matcher.
+    implementation = "lua",
   },
   keymap = { preset = "default" },
   appearance = {
