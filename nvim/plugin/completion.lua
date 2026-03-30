@@ -1,4 +1,7 @@
 require("blink.cmp").setup({
+  fuzzy = {
+    implementation = "prefer_rust",
+  },
   keymap = { preset = "default" },
   appearance = {
     nerd_font_variant = "mono",
