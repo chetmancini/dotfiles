@@ -1,0 +1,2 @@
+WRN 2026-03-30T16:37:56.877 ?.30121    server_start:197: Failed to start server: operation not permitted: /var/folders/nw/d2pcyqy52z1fnpv8_1r0mb300000gn/T/nvim.chet/KJHBIh/nvim.30121.0
+WRN 2026-03-30T16:37:56.991 ?.30121    server_start:197: Failed to start server: operation not permitted: /var/folders/nw/d2pcyqy52z1fnpv8_1r0mb300000gn/T/nvim.chet/KJHBIh/fzf-lua.1774903076.30121.1
