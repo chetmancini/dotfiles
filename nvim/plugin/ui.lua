@@ -11,7 +11,7 @@ require("bufferline").setup({
 
 require("lualine").setup({
   options = {
-    theme = "catppuccin",
+    theme = "auto",
     globalstatus = true,
   },
   sections = {
