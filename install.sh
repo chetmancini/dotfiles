@@ -366,6 +366,12 @@ install_home_symlinks() {
         "$HOME/.vim" \
         "Vim Runtime" \
         "Legacy Vim runtime files, including colors and pathogen"
+
+    create_symlink \
+        "$DOTFILES_DIR/.npmrc" \
+        "$HOME/.npmrc" \
+        "npm Configuration" \
+        "npm config with min-release-age to avoid installing very new packages"
 }
 
 install_api_keys_template() {
