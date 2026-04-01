@@ -311,6 +311,12 @@ install_config_symlinks() {
         "$HOME/.config/mise" \
         "Mise" \
         "Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code"
+
+    create_symlink \
+        "$DOTFILES_DIR/uv" \
+        "$HOME/.config/uv" \
+        "uv" \
+        "Python package manager config with exclude-newer for supply chain safety"
 }
 
 install_home_symlinks() {
