@@ -120,6 +120,7 @@ run_installed_state_checks() {
     check_symlink "Ghostty config" "$HOME/.config/ghostty" "$DOTFILES_DIR/ghostty"
     check_symlink "Neovim config" "$HOME/.config/nvim" "$DOTFILES_DIR/nvim"
     check_symlink "Mise config" "$HOME/.config/mise" "$DOTFILES_DIR/mise"
+    check_symlink "uv config" "$HOME/.config/uv" "$DOTFILES_DIR/uv"
     check_symlink "Git config" "$HOME/.gitconfig" "$DOTFILES_DIR/.gitconfig"
     check_symlink "Global gitignore" "$HOME/.gitignore" "$DOTFILES_DIR/.gitignore"
     check_symlink "Zsh config" "$HOME/.zshrc" "$DOTFILES_DIR/.zshrc"
@@ -128,6 +129,7 @@ run_installed_state_checks() {
     check_symlink "tmux config" "$HOME/.tmux.conf" "$DOTFILES_DIR/.tmux.conf"
     check_symlink "Vim config" "$HOME/.vimrc" "$DOTFILES_DIR/.vimrc"
     check_symlink "Vim runtime" "$HOME/.vim" "$DOTFILES_DIR/vim"
+    check_symlink "npm config" "$HOME/.npmrc" "$DOTFILES_DIR/.npmrc"
     echo ""
 }
 

@@ -1,9 +1,12 @@
 
-# Path to the oh-my-zsh checkout used for sourced plugins.
-export ZSH=$HOME/dotfiles/oh-my-zsh
+# Resolve the repo root from this file so the config works outside ~/dotfiles.
+typeset -g DOTFILES_DIR="${${(%):-%N}:A:h}"
 
-alias zshconfig="vim ~/dotfiles/.zshrc"
-alias ohmyzsh="vim ~/dotfiles/oh-my-zsh"
+# Path to the oh-my-zsh checkout used for sourced plugins.
+export ZSH="$DOTFILES_DIR/oh-my-zsh"
+
+alias zshconfig="vim $DOTFILES_DIR/.zshrc"
+alias ohmyzsh="vim $DOTFILES_DIR/oh-my-zsh"
 
 autoload -Uz add-zsh-hook colors
 colors
@@ -38,7 +41,7 @@ git_prompt_info() {
 
 add-zsh-hook precmd _update_git_prompt_info
 
-[ -f ~/dotfiles/chetmancini.zsh-theme ] && source ~/dotfiles/chetmancini.zsh-theme
+[ -f "$DOTFILES_DIR/chetmancini.zsh-theme" ] && source "$DOTFILES_DIR/chetmancini.zsh-theme"
 [ -f "$ZSH/plugins/history-substring-search/history-substring-search.zsh" ] && \
   source "$ZSH/plugins/history-substring-search/history-substring-search.zsh"
 
@@ -121,9 +124,9 @@ preexec() { echo -ne '\e[5 q' }
 platform='unknown'
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-  source ~/dotfiles/linux_specific.sh
+  source "$DOTFILES_DIR/linux_specific.sh"
 elif [[ "$unamestr" == 'Darwin' ]]; then
-  source ~/dotfiles/mac_specific.sh
+  source "$DOTFILES_DIR/mac_specific.sh"
 fi
 
 ##############################
@@ -142,7 +145,7 @@ export BUN_INSTALL="$HOME/.bun"
 export MYSQL_HOME=/usr/local/mysql/bin
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
-export PERSONAL_BIN=$HOME/dotfiles/bin
+export PERSONAL_BIN="$DOTFILES_DIR/bin"
 export MODULAR_HOME="$HOME/.modular"
 export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
 export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
@@ -320,14 +323,14 @@ function cpmsg() {
 # Execute on launch
 ##############################
 # Source API keys if file exists (gitignored, see api_keys.sh.template)
-[ -f ~/dotfiles/api_keys.sh ] && source ~/dotfiles/api_keys.sh
+[ -f "$DOTFILES_DIR/api_keys.sh" ] && source "$DOTFILES_DIR/api_keys.sh"
 
 # Source 1Password-backed API keys (can override above, see api_keys_1password.sh.template)
-[ -f ~/dotfiles/api_keys_1password.sh ] && source ~/dotfiles/api_keys_1password.sh
+[ -f "$DOTFILES_DIR/api_keys_1password.sh" ] && source "$DOTFILES_DIR/api_keys_1password.sh"
 
 # SSH keys are managed by macOS Keychain automatically
 # No need to call ssh-add on every shell startup
-[ -f ~/dotfiles/norm_specific.sh ] && source ~/dotfiles/norm_specific.sh
+[ -f "$DOTFILES_DIR/norm_specific.sh" ] && source "$DOTFILES_DIR/norm_specific.sh"
 
 
 ##############################
