@@ -15,6 +15,7 @@ SKIP_TPM=false
 SKIP_BREW=false
 SKIP_API_KEYS=false
 CLEAR_SCREEN=true
+PLAN_MODE=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -37,6 +38,7 @@ Install dotfiles into the current HOME directory.
 
 Options:
   --yes              Run non-interactively and accept all prompts
+  --plan, --dry-run  Preview changes without modifying files
   --skip-oh-my-zsh   Skip cloning oh-my-zsh and theme installation
   --skip-tpm         Skip tmux plugin manager installation
   --skip-brew        Skip Homebrew package installation
@@ -51,6 +53,10 @@ parse_args() {
         case "$1" in
             --yes)
                 AUTO_YES=true
+                shift
+                ;;
+            --plan|--dry-run)
+                PLAN_MODE=true
                 shift
                 ;;
             --skip-oh-my-zsh)
@@ -114,6 +120,10 @@ print_info() {
     echo -e "  ${BLUE}[info]${NC} $1"
 }
 
+print_plan() {
+    echo -e "  ${BLUE}[plan]${NC} $1"
+}
+
 # Ask user for confirmation, returns 0 for yes, 1 for no
 ask_yes_no() {
     local prompt="$1"
@@ -147,14 +157,23 @@ backup_if_exists() {
     local name="$2"
 
     if [ -e "$target" ] && [ ! -L "$target" ]; then
-        mkdir -p "$BACKUP_DIR"
         local backup_path="$BACKUP_DIR/$name"
-        mv "$target" "$backup_path"
-        print_warning "Backed up existing $name to $backup_path"
+        if [ "$PLAN_MODE" = true ]; then
+            print_plan "Would back up existing $name to $backup_path"
+            BACKUPS_PLANNED=$((BACKUPS_PLANNED + 1))
+        else
+            mkdir -p "$BACKUP_DIR"
+            mv "$target" "$backup_path"
+            print_warning "Backed up existing $name to $backup_path"
+        fi
         return 0
     elif [ -L "$target" ]; then
-        print_info "Existing symlink found, will be replaced"
-        rm -f "$target"
+        if [ "$PLAN_MODE" = true ]; then
+            print_plan "Existing symlink found, would replace it"
+        else
+            print_info "Existing symlink found, will be replaced"
+            rm -f "$target"
+        fi
         return 0
     fi
 
@@ -181,10 +200,18 @@ create_symlink() {
 
     if ask_yes_no "  Create this symlink?"; then
         backup_if_exists "$target" "$(basename "$target")"
-        mkdir -p "$(dirname "$target")"
-        ln -sf "$source" "$target"
-        print_success "Symlink created"
-        SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
+        if [ "$PLAN_MODE" = true ]; then
+            if [ ! -d "$(dirname "$target")" ]; then
+                print_plan "Would create parent directory $(dirname "$target")"
+            fi
+            print_success "Symlink would be created"
+            SYMLINKS_PLANNED=$((SYMLINKS_PLANNED + 1))
+        else
+            mkdir -p "$(dirname "$target")"
+            ln -sf "$source" "$target"
+            print_success "Symlink created"
+            SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
+        fi
     else
         print_warning "Skipped"
         SYMLINKS_SKIPPED=$((SYMLINKS_SKIPPED + 1))
@@ -207,9 +234,14 @@ install_oh_my_zsh() {
         print_success "Oh My Zsh is already installed"
     else
         if ask_yes_no "Clone Oh My Zsh repository?"; then
-            print_step "Cloning oh-my-zsh..."
-            git clone https://github.com/ohmyzsh/ohmyzsh.git "$DOTFILES_DIR/oh-my-zsh"
-            print_success "Oh My Zsh cloned successfully"
+            if [ "$PLAN_MODE" = true ]; then
+                print_step "Would clone oh-my-zsh into $DOTFILES_DIR/oh-my-zsh"
+                print_success "Oh My Zsh clone planned"
+            else
+                print_step "Cloning oh-my-zsh..."
+                git clone https://github.com/ohmyzsh/ohmyzsh.git "$DOTFILES_DIR/oh-my-zsh"
+                print_success "Oh My Zsh cloned successfully"
+            fi
         else
             print_warning "Skipped Oh My Zsh installation"
             return 0
@@ -243,9 +275,14 @@ install_tpm() {
     fi
 
     if ask_yes_no "Install Tmux Plugin Manager (TPM)?"; then
-        print_step "Cloning TPM..."
-        git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-        print_success "TPM installed"
+        if [ "$PLAN_MODE" = true ]; then
+            print_step "Would clone TPM into $HOME/.tmux/plugins/tpm"
+            print_success "TPM install planned"
+        else
+            print_step "Cloning TPM..."
+            git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+            print_success "TPM installed"
+        fi
         print_info "After setup, press prefix + I in tmux to install plugins"
     else
         print_warning "Skipped TPM installation"
@@ -266,11 +303,17 @@ install_homebrew() {
 
     if command -v brew >/dev/null 2>&1; then
         if ask_yes_no "Install/update Homebrew packages from Brewfile?"; then
-            print_step "Updating Homebrew..."
-            brew update
-            print_step "Installing packages from Brewfile..."
-            brew bundle --file="$DOTFILES_DIR/Brewfile"
-            print_success "Homebrew packages installed"
+            if [ "$PLAN_MODE" = true ]; then
+                print_step "Would run: brew update"
+                print_step "Would run: brew bundle --file=\"$DOTFILES_DIR/Brewfile\""
+                print_success "Homebrew package install planned"
+            else
+                print_step "Updating Homebrew..."
+                brew update
+                print_step "Installing packages from Brewfile..."
+                brew bundle --file="$DOTFILES_DIR/Brewfile"
+                print_success "Homebrew packages installed"
+            fi
         else
             print_warning "Skipped Homebrew packages"
         fi
@@ -286,7 +329,13 @@ install_config_symlinks() {
     echo "These symlinks set up application configurations in ~/.config/"
     echo ""
 
-    mkdir -p "$HOME/.config"
+    if [ "$PLAN_MODE" = true ]; then
+        if [ ! -d "$HOME/.config" ]; then
+            print_plan "Would create directory $HOME/.config"
+        fi
+    else
+        mkdir -p "$HOME/.config"
+    fi
 
     create_symlink \
         "$DOTFILES_DIR/yazi" \
@@ -396,9 +445,15 @@ install_api_keys_template() {
         print_success "api_keys.sh already exists"
     elif [ -f "$DOTFILES_DIR/api_keys.sh.template" ]; then
         if ask_yes_no "Create api_keys.sh from template?"; then
-            cp "$DOTFILES_DIR/api_keys.sh.template" "$DOTFILES_DIR/api_keys.sh"
-            print_success "Created api_keys.sh from template"
-            print_info "Edit $DOTFILES_DIR/api_keys.sh to add your API keys"
+            if [ "$PLAN_MODE" = true ]; then
+                print_step "Would copy api_keys.sh.template to api_keys.sh"
+                print_success "api_keys.sh creation planned"
+                print_info "You would then edit $DOTFILES_DIR/api_keys.sh to add your API keys"
+            else
+                cp "$DOTFILES_DIR/api_keys.sh.template" "$DOTFILES_DIR/api_keys.sh"
+                print_success "Created api_keys.sh from template"
+                print_info "Edit $DOTFILES_DIR/api_keys.sh to add your API keys"
+            fi
         else
             print_warning "Skipped api_keys.sh creation"
         fi
@@ -408,26 +463,45 @@ install_api_keys_template() {
 }
 
 print_summary() {
-    print_header "Installation Complete!"
-
-    echo -e "  ${GREEN}Symlinks created:${NC} $SYMLINKS_CREATED"
+    if [ "$PLAN_MODE" = true ]; then
+        print_header "Installation Plan Complete!"
+        echo -e "  ${GREEN}Symlinks planned:${NC} $SYMLINKS_PLANNED"
+        echo -e "  ${YELLOW}Backups planned:${NC} $BACKUPS_PLANNED"
+    else
+        print_header "Installation Complete!"
+        echo -e "  ${GREEN}Symlinks created:${NC} $SYMLINKS_CREATED"
+    fi
     echo -e "  ${YELLOW}Symlinks skipped:${NC} $SYMLINKS_SKIPPED"
 
-    if [ -d "$BACKUP_DIR" ]; then
+    if [ "$PLAN_MODE" = true ] && [ "$BACKUPS_PLANNED" -gt 0 ]; then
+        echo ""
+        echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
+        echo -e "  Existing files would be moved there before applying changes."
+    elif [ -d "$BACKUP_DIR" ]; then
         echo ""
         echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
         echo -e "  Files that were replaced have been backed up there."
     fi
 
     echo ""
-    echo -e "${BOLD}Next steps:${NC}"
-    echo "  1. Restart your terminal or run: source ~/.zshrc"
-    echo "  2. Run 'doctor' to verify the installed state"
-    echo "  3. Open Neovim to let LazyVim install plugins automatically"
-    echo "  4. In tmux, press prefix + I to install tmux plugins"
-    echo "  5. Run 'brew-sync --check' to verify Brewfile is in sync"
-    echo ""
-    print_success "Happy coding!"
+    if [ "$PLAN_MODE" = true ]; then
+        print_info "Preview only. No files were modified."
+        echo ""
+        echo -e "${BOLD}Next steps:${NC}"
+        echo "  1. Review the planned actions above"
+        echo "  2. Re-run ./install.sh without --plan to apply them"
+        echo ""
+        print_success "Plan complete"
+    else
+        echo -e "${BOLD}Next steps:${NC}"
+        echo "  1. Restart your terminal or run: source ~/.zshrc"
+        echo "  2. Run 'doctor' to verify the installed state"
+        echo "  3. Open Neovim to let LazyVim install plugins automatically"
+        echo "  4. In tmux, press prefix + I to install tmux plugins"
+        echo "  5. Run 'brew-sync --check' to verify Brewfile is in sync"
+        echo ""
+        print_success "Happy coding!"
+    fi
 }
 
 #==============================================================================
@@ -435,7 +509,9 @@ print_summary() {
 #==============================================================================
 
 SYMLINKS_CREATED=0
+SYMLINKS_PLANNED=0
 SYMLINKS_SKIPPED=0
+BACKUPS_PLANNED=0
 
 parse_args "$@"
 
@@ -451,6 +527,9 @@ echo ""
 echo -e "  ${BOLD}Dotfiles directory:${NC} $DOTFILES_DIR"
 echo -e "  ${BOLD}Home directory:${NC}     $HOME"
 echo -e "  ${BOLD}Backup directory:${NC}   $BACKUP_DIR (if needed)"
+if [ "$PLAN_MODE" = true ]; then
+    echo -e "  ${BOLD}Mode:${NC}               Preview only (--plan)"
+fi
 echo ""
 
 if ! ask_yes_no "Ready to begin?"; then

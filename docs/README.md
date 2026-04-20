@@ -7,6 +7,7 @@ Personal dotfiles for macOS development environment.
 ```bash
 git clone https://github.com/chetmancini/dotfiles.git ~/dotfiles
 cd ~/dotfiles
+./install.sh --plan
 ./install.sh
 doctor
 ```
