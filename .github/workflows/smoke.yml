@@ -39,6 +39,16 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/oh-my-zsh/custom/themes"
           mkdir -p "$RUNNER_TEMP/home"
+          mkdir -p "$RUNNER_TEMP/home-plan"
+
+      - name: Preview installer
+        env:
+          HOME: ${{ runner.temp }}/home-plan
+        run: |
+          echo "existing git config" > "$HOME/.gitconfig"
+          ./install.sh --plan --yes --skip-brew --skip-api-keys --no-clear
+          test -f "$HOME/.gitconfig"
+          test ! -L "$HOME/.gitconfig"
 
       - name: Run installer
         env:

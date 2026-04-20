@@ -55,6 +55,9 @@ The `install.sh` script creates symlinks from this repository to home directory:
 # Initial setup (installs Homebrew packages and creates symlinks)
 ./install.sh
 
+# Preview the install without changing files
+./install.sh --plan
+
 # Headless/bootstrap mode
 ./install.sh --yes --skip-brew --no-clear
 

@@ -12,6 +12,7 @@ git clone https://github.com/chetmancini/dotfiles.git ~/dotfiles
 
 # Run install script
 cd ~/dotfiles
+./install.sh --plan
 ./install.sh
 
 # Verify the installed state
@@ -68,7 +69,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - fzf integration for fuzzy finding
 
 ### Bootstrap
-- `install.sh` supports interactive and headless installs (`--yes`, `--skip-brew`, etc.)
+- `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, etc.)
 - `doctor` verifies symlinks, theme wiring, TPM, and repo health checks
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 
