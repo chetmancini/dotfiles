@@ -24,7 +24,7 @@ CONFIG_FILE="$CONFIG_DIR/config"
 
 # Default configuration
 DEFAULT_SHOW_WEATHER=true
-DEFAULT_WEATHER_LOCATION=""  # Empty uses IP geolocation
+DEFAULT_WEATHER_LOCATION="" # Empty uses IP geolocation
 DEFAULT_SHOW_CALENDAR=true
 DEFAULT_CALENDAR_DAYS=2
 DEFAULT_CALENDAR_NAME="chet.mancini@norm.ai"
@@ -207,7 +207,7 @@ show_github_notifications() {
         elif [[ "$line" == ITEM:* ]]; then
             # Notification item
             item="${line#ITEM:}"
-            IFS='|' read -r type title reason url <<< "$item"
+            IFS='|' read -r type title reason url <<<"$item"
 
             # Convert API URL to web URL
             web_url=""
@@ -252,7 +252,7 @@ show_github_notifications() {
                 echo "    [$icon] $title [$reason_text]"
             fi
         fi
-    done <<< "$notifications"
+    done <<<"$notifications"
 
     total=$(gh api notifications 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
     if [ "$total" -gt "$GITHUB_NOTIFICATIONS_LIMIT" ]; then
@@ -331,7 +331,7 @@ main() {
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help)
+            -h | --help)
                 print_help
                 ;;
             --no-header)

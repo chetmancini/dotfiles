@@ -10,8 +10,8 @@ set -euo pipefail
 gone_branches=$(git branch -vv | grep ': gone]' | sed 's/^[* +]*//' | awk '{print $1}')
 
 if [[ -z "$gone_branches" ]]; then
-  echo "No branches with gone upstreams found."
-  exit 0
+    echo "No branches with gone upstreams found."
+    exit 0
 fi
 
 echo "Branches with gone upstreams:"
@@ -21,12 +21,12 @@ echo ""
 current_branch=$(git branch --show-current)
 
 for branch in $gone_branches; do
-  if [[ "$branch" == "$current_branch" ]]; then
-    echo "Skipping $branch (current branch)"
-    continue
-  fi
-  echo "Deleting $branch..."
-  git branch -D "$branch"
+    if [[ "$branch" == "$current_branch" ]]; then
+        echo "Skipping $branch (current branch)"
+        continue
+    fi
+    echo "Deleting $branch..."
+    git branch -D "$branch"
 done
 
 echo ""

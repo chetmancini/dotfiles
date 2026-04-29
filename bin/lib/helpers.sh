@@ -6,6 +6,7 @@
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+# shellcheck disable=SC2034
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
@@ -62,7 +63,7 @@ run_with_spinner() {
     # shellcheck disable=SC2064
     trap "rm -f '$tmpfile'" EXIT INT TERM
 
-    "$@" > "$tmpfile" 2>&1 &
+    "$@" >"$tmpfile" 2>&1 &
     pid=$!
 
     # Show spinner while waiting

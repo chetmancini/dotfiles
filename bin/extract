@@ -90,19 +90,19 @@ case "$FILE" in
         ;;
     *.bz2)
         require_tool "bunzip2" "brew install bzip2"
-        bunzip2 -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.bz2}")"
+        bunzip2 -c "$FILE" >"$TARGET_DIR/$(basename "${FILE%.bz2}")"
         ;;
     *.rar)
         require_tool "unrar" "brew install unrar"
         if [[ "$VERBOSE" -eq 1 ]]; then
             unrar x -y "$FILE" "$TARGET_DIR"
         else
-            unrar x -y "$FILE" "$TARGET_DIR" > /dev/null 2>&1
+            unrar x -y "$FILE" "$TARGET_DIR" >/dev/null 2>&1
         fi
         ;;
     *.gz)
         require_tool "gunzip"
-        gunzip -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.gz}")"
+        gunzip -c "$FILE" >"$TARGET_DIR/$(basename "${FILE%.gz}")"
         ;;
     *.tar)
         require_tool "tar"
@@ -126,31 +126,23 @@ case "$FILE" in
         ;;
     *.Z)
         require_tool "uncompress" "brew install ncompress"
-        uncompress -c "$FILE" > "$TARGET_DIR/$(basename "${FILE%.Z}")"
+        uncompress -c "$FILE" >"$TARGET_DIR/$(basename "${FILE%.Z}")"
         ;;
     *.7z)
         require_tool "7z" "brew install p7zip"
         if [[ "$VERBOSE" -eq 1 ]]; then
             7z x "$FILE" -o"$TARGET_DIR"
         else
-            7z x "$FILE" -o"$TARGET_DIR" > /dev/null 2>&1
+            7z x "$FILE" -o"$TARGET_DIR" >/dev/null 2>&1
         fi
-        ;;
-    *.xz)
-        require_tool "xz"
-        xz -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.xz}")"
         ;;
     *.tar.xz)
         require_tool "tar"
         tar "${TAR_FLAGS}Jf" "$FILE" -C "$TARGET_DIR"
         ;;
-    *.zst)
-        require_tool "zstd" "brew install zstd"
-        zstd -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.zst}")"
-        ;;
-    *.zstd)
-        require_tool "zstd" "brew install zstd"
-        zstd -dc "$FILE" > "$TARGET_DIR/$(basename "${FILE%.zstd}")"
+    *.xz)
+        require_tool "xz"
+        xz -dc "$FILE" >"$TARGET_DIR/$(basename "${FILE%.xz}")"
         ;;
     *.tar.zst)
         require_tool "tar"
@@ -161,6 +153,14 @@ case "$FILE" in
         require_tool "tar"
         require_tool "zstd" "brew install zstd"
         zstd -dc "$FILE" | tar "${TAR_FLAGS}f" - -C "$TARGET_DIR"
+        ;;
+    *.zst)
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" >"$TARGET_DIR/$(basename "${FILE%.zst}")"
+        ;;
+    *.zstd)
+        require_tool "zstd" "brew install zstd"
+        zstd -dc "$FILE" >"$TARGET_DIR/$(basename "${FILE%.zstd}")"
         ;;
     *)
         echo "Error: '$FILE' cannot be extracted via extract"

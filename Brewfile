@@ -49,6 +49,8 @@ brew "readline"                 # Line editing library
 brew "ripgrep"                  # Fast grep (rg)
 brew "rust"                     # Systems programming language
 brew "sd"                       # Better sed
+brew "shellcheck"               # Shell script linter
+brew "shfmt"                    # Shell script formatter
 brew "tmux"                     # Terminal multiplexer
 brew "tokei"                    # Code statistics
 brew "wget"                     # File downloader

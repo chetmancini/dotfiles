@@ -87,7 +87,7 @@ emit_brew_upgrade_report() {
 
         updated_entries+=("$name $target_version")
         ((updated_count++))
-    done < "$before_file"
+    done <"$before_file"
 
     if [ "$updated_count" -eq 0 ]; then
         echo "info:$label updated: none"
@@ -120,7 +120,7 @@ run_logged_command() {
             status=$?
         fi
         echo "[$(timestamp)] END: $label (exit $status)"
-    } >> "$log_file" 2>&1
+    } >>"$log_file" 2>&1
 
     return "$status"
 }
@@ -131,7 +131,7 @@ run_brew_tasks() {
     local log_file="$TEMP_DIR/brew.log"
 
     {
-        : > "$log_file"
+        : >"$log_file"
 
         if [ "$RUN_BREW_UPDATE" = true ]; then
             echo "section:Updating Homebrew..."
@@ -154,13 +154,13 @@ run_brew_tasks() {
             local cask_before="$TEMP_DIR/brew_cask_before.out"
             local cask_after="$TEMP_DIR/brew_cask_after.out"
 
-            brew outdated --formula --verbose > "$formula_before" 2>> "$log_file" || true
-            brew outdated --cask --verbose > "$cask_before" 2>> "$log_file" || true
+            brew outdated --formula --verbose >"$formula_before" 2>>"$log_file" || true
+            brew outdated --cask --verbose >"$cask_before" 2>>"$log_file" || true
 
             echo "info:[$(timestamp)] Running brew upgrade"
             if run_logged_command "$log_file" "brew upgrade" brew upgrade; then
-                brew outdated --formula > "$formula_after" 2>> "$log_file" || true
-                brew outdated --cask > "$cask_after" 2>> "$log_file" || true
+                brew outdated --formula >"$formula_after" 2>>"$log_file" || true
+                brew outdated --cask >"$cask_after" 2>>"$log_file" || true
                 echo "success:Packages upgraded"
                 emit_brew_upgrade_report "Packages" "$formula_before" "$formula_after"
                 emit_brew_upgrade_report "Apps" "$cask_before" "$cask_after"
@@ -181,7 +181,7 @@ run_brew_tasks() {
                 echo "info:Check log: $log_file"
             fi
         fi
-    } > "$output_file"
+    } >"$output_file"
 }
 
 run_npm_global_update() {
@@ -200,7 +200,7 @@ run_npm_global_update() {
             exit 0
         fi
 
-        : > "$log_file"
+        : >"$log_file"
         echo "info:npm global update log: $log_file"
         echo "info:[$(timestamp)] Running npm update -g"
 
@@ -210,7 +210,7 @@ run_npm_global_update() {
             echo "error:Failed to update global npm packages"
             echo "info:Check log: $log_file"
         fi
-    } > "$output_file"
+    } >"$output_file"
 }
 
 # Print output from a task file
@@ -220,12 +220,15 @@ print_task_output() {
 
     while IFS=: read -r type message; do
         case "$type" in
-            section) print_section "$message"; echo "" ;;
+            section)
+                print_section "$message"
+                echo ""
+                ;;
             success) print_success "$message" ;;
             error) print_error "$message" ;;
             info) print_info "$message" ;;
         esac
-    done < "$output_file"
+    done <"$output_file"
 }
 
 # Check for macOS updates (just report, don't install)
@@ -262,7 +265,7 @@ check_macos_updates() {
                 echo "success:macOS is up to date"
             fi
         fi
-    } > "$output_file"
+    } >"$output_file"
 }
 
 # Docker cleanup
@@ -295,7 +298,7 @@ run_docker_prune() {
         else
             echo "error:Failed to clean up Docker"
         fi
-    } > "$output_file"
+    } >"$output_file"
 }
 
 # Update Neovim plugins via Lazy
@@ -319,7 +322,7 @@ update_nvim_plugins() {
         else
             echo "error:Failed to update Neovim plugins"
         fi
-    } > "$output_file"
+    } >"$output_file"
 }
 
 # Fetch a single repo (safe to run in parallel)
@@ -335,8 +338,8 @@ fetch_single_repo() {
         cd "$repo"
 
         if ! git fetch origin 2>/dev/null; then
-            echo "error:$repo_name: failed to fetch" >> "$output_file"
-            echo "$repo" >> "$failed_file"
+            echo "error:$repo_name: failed to fetch" >>"$output_file"
+            echo "$repo" >>"$failed_file"
             exit 0
         fi
     )
@@ -361,7 +364,7 @@ update_single_repo() {
         elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
             branch="master"
         else
-            echo "error:$repo_name: no main/master branch found" >> "$output_file"
+            echo "error:$repo_name: no main/master branch found" >>"$output_file"
             exit 0
         fi
 
@@ -374,7 +377,7 @@ update_single_repo() {
                 if git stash push -m "update-everything auto-stash" 2>/dev/null; then
                     stashed=true
                 else
-                    echo "error:$repo_name: failed to stash changes, skipping pull" >> "$output_file"
+                    echo "error:$repo_name: failed to stash changes, skipping pull" >>"$output_file"
                     exit 0
                 fi
             fi
@@ -382,36 +385,36 @@ update_single_repo() {
             if git pull --ff-only origin "$branch" 2>/dev/null; then
                 if [ "$stashed" = true ]; then
                     if git stash pop 2>/dev/null; then
-                        echo "success:$repo_name: pulled latest on $branch (stashed changes restored)" >> "$output_file"
+                        echo "success:$repo_name: pulled latest on $branch (stashed changes restored)" >>"$output_file"
                     else
-                        echo "error:$repo_name: pulled latest on $branch but failed to restore stash (conflicts?)" >> "$output_file"
+                        echo "error:$repo_name: pulled latest on $branch but failed to restore stash (conflicts?)" >>"$output_file"
                     fi
                 else
-                    echo "success:$repo_name: pulled latest on $branch" >> "$output_file"
+                    echo "success:$repo_name: pulled latest on $branch" >>"$output_file"
                 fi
             else
                 if [ "$stashed" = true ]; then
                     git stash pop 2>/dev/null || true
                 fi
-                echo "error:$repo_name: failed to pull (might need rebase)" >> "$output_file"
+                echo "error:$repo_name: failed to pull (might need rebase)" >>"$output_file"
             fi
         else
             # On a different branch, refresh the local primary branch pointer from origin.
             if git show-ref --verify --quiet "refs/heads/$branch"; then
                 if git merge-base --is-ancestor "$branch" "origin/$branch" 2>/dev/null; then
                     if git branch -f "$branch" "origin/$branch" 2>/dev/null; then
-                        echo "success:$repo_name: updated $branch (currently on $current_branch)" >> "$output_file"
+                        echo "success:$repo_name: updated $branch (currently on $current_branch)" >>"$output_file"
                     else
-                        echo "error:$repo_name: failed to update local $branch from origin/$branch" >> "$output_file"
+                        echo "error:$repo_name: failed to update local $branch from origin/$branch" >>"$output_file"
                     fi
                 else
-                    echo "info:$repo_name: local $branch has diverged from origin/$branch; not updating pointer" >> "$output_file"
+                    echo "info:$repo_name: local $branch has diverged from origin/$branch; not updating pointer" >>"$output_file"
                 fi
             else
                 if git branch "$branch" "origin/$branch" 2>/dev/null; then
-                    echo "success:$repo_name: created local $branch from origin/$branch (currently on $current_branch)" >> "$output_file"
+                    echo "success:$repo_name: created local $branch from origin/$branch (currently on $current_branch)" >>"$output_file"
                 else
-                    echo "error:$repo_name: failed to create local $branch from origin/$branch" >> "$output_file"
+                    echo "error:$repo_name: failed to create local $branch from origin/$branch" >>"$output_file"
                 fi
             fi
         fi
@@ -426,7 +429,7 @@ pull_repos() {
 
     local output_file="$TEMP_DIR/repos.out"
     local failed_file="$TEMP_DIR/repos_fetch_failed.list"
-    : > "$failed_file"
+    : >"$failed_file"
     touch "$output_file"
 
     local -a repos=()
@@ -434,7 +437,7 @@ pull_repos() {
 
     for repos_dir in "${REPOS_DIRS[@]}"; do
         if [ ! -d "$repos_dir" ]; then
-            echo "info:Skipping $repos_dir (not found)" >> "$output_file"
+            echo "info:Skipping $repos_dir (not found)" >>"$output_file"
             continue
         fi
 
@@ -446,13 +449,13 @@ pull_repos() {
     done
 
     if [ "${#repos[@]}" -eq 0 ]; then
-        echo "info:No git repositories found" >> "$output_file"
+        echo "info:No git repositories found" >>"$output_file"
         return
     fi
 
-    echo "section:Fetching remotes..." >> "$output_file"
+    echo "section:Fetching remotes..." >>"$output_file"
     if [ "$PARALLEL" = true ]; then
-        echo "info:Running git fetch in parallel across repositories" >> "$output_file"
+        echo "info:Running git fetch in parallel across repositories" >>"$output_file"
         for repo in "${repos[@]}"; do
             fetch_single_repo "$repo" "$output_file" "$failed_file" &
             pids+=($!)
@@ -462,13 +465,13 @@ pull_repos() {
             wait "$pid" 2>/dev/null || true
         done
     else
-        echo "info:Running git fetch sequentially across repositories" >> "$output_file"
+        echo "info:Running git fetch sequentially across repositories" >>"$output_file"
         for repo in "${repos[@]}"; do
             fetch_single_repo "$repo" "$output_file" "$failed_file"
         done
     fi
 
-    echo "section:Updating local branches..." >> "$output_file"
+    echo "section:Updating local branches..." >>"$output_file"
     for repo in "${repos[@]}"; do
         if grep -Fqx "$repo" "$failed_file"; then
             continue
@@ -600,7 +603,7 @@ run_sequential() {
                 error) print_error "$message" ;;
                 info) print_info "$message" ;;
             esac
-        done < "$TEMP_DIR/repos.out"
+        done <"$TEMP_DIR/repos.out"
         echo ""
     fi
 }
@@ -612,10 +615,10 @@ main() {
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help)
+            -h | --help)
                 print_help
                 ;;
-            -v|--verbose)
+            -v | --verbose)
                 VERBOSE=true
                 shift
                 ;;

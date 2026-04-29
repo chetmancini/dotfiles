@@ -73,7 +73,7 @@ check_disk_space() {
 # Generate default config file
 generate_config() {
     mkdir -p "$CONFIG_DIR"
-    cat > "$CONFIG_FILE" << 'EOF'
+    cat >"$CONFIG_FILE" <<'EOF'
 # good-morning configuration
 # Uncomment and modify settings as needed
 
@@ -191,10 +191,10 @@ main() {
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help)
+            -h | --help)
                 print_help
                 ;;
-            -v|--verbose)
+            -v | --verbose)
                 VERBOSE=true
                 verbose_flag="-v"
                 shift

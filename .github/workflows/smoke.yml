@@ -11,20 +11,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install zsh and shellcheck
-        run: sudo apt-get update && sudo apt-get install -y zsh shellcheck
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install shell tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y zsh shellcheck
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Check shell formatting
+        run: make shell-format-check
 
       - name: Check bash scripts
-        run: |
-          while IFS= read -r file; do
-            bash -n "$file"
-          done < <(rg -l '^#!/.*bash' .)
+        run: make shell-syntax
 
-      - name: ShellCheck bootstrap scripts
-        run: shellcheck -x install.sh bin/doctor mac_dev_install.sh
+      - name: ShellCheck shell scripts
+        run: make shellcheck
+
+      - name: Lint TOML configs
+        run: make toml-lint
 
       - name: Check zsh config
-        run: zsh -n .zshrc
+        run: make zsh-check
 
   install-smoke:
     runs-on: ubuntu-latest

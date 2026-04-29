@@ -40,8 +40,8 @@ ensure_notes_dir() {
         mkdir -p "$NOTES_DIR"
     fi
     if [[ ! -f "$NOTES_FILE" ]]; then
-        echo "# Scratch Notes" > "$NOTES_FILE"
-        echo "" >> "$NOTES_FILE"
+        echo "# Scratch Notes" >"$NOTES_FILE"
+        echo "" >>"$NOTES_FILE"
     fi
 }
 
@@ -51,7 +51,7 @@ add_note() {
     timestamp=$(date "+%Y-%m-%d %H:%M")
     local text="$*"
 
-    echo "- **[$timestamp]** $text" >> "$NOTES_FILE"
+    echo "- **[$timestamp]** $text" >>"$NOTES_FILE"
     echo "Noted: $text"
 }
 
@@ -102,7 +102,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 case "$1" in
-    -h|--help)
+    -h | --help)
         print_help
         ;;
     --today)

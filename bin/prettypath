@@ -5,4 +5,3 @@ set -euo pipefail
 # prettypath: Display PATH with one entry per line
 
 echo "$PATH" | tr ':' '\n'
-

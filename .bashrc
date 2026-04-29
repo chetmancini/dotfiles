@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 ##############################
 # Minimal bashrc (zsh is primary shell)
 ##############################
@@ -46,7 +47,7 @@ _clipboard_copy() {
 }
 
 function cpbranch() {
-    if git rev-parse --git-dir > /dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then
         git rev-parse --abbrev-ref HEAD | tr -d '\n' | _clipboard_copy
     else
         echo "not in a repo" >&2
@@ -55,4 +56,5 @@ function cpbranch() {
 }
 
 # fzf
+# shellcheck source=/dev/null
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash

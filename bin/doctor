@@ -92,7 +92,7 @@ parse_args() {
                 CHECK_TOOLS=false
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 print_help
                 exit 0
                 ;;
