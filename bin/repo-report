@@ -39,14 +39,14 @@ DIRS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--help)
+        -h | --help)
             print_help
             ;;
-        -d|--dirty)
+        -d | --dirty)
             DIRTY_ONLY=true
             shift
             ;;
-        -q|--quiet)
+        -q | --quiet)
             QUIET=true
             shift
             ;;
@@ -93,7 +93,10 @@ check_repo() {
         [[ "$added" -gt 0 ]] && parts+=("${added} staged")
         [[ "$deleted" -gt 0 ]] && parts+=("${deleted} deleted")
         [[ "$untracked" -gt 0 ]] && parts+=("${untracked} untracked")
-        issues+=("dirty: $(IFS=', '; echo "${parts[*]}")")
+        issues+=("dirty: $(
+            IFS=', '
+            echo "${parts[*]}"
+        )")
     fi
 
     # Check for unpushed commits
@@ -136,7 +139,10 @@ check_repo() {
     else
         dirty_repos=$((dirty_repos + 1))
         if [[ "$QUIET" == true ]]; then
-            echo -e "${RED}✗${NC} $repo_name ($branch): $(IFS=', '; echo "${issues[*]}")"
+            echo -e "${RED}✗${NC} $repo_name ($branch): $(
+                IFS=', '
+                echo "${issues[*]}"
+            )"
         else
             print_error "$repo_name ($branch)"
             for issue in "${issues[@]}"; do

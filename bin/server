@@ -34,14 +34,14 @@ SERVE_DIR="."
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--help)
+        -h | --help)
             print_help
             ;;
-        -n|--no-browser)
+        -n | --no-browser)
             OPEN_BROWSER=0
             shift
             ;;
-        -d|--dir)
+        -d | --dir)
             SERVE_DIR="$2"
             shift 2
             ;;

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 ##############################
 # Paths
 ##############################
@@ -12,5 +13,6 @@ export NODE_PATH="$NODE_PATH:/usr/local/lib/node_modules"
 PATH=$PATH:$HOME/.rvm/bin
 
 if [ -f ~/.bashrc ]; then
+    # shellcheck source=/dev/null
     source ~/.bashrc
 fi

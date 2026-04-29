@@ -72,6 +72,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, etc.)
 - `doctor` verifies symlinks, theme wiring, TPM, and repo health checks
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
+- `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
 ### Git
 - Conventional commit aliases: `git feat`, `git fix`, `git chore`, etc.

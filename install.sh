@@ -55,7 +55,7 @@ parse_args() {
                 AUTO_YES=true
                 shift
                 ;;
-            --plan|--dry-run)
+            --plan | --dry-run)
                 PLAN_MODE=true
                 shift
                 ;;
@@ -79,7 +79,7 @@ parse_args() {
                 CLEAR_SCREEN=false
                 shift
                 ;;
-            -h|--help)
+            -h | --help)
                 print_help
                 exit 0
                 ;;
@@ -144,9 +144,9 @@ ask_yes_no() {
         read -r -p "$prompt" answer
         answer="${answer:-$default}"
         case "$answer" in
-            [Yy]* ) return 0 ;;
-            [Nn]* ) return 1 ;;
-            * ) echo "Please answer yes or no." ;;
+            [Yy]*) return 0 ;;
+            [Nn]*) return 1 ;;
+            *) echo "Please answer yes or no." ;;
         esac
     done
 }

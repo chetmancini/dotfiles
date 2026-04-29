@@ -43,4 +43,3 @@ echo "$process_list" |
     grep -Fv "${BASH_SOURCE[0]}" |
     grep -Fv grep |
     grep -E --color=auto '^\s*[[:digit:]]+' || true
-

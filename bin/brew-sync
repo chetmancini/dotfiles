@@ -75,7 +75,7 @@ while [ $# -gt 0 ]; do
             DRY_RUN=true
             shift
             ;;
-        -h|--help)
+        -h | --help)
             print_help
             ;;
         *)
@@ -96,14 +96,14 @@ print_header
 
 # Get lists of packages
 get_brewfile_formulae() {
-    grep -E '^\s*brew\s+"' "$BREWFILE" 2>/dev/null | \
-        sed -E 's/^\s*brew\s+"([^"]+)".*/\1/' | \
+    grep -E '^\s*brew\s+"' "$BREWFILE" 2>/dev/null |
+        sed -E 's/^\s*brew\s+"([^"]+)".*/\1/' |
         sort -u
 }
 
 get_brewfile_casks() {
-    grep -E '^\s*cask\s+"' "$BREWFILE" 2>/dev/null | \
-        sed -E 's/^\s*cask\s+"([^"]+)".*/\1/' | \
+    grep -E '^\s*cask\s+"' "$BREWFILE" 2>/dev/null |
+        sed -E 's/^\s*cask\s+"([^"]+)".*/\1/' |
         sort -u
 }
 
@@ -258,9 +258,9 @@ add_missing() {
                 tap_info=$(brew info "$pkg" 2>/dev/null | head -1 || true)
                 if echo "$tap_info" | grep -q "/"; then
                     # Has a tap prefix
-                    echo "brew \"$pkg\"" >> "$BREWFILE"
+                    echo "brew \"$pkg\"" >>"$BREWFILE"
                 else
-                    echo "brew \"$pkg\"" >> "$BREWFILE"
+                    echo "brew \"$pkg\"" >>"$BREWFILE"
                 fi
             fi
         done
@@ -273,7 +273,7 @@ add_missing() {
         echo "$casks_to_add" | while read -r pkg; do
             echo "  + $pkg"
             if [ "$DRY_RUN" = false ]; then
-                echo "cask \"$pkg\"" >> "$BREWFILE"
+                echo "cask \"$pkg\"" >>"$BREWFILE"
             fi
         done
     fi
@@ -360,9 +360,9 @@ remove_uninstalled() {
             fi
 
             if [ "$should_keep" = true ]; then
-                echo "$line" >> "$temp_file"
+                echo "$line" >>"$temp_file"
             fi
-        done < "$BREWFILE"
+        done <"$BREWFILE"
 
         mv "$temp_file" "$BREWFILE"
 
