@@ -2,9 +2,12 @@
 .svn
 .tissues
 *~
+*.bak
+*.log
 *.swp
 *.rbc
 *.pyc
+.netrwhist
 replstate.xml
 .rvmrc
 intent_specific.sh

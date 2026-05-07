@@ -7,6 +7,8 @@ DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=bin/lib/helpers.sh
 source "$SCRIPT_DIR/lib/helpers.sh"
+# shellcheck source=bin/lib/symlinks.sh
+source "$SCRIPT_DIR/lib/symlinks.sh"
 
 STRICT=false
 CHECK_TOOLS=true
@@ -116,20 +118,13 @@ run_installed_state_checks() {
     print_section "Checking installed symlinks"
     echo ""
 
-    check_symlink "Yazi config" "$HOME/.config/yazi" "$DOTFILES_DIR/yazi"
-    check_symlink "Ghostty config" "$HOME/.config/ghostty" "$DOTFILES_DIR/ghostty"
-    check_symlink "Neovim config" "$HOME/.config/nvim" "$DOTFILES_DIR/nvim"
-    check_symlink "Mise config" "$HOME/.config/mise" "$DOTFILES_DIR/mise"
-    check_symlink "uv config" "$HOME/.config/uv" "$DOTFILES_DIR/uv"
-    check_symlink "Git config" "$HOME/.gitconfig" "$DOTFILES_DIR/.gitconfig"
-    check_symlink "Global gitignore" "$HOME/.gitignore" "$DOTFILES_DIR/.gitignore"
-    check_symlink "Zsh config" "$HOME/.zshrc" "$DOTFILES_DIR/.zshrc"
-    check_symlink "Bash config" "$HOME/.bashrc" "$DOTFILES_DIR/.bashrc"
-    check_symlink "Bash profile" "$HOME/.bash_profile" "$DOTFILES_DIR/.bash_profile"
-    check_symlink "tmux config" "$HOME/.tmux.conf" "$DOTFILES_DIR/.tmux.conf"
-    check_symlink "Vim config" "$HOME/.vimrc" "$DOTFILES_DIR/.vimrc"
-    check_symlink "Vim runtime" "$HOME/.vim" "$DOTFILES_DIR/vim"
-    check_symlink "npm config" "$HOME/.npmrc" "$DOTFILES_DIR/.npmrc"
+    while IFS='|' read -r source_rel target_rel _install_name doctor_label _description; do
+        check_symlink "$doctor_label" "$HOME/$target_rel" "$DOTFILES_DIR/$source_rel"
+    done < <(managed_symlinks_for_group config)
+
+    while IFS='|' read -r source_rel target_rel _install_name doctor_label _description; do
+        check_symlink "$doctor_label" "$HOME/$target_rel" "$DOTFILES_DIR/$source_rel"
+    done < <(managed_symlinks_for_group home)
     echo ""
 }
 

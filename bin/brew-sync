@@ -11,10 +11,18 @@ set -euo pipefail
 #   brew-sync --update     # Update Brewfile from current packages
 #   brew-sync --help       # Show help
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 
-BREWFILE="$HOME/dotfiles/Brewfile"
+BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile}"
 DRY_RUN=false
 
 # Colors (redefine for standalone use)
@@ -43,6 +51,9 @@ print_help() {
     echo "  --check        Only check for drift (default)"
     echo "  --dry-run      Show what would be done without making changes"
     echo "  -h, --help     Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  BREWFILE=/path/to/Brewfile   Override the derived Brewfile path"
     echo ""
     echo "Examples:"
     echo "  brew-sync              # Check for drift"
