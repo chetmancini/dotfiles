@@ -9,6 +9,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
+# shellcheck source=bin/lib/symlinks.sh
+source "$SCRIPT_DIR/bin/lib/symlinks.sh"
+
 AUTO_YES=false
 SKIP_OH_MY_ZSH=false
 SKIP_TPM=false
@@ -337,35 +340,13 @@ install_config_symlinks() {
         mkdir -p "$HOME/.config"
     fi
 
-    create_symlink \
-        "$DOTFILES_DIR/yazi" \
-        "$HOME/.config/yazi" \
-        "Yazi File Manager" \
-        "Terminal file manager with vim-like keybindings and image preview"
-
-    create_symlink \
-        "$DOTFILES_DIR/ghostty" \
-        "$HOME/.config/ghostty" \
-        "Ghostty Terminal" \
-        "GPU-accelerated terminal emulator configuration"
-
-    create_symlink \
-        "$DOTFILES_DIR/nvim" \
-        "$HOME/.config/nvim" \
-        "Neovim" \
-        "LazyVim-based Neovim configuration with plugins and keymaps"
-
-    create_symlink \
-        "$DOTFILES_DIR/mise" \
-        "$HOME/.config/mise" \
-        "Mise" \
-        "Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code"
-
-    create_symlink \
-        "$DOTFILES_DIR/uv" \
-        "$HOME/.config/uv" \
-        "uv" \
-        "Python package manager config with exclude-newer for supply chain safety"
+    while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
+        create_symlink \
+            "$DOTFILES_DIR/$source_rel" \
+            "$HOME/$target_rel" \
+            "$install_name" \
+            "$description"
+    done < <(managed_symlinks_for_group config)
 }
 
 install_home_symlinks() {
@@ -374,59 +355,13 @@ install_home_symlinks() {
     echo "These symlinks set up git, shell, and editor files in your home directory."
     echo ""
 
-    create_symlink \
-        "$DOTFILES_DIR/.gitconfig" \
-        "$HOME/.gitconfig" \
-        "Git Config" \
-        "Main git configuration with aliases, delta pager, and conditional includes"
-
-    create_symlink \
-        "$DOTFILES_DIR/.gitignore" \
-        "$HOME/.gitignore" \
-        "Global Gitignore" \
-        "Global patterns to ignore across all repositories (e.g., .DS_Store)"
-
-    create_symlink \
-        "$DOTFILES_DIR/.zshrc" \
-        "$HOME/.zshrc" \
-        "Zsh Configuration" \
-        "Main shell config: aliases, functions, PATH, and tool initialization"
-
-    create_symlink \
-        "$DOTFILES_DIR/.bashrc" \
-        "$HOME/.bashrc" \
-        "Bash Configuration" \
-        "Compatibility shell config for environments that still start bash"
-
-    create_symlink \
-        "$DOTFILES_DIR/.bash_profile" \
-        "$HOME/.bash_profile" \
-        "Bash Profile" \
-        "Login-shell entry point for bash-based environments"
-
-    create_symlink \
-        "$DOTFILES_DIR/.tmux.conf" \
-        "$HOME/.tmux.conf" \
-        "Tmux Configuration" \
-        "Terminal multiplexer config for managing multiple terminal sessions"
-
-    create_symlink \
-        "$DOTFILES_DIR/.vimrc" \
-        "$HOME/.vimrc" \
-        "Vim Configuration" \
-        "Legacy Vim configuration for environments that still use Vim"
-
-    create_symlink \
-        "$DOTFILES_DIR/vim" \
-        "$HOME/.vim" \
-        "Vim Runtime" \
-        "Legacy Vim runtime files, including colors and pathogen"
-
-    create_symlink \
-        "$DOTFILES_DIR/.npmrc" \
-        "$HOME/.npmrc" \
-        "npm Configuration" \
-        "npm config with min-release-age to avoid installing very new packages"
+    while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
+        create_symlink \
+            "$DOTFILES_DIR/$source_rel" \
+            "$HOME/$target_rel" \
+            "$install_name" \
+            "$description"
+    done < <(managed_symlinks_for_group home)
 }
 
 install_api_keys_template() {
