@@ -155,6 +155,7 @@ export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 export TURSO_PATH="$HOME/.turso"
 export BROWSER_USE_PATH="$HOME/.browser-use/bin"
 export PYENV_ROOT="$HOME/.pyenv"
+export GROK_PATH="$HOME/.grok/bin"
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
 
@@ -190,6 +191,7 @@ path_add \
     "$TURSO_PATH" \
     "$BROWSER_USE_PATH" \
     "$PYENV_ROOT/bin" \
+    "$GROK_PATH" \
     "$HOME/bin"
 
 export PATH
@@ -625,3 +627,8 @@ fi
   source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 [ -f /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
   source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# >>> grok installer >>>
+fpath=(~/.grok/completions/zsh $fpath)
+autoload -Uz compinit && compinit -C
+# <<< grok installer <<<
