@@ -585,16 +585,23 @@ fi
 
 # Completion dirs must be on fpath before compinit so they're picked up by the
 # single cached compinit below (installer blocks at the bottom only set fpath).
+_compinit_rebuild=false
 [ -d ~/.grok/completions/zsh ] && fpath=(~/.grok/completions/zsh $fpath)
-[ -d ~/.docker/completions ] && fpath=(~/.docker/completions $fpath)
+if [ -d ~/.docker/completions ]; then
+  fpath=(~/.docker/completions $fpath)
+  if [[ -r ~/.zcompdump ]] && ! command grep -q "'docker' '_docker'" ~/.zcompdump; then
+    _compinit_rebuild=true
+  fi
+fi
 
 # Cached compinit - only regenerate once per day
 autoload -Uz compinit
-if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+if [[ "$_compinit_rebuild" == true || -n ~/.zcompdump(#qN.mh+24) ]]; then
   compinit
 else
   compinit -C
 fi
+unset _compinit_rebuild
 
 
 # Lazy-load pyenv (saves ~100ms on shell startup)
