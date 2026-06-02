@@ -16,7 +16,7 @@
     st = status
     ri = rebase --interactive
     rc = rebase --continue
-    rom = "!git rebase origin/$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || echo main)"
+    rom = "!f() { ref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null); if [ -n \"$ref\" ]; then b=\"${ref#origin/}\"; elif git show-ref --verify --quiet refs/remotes/origin/main; then b=main; elif git show-ref --verify --quiet refs/remotes/origin/master; then b=master; else b=main; fi; git rebase \"origin/$b\"; }; f"
     wt = worktree
     wtl = worktree list
     wta = worktree add
