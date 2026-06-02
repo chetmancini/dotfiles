@@ -583,9 +583,10 @@ if command -v thefuck &> /dev/null; then
   }
 fi
 
-# Grok completions on fpath before compinit so they're picked up by the single
-# cached compinit below (the grok installer block at the bottom only sets fpath).
+# Completion dirs must be on fpath before compinit so they're picked up by the
+# single cached compinit below (installer blocks at the bottom only set fpath).
 [ -d ~/.grok/completions/zsh ] && fpath=(~/.grok/completions/zsh $fpath)
+[ -d ~/.docker/completions ] && fpath=(~/.docker/completions $fpath)
 
 # Cached compinit - only regenerate once per day
 autoload -Uz compinit
@@ -630,8 +631,7 @@ fi
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
-# Docker CLI completions (compinit called once above)
-fpath=($HOME/.docker/completions $fpath)
+# Docker CLI completions are added to fpath above, before compinit
 
 # Mise
 if command -v mise &> /dev/null; then
