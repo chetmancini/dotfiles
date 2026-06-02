@@ -16,7 +16,11 @@
     st = status
     ri = rebase --interactive
     rc = rebase --continue
-    rom = rebase origin/main
+    rom = "!git rebase origin/$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || echo main)"
+    wt = worktree
+    wtl = worktree list
+    wta = worktree add
+    wtr = worktree remove
     mt = mergetool
     type = cat-file -t
     dump = cat-file -p
@@ -53,6 +57,7 @@
     navigate = true  # use n and N to move between diff sections
     dark = true      # or light = true, or omit for auto-detection
     side-by-side = true
+    line-numbers = true
 [merge]
     conflictstyle = diff3
     tool = diffmerge
@@ -61,13 +66,28 @@
     keepBackup = false
 [diff]
     tool = diffmerge
+    algorithm = histogram
+    colorMoved = default
 [push]
-    default = upstream
+    default = simple
+    autoSetupRemote = true
+[fetch]
+    prune = true
+[pull]
+    rebase = true
 [rebase]
     autosquash = true
+    autoStash = true
+[branch]
+    sort = -committerdate
+[column]
+    ui = auto
+[init]
+    defaultBranch = main
 [user]
     name = Chet Mancini
     email = chetmancini@gmail.com
+    useConfigOnly = true
 [github]
     user = chetmancini
 [includeIf "gitdir:~/code/"]

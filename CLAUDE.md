@@ -126,7 +126,8 @@ This repository includes configurations for:
 - `gd` - git diff
 - `gch` - git checkout
 - `gaa` - git add -A
-- `grom` - git rebase origin/main
+- `grom` - git rebase onto the remote's default branch (auto-detects main/master)
+- `wt` / `wtl` / `wta` / `wtr` - git worktree / list / add / remove
 - `cpbranch()` - Copy current branch name to clipboard
 
 ### Navigation

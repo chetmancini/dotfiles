@@ -59,7 +59,7 @@ HISTSIZE=1000000
 SAVEHIST=1000000
 # If I type cd and then cd again, only save the last one
 setopt HIST_IGNORE_DUPS
-setopt INC_APPEND_HISTORY    # Write history immediately, not on shell exit
+setopt SHARE_HISTORY         # Write immediately and share live across all sessions
 setopt HIST_IGNORE_SPACE     # Commands starting with space won't be saved
 setopt HIST_SAVE_NO_DUPS
 setopt HIST_EXPIRE_DUPS_FIRST
@@ -267,7 +267,6 @@ alias gadd='git add'
 alias gaa='git add -A'
 alias gco='git commit -m'
 alias gca='git commit -am'
-alias grom='git rebase origin/main'
 alias grod='git rebase origin/develop'
 alias gri='git rebase -i'
 alias grc='git rebase --continue'
@@ -284,6 +283,32 @@ alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
 alias gamend="git commit --amend -C HEAD"
 alias gclean='git clean -nd'
 alias gcleanf='git checkout . && git clean -f'
+
+# Git worktree shortcuts (Conductor and parallel-branch workflows)
+alias wt='git worktree'
+alias wtl='git worktree list'
+alias wta='git worktree add'
+alias wtr='git worktree remove'
+
+# Resolve the remote's default branch (main, master, etc.), with fallback
+_git_default_branch() {
+    local ref
+    ref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
+    if [[ -n "$ref" ]]; then
+        echo "${ref#origin/}"
+    elif git show-ref --verify --quiet refs/remotes/origin/main; then
+        echo main
+    elif git show-ref --verify --quiet refs/remotes/origin/master; then
+        echo master
+    else
+        echo main
+    fi
+}
+
+# Rebase onto the remote's default branch, whatever it's named
+grom() {
+    git rebase "origin/$(_git_default_branch)"
+}
 
 __git_files () {
     _wanted files expl 'local files' _files
@@ -489,6 +514,17 @@ if command -v fzf &> /dev/null; then
     eval "$(fzf --zsh)"
   fi
 
+  # Use fd for fzf's file/dir walking: faster and respects .gitignore.
+  # Drives Ctrl-T, Alt-C, and **<Tab> completion in addition to the defaults.
+  if command -v fd &> /dev/null; then
+    export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+  fi
+  export FZF_DEFAULT_OPTS='--height 60% --layout=reverse --border'
+  export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range :500 {}'"
+  export FZF_ALT_C_OPTS="--preview 'eza --tree --color=always --level=2 {}'"
+
   # Fuzzy cd into directory
   fcd() {
     local dir
@@ -528,9 +564,9 @@ if command -v fzf &> /dev/null; then
   }
 fi
 if command -v zoxide &> /dev/null; then
-  eval "$(zoxide init zsh)"
-  # Use zoxide for cd with fallback to builtin cd if zoxide fails
-  cd() { z "$@" 2>/dev/null || builtin cd "$@"; }
+  # --cmd cd makes zoxide own `cd` (it still cd's into literal paths) and adds
+  # `cdi` for interactive fuzzy jumps. Replaces the hand-rolled cd() wrapper.
+  eval "$(zoxide init zsh --cmd cd)"
 fi
 # System info on login shells only (not every new terminal tab)
 # Run 'fastfetch' manually to see system info
@@ -546,6 +582,10 @@ if command -v thefuck &> /dev/null; then
     fuck "$@"
   }
 fi
+
+# Grok completions on fpath before compinit so they're picked up by the single
+# cached compinit below (the grok installer block at the bottom only sets fpath).
+[ -d ~/.grok/completions/zsh ] && fpath=(~/.grok/completions/zsh $fpath)
 
 # Cached compinit - only regenerate once per day
 autoload -Uz compinit
@@ -630,5 +670,4 @@ fi
 
 # >>> grok installer >>>
 fpath=(~/.grok/completions/zsh $fpath)
-autoload -Uz compinit && compinit -C
 # <<< grok installer <<<
