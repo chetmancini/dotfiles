@@ -180,9 +180,9 @@ path_add \
     "$USR_LOCAL_SBIN" \
     "$USR_LOCAL_HOME" \
     "$ZEROBREW_PATH" \
-    "$UV_PATH" \
     "$MYSQL_HOME" \
     "$NPM_GLOBAL_BIN" \
+    "$UV_PATH" \
     "$PNPM_HOME" \
     "$BUN_INSTALL/bin" \
     "$JAVA_HOME/bin" \
