@@ -88,7 +88,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - `dot` dispatches `bin/` tools (`dot help`, `dot status`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
 - [`docs/package-managers.md`](docs/package-managers.md) defines the preferred owner for runtimes, native apps, and global JavaScript CLIs; use `package-sync --update` to refresh npm and pnpm globals
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
-- `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, zsh checks, and bats tests (`tests/`)
+- `make format` formats shell scripts with `shfmt` and Lua files with `stylua`; `make check` runs formatting, syntax, ShellCheck, TOML, stylua, zsh checks, and bats tests (`tests/`)
 
 ### Secrets (1Password preferred)
 - **Preferred:** copy `api_keys_1password.sh.template` → `api_keys_1password.sh` (gitignored), set `op://` item refs via `op_secret`
