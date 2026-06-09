@@ -21,6 +21,12 @@ jobs:
           go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
 
+      - name: Install stylua
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+
       - name: Check shell formatting
         run: make shell-format-check
 
@@ -32,6 +38,9 @@ jobs:
 
       - name: Lint TOML configs
         run: make toml-lint
+
+      - name: Check Lua formatting with stylua
+        run: make stylua-check
 
       - name: Check zsh config
         run: make zsh-check
