@@ -1,7 +1,0 @@
-[settings]
-trusted_config_paths = [
-  "~/norm",
-  "~/projects",
-  "~/code/**",
-  "~/.config/mise",
-]
