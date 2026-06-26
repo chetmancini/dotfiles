@@ -75,7 +75,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
 ### Git
-- Conventional commit aliases: `git feat`, `git fix`, `git chore`, etc.
+- Conventional commit aliases: `git cc <type>`, `git feat`, `git fix`, `git chore`, etc.
 - Conditional includes for work vs personal repos
 - git-delta for beautiful diffs
 
