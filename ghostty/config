@@ -21,4 +21,5 @@ window-padding-y = 10
 window-padding-balance = true
 
 keybind = global:cmd+grave_accent=toggle_quick_terminal
-keybind = shift+enter=text:\x1b\r
+keybind = alt+backspace=text:\x1b\x7f
+keybind = shift+enter=text:\n
