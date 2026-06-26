@@ -95,7 +95,11 @@ parse_git_aliases() {
             name=$(echo "$line" | sed 's/^alias\.//' | cut -d' ' -f1)
             value=$(echo "$line" | sed 's/^alias\.[^ ]* //')
 
-            if echo "$value" | grep -q '!a() {'; then
+            if [[ "$name" == "cc" ]]; then
+                printf "[git-commit] git %-12s   conventional commit helper: git cc <type> [...]\n" "$name"
+            elif [[ "$value" == cc\ * ]]; then
+                printf "[git-commit] git %-12s   conventional commit: %s(...)\n" "$name" "${value#cc }"
+            elif echo "$value" | grep -q '!a() {'; then
                 printf "[git-commit] git %-12s   conventional commit: %s(...)\n" "$name" "$name"
             else
                 if [[ ${#value} -gt 80 ]]; then

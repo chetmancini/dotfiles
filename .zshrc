@@ -262,14 +262,14 @@ alias gs='git status -sb'
 alias gd='git diff'
 alias gb='git branch -vv'
 alias gf='git fetch --all --prune'
-alias gch='git checkout'
-alias gadd='git add'
-alias gaa='git add -A'
+alias gch='git ch'
+alias gadd='git a'
+alias gaa='git aa'
 alias gco='git commit -m'
 alias gca='git commit -am'
 alias grod='git rebase origin/develop'
-alias gri='git rebase -i'
-alias grc='git rebase --continue'
+alias gri='git ri'
+alias grc='git rc'
 alias glog='git log'
 alias ghist='git hist'
 alias gpush='git push'
@@ -285,30 +285,13 @@ alias gclean='git clean -nd'
 alias gcleanf='git checkout . && git clean -f'
 
 # Git worktree shortcuts (Conductor and parallel-branch workflows)
-alias wt='git worktree'
-alias wtl='git worktree list'
-alias wta='git worktree add'
-alias wtr='git worktree remove'
+alias wt='git wt'
+alias wtl='git wtl'
+alias wta='git wta'
+alias wtr='git wtr'
 
-# Resolve the remote's default branch (main, master, etc.), with fallback
-_git_default_branch() {
-    local ref
-    ref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
-    if [[ -n "$ref" ]]; then
-        echo "${ref#origin/}"
-    elif git show-ref --verify --quiet refs/remotes/origin/main; then
-        echo main
-    elif git show-ref --verify --quiet refs/remotes/origin/master; then
-        echo master
-    else
-        echo main
-    fi
-}
-
-# Rebase onto the remote's default branch, whatever it's named
-grom() {
-    git rebase "origin/$(_git_default_branch)"
-}
+# Rebase onto the remote's default branch, whatever it's named.
+alias grom='git rom'
 
 __git_files () {
     _wanted files expl 'local files' _files
