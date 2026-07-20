@@ -102,8 +102,6 @@
 	required = true
 [oh-my-zsh]
 	git-commit-alias = 8df5c1b18b1393dc5046c729094f897bd3636a9b
-[credential "https://dev.azure.com"]
-	useHttpPath = true
 [credential "https://github.com"]
 	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
