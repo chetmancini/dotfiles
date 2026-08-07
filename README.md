@@ -53,7 +53,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - **CLI Tools**: eza, bat, fzf, zoxide, jq, htop, yazi
 - **Development**: neovim, gh, git-delta, awscli
 - **Kubernetes**: kubectl, kubectx, k9s, helm
-- **Languages**: pyenv, n, openjdk, bun
+- **Languages**: mise (node/python), openjdk, bun, uv, pnpm
 - **Databases**: postgresql, redis, sqlite
 - **Apps**: Ghostty, Arc, Zed, JetBrains Toolbox, Slack, Discord
 - **Fonts**: Monaspace, Hack (+ Nerd Font variants)
@@ -64,7 +64,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - Custom theme with git status (`chetmancini.zsh-theme`)
 - Lightweight shell startup that sources only the needed oh-my-zsh components
 - Vi mode with visual cursor indicator
-- Lazy-loaded pyenv and streamlined Node setup (`n`) for fast startup
+- **mise** for Node/Python versions (see `mise/config.toml`); **uv** / **pnpm** / **bun** for packages
 - zoxide for smart directory jumping
 - fzf integration for fuzzy finding
 

@@ -1,0 +1,18 @@
+# Managed by ~/dotfiles (intended symlink: ~/.config/mise).
+# Project-local overrides: put mise.toml or .tool-versions in the project root.
+# Package managers stay separate: uv (Python packages), pnpm/bun (JS packages).
+
+[settings]
+# Honor .node-version, .python-version, .tool-versions in projects
+idiomatic_version_file_enable_tools = ["node", "python"]
+# Allow project mise.toml under common workspace roots without prompting
+trusted_config_paths = [
+  "~/code",
+  "~/norm",
+  "~/projects",
+]
+
+[tools]
+# Global defaults — override per-project with mise.toml / .tool-versions
+node = "26.7.0"
+python = "3.14.7"

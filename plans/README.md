@@ -11,7 +11,7 @@ when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Consolidate version managers onto mise | P1 | M | — | TODO |
+| 001 | Consolidate version managers onto mise | P1 | M | — | DONE |
 | 002 | Modularize `.zshrc` and drop oh-my-zsh | P1 | L | 001 recommended | TODO |
 | 003 | 1Password-native secrets loading | P1 | M | — | TODO |
 | 004 | Prune legacy surface + Brewfile profiles | P2 | M | 002 | TODO |

@@ -154,7 +154,6 @@ export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
 export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
 export TURSO_PATH="$HOME/.turso"
 export BROWSER_USE_PATH="$HOME/.browser-use/bin"
-export PYENV_ROOT="$HOME/.pyenv"
 export GROK_PATH="$HOME/.grok/bin"
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
@@ -190,7 +189,6 @@ path_add \
     "$ANTIGRAVITY_PATH" \
     "$TURSO_PATH" \
     "$BROWSER_USE_PATH" \
-    "$PYENV_ROOT/bin" \
     "$GROK_PATH" \
     "$HOME/bin"
 
@@ -587,44 +585,13 @@ fi
 unset _compinit_rebuild
 
 
-# Lazy-load pyenv (saves ~100ms on shell startup)
-pyenv() {
-  unset -f pyenv
-  eval "$(command pyenv init -)"
-  pyenv "$@"
-}
-
-# Lazy-load nvm (saves ~200ms on shell startup)
-export NVM_DIR="$HOME/.nvm"
-if [ -d "$NVM_DIR" ]; then
-  nvm() {
-    unset -f nvm node npm npx
-    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-    nvm "$@"
-  }
-  node() {
-    unset -f nvm node npm npx
-    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-    node "$@"
-  }
-  npm() {
-    unset -f nvm node npm npx
-    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-    npm "$@"
-  }
-  npx() {
-    unset -f nvm node npm npx
-    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-    npx "$@"
-  }
-fi
-
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 # Docker CLI completions are added to fpath above, before compinit
 
-# Mise
-if command -v mise &> /dev/null; then
+# Version managers — mise is the single runtime manager (node, python, …).
+# Package managers stay separate: uv, pnpm, bun.
+if command -v mise &>/dev/null; then
   eval "$(mise activate zsh)"
 fi
 

@@ -14,7 +14,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 2. Sources only the needed pieces from `oh-my-zsh/`, which `install.sh` clones if missing
 3. Sources platform-specific configs (`mac_specific.sh` or `linux_specific.sh`)
 4. Sources `api_keys.sh` for environment variables (not tracked in git, see `api_keys.sh.template`)
-5. Initializes various tools at the end: fzf, zoxide, pyenv, nvm, etc.
+5. Initializes various tools at the end: fzf, zoxide, mise, etc.
 
 ### Homebrew Package Management
 
@@ -101,8 +101,8 @@ When modifying dotfiles, changes take effect in different ways:
 ### Common Development Patterns
 
 This repository includes configurations for:
-- **Python**: Uses pyenv for version management, uv for fast package management
-- **Node**: Uses nvm for version management, with pnpm/bun as alternatives to npm
+- **Python**: Uses mise for version management, uv for fast package management
+- **Node**: Uses mise for version management, with pnpm/bun as package managers
 - **Ruby**: Uses rbenv for version management (currently commented out in zshrc)
 - **Java**: OpenJDK with helper function `setjdk` to switch versions
 
@@ -156,4 +156,4 @@ LazyVim-based configuration located in `nvim/`:
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
-- nvm and pyenv are lazy-loaded for faster shell startup
+- mise is the single runtime version manager (activated in `.zshrc`); see `mise/config.toml`

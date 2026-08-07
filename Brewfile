@@ -94,7 +94,8 @@ brew "sbt"                      # Scala build tool
 #==============================================================================
 # Development - Python
 #==============================================================================
-brew "pyenv"                    # Python version manager
+# Version management is mise (see mise/config.toml). Historical alternative:
+# brew "pyenv"
 brew "ruff"                     # Python linter
 brew "uv"                       # Fast pip replacement
 
@@ -102,7 +103,8 @@ brew "uv"                       # Fast pip replacement
 # Development - Node.js
 #==============================================================================
 brew "oven-sh/bun/bun"          # JavaScript runtime
-brew "n"                        # Node version manager
+# Version management is mise (see mise/config.toml). Historical alternative:
+# brew "n"
 brew "pnpm"                     # Node package manager
 
 #==============================================================================
