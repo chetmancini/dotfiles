@@ -212,7 +212,7 @@ alias -g NUL="> /dev/null 2>&1"
 hgrep() { history | grep "$1"; }
 alias c='clear'
 #alias ll='ls -la'
-alias ls='eza --icons '
+alias ls='eza --icons=always'
 alias ll='eza --all --long --header --icons --git'
 alias cat='bat --paging=never'
 alias catp='bat'  # With paging
