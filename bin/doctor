@@ -137,7 +137,7 @@ run_dependency_checks() {
     for module in \
         options path platform theme aliases git functions secrets \
         plugins fun \
-        tools/fzf tools/zoxide tools/mise tools/completions; do
+        tools/fzf tools/zoxide tools/mise tools/direnv tools/atuin tools/completions; do
         check_path_exists "zsh module $module" "$DOTFILES_DIR/zsh/${module}.zsh"
     done
     check_path_exists "TPM" "$HOME/.tmux/plugins/tpm"
@@ -198,6 +198,8 @@ run_tool_checks() {
     check_command yazi
     check_command zoxide
     check_command mise
+    check_command atuin
+    check_command direnv
     echo ""
 }
 

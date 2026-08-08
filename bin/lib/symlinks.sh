@@ -11,6 +11,7 @@ ghostty|.config/ghostty|Ghostty Terminal|Ghostty config|GPU-accelerated terminal
 nvim|.config/nvim|Neovim|Neovim config|LazyVim-based Neovim configuration with plugins and keymaps
 mise|.config/mise|Mise|Mise config|Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code
 uv|.config/uv|uv|uv config|Python package manager config with exclude-newer for supply chain safety
+atuin|.config/atuin|Atuin|Atuin config|Shell history search defaults (no secrets; sync is operator opt-in)
 EOF
             ;;
         home)

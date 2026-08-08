@@ -14,7 +14,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/completions), fun extras, then plugins last
 3. Platform modules source `mac_specific.sh` or `linux_specific.sh`
 4. Secrets modules source `api_keys.sh` / `api_keys_1password.sh` (gitignored; see templates)
-5. Plugins (autosuggestions, history-substring-search, syntax-highlighting) load from Homebrew share paths
+5. Tools include fzf, zoxide, mise, direnv, atuin (Ctrl-R); plugins (autosuggestions, history-substring-search, syntax-highlighting) load last from Homebrew
 
 ### Homebrew Package Management
 
@@ -30,6 +30,7 @@ The `install.sh` script creates symlinks from this repository to home directory:
 - `~/dotfiles/yazi` → `~/.config/yazi`
 - `~/dotfiles/ghostty` → `~/.config/ghostty`
 - `~/dotfiles/nvim` → `~/.config/nvim`
+- `~/dotfiles/atuin` → `~/.config/atuin`
 - `~/dotfiles/.gitconfig` → `~/.gitconfig`
 - `~/dotfiles/.gitignore` → `~/.gitignore`
 - `~/dotfiles/.zshrc` → `~/.zshrc`
@@ -154,4 +155,5 @@ LazyVim-based configuration located in `nvim/`:
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
 - mise is the single runtime version manager (`zsh/tools/mise.zsh`); see `mise/config.toml`
+- atuin owns Ctrl-R history search; direnv loads project `.envrc` after `direnv allow`
 - Optional cleanup: remove a leftover `~/dotfiles/oh-my-zsh` clone after confirming the shell works

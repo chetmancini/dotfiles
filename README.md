@@ -58,7 +58,7 @@ brew-sync
 
 ### Core categories
 
-- **CLI Tools**: eza, bat, fzf, zoxide, jq, htop, yazi, shellcheck, shfmt
+- **CLI Tools**: eza, bat, fzf, zoxide, atuin, direnv, jq, htop, yazi, shellcheck, shfmt
 - **Development**: neovim, gh, git-delta, awscli, mise
 - **Kubernetes**: kubectl, kubectx, k9s, helm
 - **Languages**: mise (node/python), openjdk, bun, uv, pnpm
@@ -77,7 +77,9 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - Vi mode with visual cursor indicator
 - **mise** for Node/Python versions (see `mise/config.toml`); **uv** / **pnpm** / **bun** for packages
 - zoxide for smart directory jumping
-- fzf integration for fuzzy finding
+- fzf integration for fuzzy finding (Ctrl-T files, Alt-C dirs)
+- **atuin** for shell history search (**Ctrl-R**); up-arrow stays history-substring
+- **direnv** for per-project env (`.envrc` + `direnv allow`; never commit secrets)
 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)

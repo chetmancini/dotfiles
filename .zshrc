@@ -15,6 +15,8 @@ _zsh_modules=(
   tools/fzf
   tools/zoxide
   tools/mise
+  tools/direnv
+  tools/atuin
   tools/completions
   fun
   plugins

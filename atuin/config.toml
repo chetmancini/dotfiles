@@ -1,0 +1,20 @@
+# Managed by ~/dotfiles (symlinked to ~/.config/atuin/config.toml).
+# Non-sensitive defaults only — never put sync session tokens or keys here.
+# Optional sync: run `atuin register` / `atuin login` on the machine (operator opt-in).
+# Optional one-time history import: `atuin import auto` (rewrites the local history DB).
+
+# Fuzzy search for Ctrl-R
+search_mode = "fuzzy"
+filter_mode = "global"
+style = "compact"
+inline_height = 40
+
+# Insert selected command into the line for editing (safer than instant exec)
+enter_accept = false
+
+# Local-first defaults; enable sync only after `atuin login`
+auto_sync = false
+update_check = false
+
+[search]
+filters = ["global", "host", "session", "directory"]

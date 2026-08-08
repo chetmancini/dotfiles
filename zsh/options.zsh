@@ -44,10 +44,12 @@ export EDITOR="nvim"
 bindkey -v
 export KEYTIMEOUT=1  # 10ms delay for multi-char sequences (eliminates ESC lag in vi mode)
 
-# vi style incremental search
+# History search:
+#   ^R — fallback incremental search; tools/atuin.zsh rebinds to atuin when present
+#   ^S — reverse incremental search
+#   ^P/^N — history-search here; plugins.zsh upgrades to history-substring-search
 bindkey '^R' history-incremental-search-backward
 bindkey '^S' history-incremental-search-forward
-# ^P/^N: history-search here; plugins.zsh upgrades to history-substring-search when loaded
 bindkey '^P' history-search-backward
 bindkey '^N' history-search-forward
 

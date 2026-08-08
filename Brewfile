@@ -11,12 +11,14 @@ tap "oven-sh/bun"
 #==============================================================================
 # Core CLI Tools
 #==============================================================================
+brew "atuin"                    # SQLite shell history + better search (^R)
 brew "bat"                      # Better cat
 brew "brotli"                   # Lossless compression
 brew "btop"                     # Resource monitor
 brew "chafa"                    # Terminal image viewer (yazi fallback)
 brew "coreutils"                # GNU utilities
 brew "curl"                     # URL transfer tool
+brew "direnv"                   # Per-project env via .envrc
 brew "dust"                     # Better du
 brew "eza"                      # Better ls
 brew "fd"                       # Better find
