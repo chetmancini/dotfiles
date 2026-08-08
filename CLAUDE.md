@@ -11,7 +11,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 ### Configuration Loading Flow
 
 1. `.zshrc` is a thin orchestrator that resolves `DOTFILES_DIR` and sources modules from `zsh/`
-2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/completions), fun extras, then plugins last
+2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/direnv/atuin/completions), fun extras, then plugins last
 3. Platform modules source `mac_specific.sh` or `linux_specific.sh`
 4. Secrets modules source `api_keys.sh` / `api_keys_1password.sh` (gitignored; see templates)
 5. Tools include fzf, zoxide, mise, direnv, atuin (Ctrl-R); plugins (autosuggestions, history-substring-search, syntax-highlighting) load last from Homebrew
@@ -110,10 +110,12 @@ This repository includes configurations for:
 - `bin/doctor` - Installation verification script
 - `chetmancini.zsh-theme` - Custom λ prompt theme
 - `bin/` - Custom utility scripts (extract, imgcat, murder, removeexif, brew-sync, etc.)
-- `nvim/` - LazyVim-based neovim configuration
+- `nvim/` - Neovim config via `vim.pack` + `plugin/*.lua` (not LazyVim)
 - `yazi/` - File browser configuration
 - `ghostty/` - Ghostty terminal configuration
+- `atuin/` - Atuin history-search config
 - `api_keys.sh` - Environment variables and API keys (gitignored, template provided)
+- `plans/` - Modernization plans and status
 
 ## Key Aliases and Functions
 
@@ -138,11 +140,11 @@ This repository includes configurations for:
 
 ## Neovim Configuration
 
-LazyVim-based configuration located in `nvim/`:
-- Entry point: `nvim/init.lua`
-- Plugins defined in `nvim/lua/plugins/`
-- Custom keymaps in `nvim/lua/config/keymaps.lua`
-- Options in `nvim/lua/config/options.lua`
+Modular configuration in `nvim/` (no LazyVim / lazy.nvim):
+- Entry point: `nvim/init.lua` — leaders, options, `vim.pack.add({...})`, colorscheme, core keymaps
+- Feature modules: `nvim/plugin/*.lua` (lsp, completion, finder, git, format, rust, …)
+- Lockfile: `nvim/nvim-pack-lock.json`
+- Details: `docs/neovim.md`
 
 ## Notes for Modifications
 
@@ -156,4 +158,4 @@ LazyVim-based configuration located in `nvim/`:
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
 - mise is the single runtime version manager (`zsh/tools/mise.zsh`); see `mise/config.toml`
 - atuin owns Ctrl-R history search; direnv loads project `.envrc` after `direnv allow`
-- Optional cleanup: remove a leftover `~/dotfiles/oh-my-zsh` clone after confirming the shell works
+- Optional cleanup: remove a leftover `~/dotfiles/oh-my-zsh` clone if present (no longer used; removed in plan 002)

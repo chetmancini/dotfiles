@@ -18,7 +18,7 @@ when done.
 | 005 | Shell UX: atuin + direnv | P2 | M | 002 | DONE |
 | 006 | `dot` CLI dispatcher for `bin/` | P2 | M | — | DONE |
 | 007 | Agent / MCP config layout | P3 | M | 003 helpful | TODO |
-| 008 | Documentation reconciliation pass | P2 | S | 001–007 best-effort | TODO |
+| 008 | Documentation reconciliation pass | P2 | S | 001–007 best-effort | DONE |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED` (reason)
 

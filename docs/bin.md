@@ -6,6 +6,8 @@
 
 The `bin/` directory contains utility scripts for common tasks: archive extraction, process management, system updates, and more. Scripts are available in `$PATH` via the dotfiles installation.
 
+**Discovery:** run `dot help` (or `bin/dot help`). Primary tools also work directly (`doctor`, `brew-sync`, …). See root `bin/README.md` for the full catalog.
+
 ## Setup
 
 **Directory:** `bin/` (added to PATH)

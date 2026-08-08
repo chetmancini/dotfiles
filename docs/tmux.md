@@ -125,7 +125,7 @@ New panes and windows open in the current working directory, not the directory w
 
 Both tmux and neovim are configured with `vim-tmux-navigator`:
 - tmux: Smart pane switching that detects vim
-- neovim: `nvim/lua/plugins/tmux-navigator.lua`
+- neovim: `nvim/plugin/tmux.lua` (vim-tmux-navigator via `vim.pack`)
 
 The same `Ctrl-h/j/k/l` keys work everywhere.
 

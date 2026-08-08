@@ -8,7 +8,7 @@ managed_symlinks_for_group() {
             cat <<'EOF'
 yazi|.config/yazi|Yazi File Manager|Yazi config|Terminal file manager with vim-like keybindings and image preview
 ghostty|.config/ghostty|Ghostty Terminal|Ghostty config|GPU-accelerated terminal emulator configuration
-nvim|.config/nvim|Neovim|Neovim config|LazyVim-based Neovim configuration with plugins and keymaps
+nvim|.config/nvim|Neovim|Neovim config|Neovim config (vim.pack + modular plugin/*.lua)
 mise|.config/mise|Mise|Mise config|Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code
 uv|.config/uv|uv|uv config|Python package manager config with exclude-newer for supply chain safety
 atuin|.config/atuin|Atuin|Atuin config|Shell history search defaults (no secrets; sync is operator opt-in)

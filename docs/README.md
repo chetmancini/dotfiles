@@ -10,6 +10,7 @@ cd ~/dotfiles
 ./install.sh --plan
 ./install.sh
 doctor
+# or: dot doctor
 ```
 
 ## Applications
@@ -17,10 +18,10 @@ doctor
 | App | Description | Config |
 |-----|-------------|--------|
 | [tmux](./tmux.md) | Terminal multiplexer with vim integration | `.tmux.conf` |
-| [neovim](./neovim.md) | LazyVim-based editor with 40+ plugins | `nvim/` |
+| [neovim](./neovim.md) | Modular Neovim (`vim.pack` + `plugin/*.lua`) | `nvim/` |
 | [yazi](./yazi.md) | Terminal file browser with git integration | `yazi/` |
 | [ghostty](./ghostty.md) | GPU-accelerated terminal | `ghostty/` |
-| [bin scripts](./bin.md) | Utility scripts for daily workflows | `bin/` |
+| [bin scripts](./bin.md) | Utility scripts (`dot help` to discover) | `bin/` |
 
 ## Tool Integration
 
@@ -50,63 +51,80 @@ doctor
 ```
 
 Key integrations:
-- **ghostty + tmux**: Transparent terminal with tmux quick-toggle
+- **ghostty + tmux**: Transparent terminal with tmux sessions
 - **tmux + neovim**: Seamless pane/split navigation with `Ctrl-h/j/k/l`
-- **neovim + Copilot**: AI-assisted coding with auto-suggestions
+- **neovim + Copilot**: AI-assisted coding
 - **yazi + neovim**: File browser launches in `$EDITOR`
+- **zsh + mise/atuin/direnv**: versions, history search, project env
 
 ## File Structure
 
 ```
 ~/dotfiles/
-├── .zshrc              # Shell configuration
-├── .tmux.conf          # Tmux configuration
-├── .gitconfig          # Git configuration
-├── Brewfile            # Homebrew packages
-├── install.sh          # Setup script
-├── chetmancini.zsh-theme  # Custom oh-my-zsh theme
-├── nvim/               # Neovim (LazyVim)
-├── vim/                # Legacy Vim runtime
-├── yazi/               # Yazi file browser
-├── ghostty/            # Ghostty terminal
-├── bin/                # Utility scripts
-└── docs/               # This documentation
+├── .zshrc                 # Thin shell orchestrator
+├── zsh/                   # Modular shell config
+├── .tmux.conf
+├── .gitconfig
+├── Brewfile               # Core Homebrew packages
+├── Brewfile.optional      # Optional apps/tools
+├── install.sh
+├── chetmancini.zsh-theme  # Custom λ prompt (no oh-my-zsh)
+├── nvim/                  # Neovim (vim.pack)
+├── atuin/                 # Atuin config (history search)
+├── vim/                   # Legacy Vim (not installed by default)
+├── iterm/                 # Legacy iTerm prefs
+├── yazi/
+├── ghostty/
+├── bin/                   # Utility scripts + `dot` dispatcher
+├── plans/                 # Modernization / implementation plans
+└── docs/                  # This documentation
 ```
 
 ## Installation Details
 
-The `install.sh` script creates symlinks:
+`install.sh` creates symlinks (see `bin/lib/symlinks.sh` for the full list).
+Core defaults include:
 
 | Source | Target |
 |--------|--------|
 | `~/dotfiles/yazi` | `~/.config/yazi` |
 | `~/dotfiles/ghostty` | `~/.config/ghostty` |
 | `~/dotfiles/nvim` | `~/.config/nvim` |
-| `~/dotfiles/vim` | `~/.vim` |
+| `~/dotfiles/mise` | `~/.config/mise` |
+| `~/dotfiles/uv` | `~/.config/uv` |
+| `~/dotfiles/atuin` | `~/.config/atuin` |
 | `~/dotfiles/.gitconfig` | `~/.gitconfig` |
-| `~/dotfiles/.gitignore` | `~/.gitignore` |
 | `~/dotfiles/.zshrc` | `~/.zshrc` |
-| `~/dotfiles/.bashrc` | `~/.bashrc` |
-| `~/dotfiles/.bash_profile` | `~/.bash_profile` |
 | `~/dotfiles/.tmux.conf` | `~/.tmux.conf` |
-| `~/dotfiles/.vimrc` | `~/.vimrc` |
-| `~/dotfiles/chetmancini.zsh-theme` | `~/dotfiles/oh-my-zsh/custom/themes/chetmancini.zsh-theme` |
 
-Homebrew packages are installed via:
+Legacy Vim (`.vimrc` / `vim` → `~/.vim`) is **opt-in** via `./install.sh --with-legacy-vim`.
+
+Homebrew:
+
 ```bash
 brew bundle --file=~/dotfiles/Brewfile
+brew bundle --file=~/dotfiles/Brewfile.optional   # optional apps
 ```
 
-Validate the installed state with:
+Validate:
+
 ```bash
 doctor
+# or
+dot doctor
+dot help
 ```
 
 ## Applying Changes
 
 | Config | How to apply |
 |--------|--------------|
-| `.zshrc` | `source ~/.zshrc` or restart shell |
+| `.zshrc` / `zsh/` | `source ~/.zshrc` or restart shell |
 | `.gitconfig` | Immediate (new commands) |
 | Neovim | Restart neovim |
-| Brewfile | `brew bundle --file=~/dotfiles/Brewfile` |
+| Core Brewfile | `brew bundle --file=~/dotfiles/Brewfile` |
+| Optional Brewfile | `brew bundle --file=~/dotfiles/Brewfile.optional` |
+
+## Plans
+
+Implementation / modernization notes live in [`plans/`](../plans/) (mise, modular zsh, Brewfile profiles, atuin/direnv, `dot` CLI, docs, etc.).

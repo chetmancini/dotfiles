@@ -24,7 +24,7 @@ doctor
 | Tool | Config | Description |
 |------|--------|-------------|
 | zsh | `.zshrc` + `zsh/` | Modular shell (aliases, functions, tools) |
-| neovim | `nvim/` | LazyVim-based config |
+| neovim | `nvim/` | Modular config (`vim.pack` + `plugin/*.lua`) |
 | git | `.gitconfig` | Aliases, delta pager, conventional commits |
 | tmux | `.tmux.conf` | Terminal multiplexer |
 | yazi | `yazi/` | File browser |
@@ -122,12 +122,15 @@ fzfp        # fzf with bat preview
 ├── Brewfile.optional   # Optional apps/tools (opt-in)
 ├── install.sh          # Setup script
 ├── chetmancini.zsh-theme  # Custom λ theme
-├── bin/                # Custom scripts (see bin/README.md)
-├── nvim/               # Neovim (primary editor)
+├── bin/                # Custom scripts + `dot` (see bin/README.md)
+├── nvim/               # Neovim (vim.pack + plugin/*.lua)
+├── atuin/              # Atuin history config
 ├── vim/                # Legacy Vim runtime (not installed by default)
 ├── iterm/              # Legacy iTerm prefs (Ghostty is primary)
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
+├── plans/              # Implementation plans
+├── docs/               # Extended documentation
 └── api_keys.sh         # API keys (gitignored)
 ```
 

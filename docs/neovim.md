@@ -1,36 +1,47 @@
 # Neovim
 
-> LazyVim-based editor with 40+ plugins for modern development
+> Modular Neovim config using built-in `vim.pack` plugin management
 
 ## Overview
 
-Neovim configuration built on [LazyVim](https://www.lazyvim.org/) with custom plugins for Rust, Python, TypeScript, and AI-assisted coding via GitHub Copilot. Integrates seamlessly with tmux for navigation.
+Neovim configuration managed with **`vim.pack`** (Neovim’s built-in package
+manager), not LazyVim or lazy.nvim. Plugins are declared in `nvim/init.lua`;
+feature setup lives under `nvim/plugin/*.lua`. Includes Catppuccin, LSP via
+Mason, blink.cmp completion, Copilot, fzf-lua, neo-tree, and language extras
+for Rust, Python, and SQL. Tmux navigation works with `Ctrl-h/j/k/l`.
 
 ## Setup
 
 **Config directory:** `nvim/` symlinked to `~/.config/nvim`
 
 **Dependencies:**
-- `neovim` (via Brewfile)
-- Language servers installed via Mason
+- `neovim` (via core Brewfile)
+- Language servers / tools via `:Mason` as needed
 
 ## Directory Structure
 
 ```
 nvim/
-├── init.lua                    # Entry point (loads config.lazy)
-├── lazy-lock.json              # Plugin version lock file
-├── lua/
-│   ├── config/
-│   │   ├── lazy.lua            # Plugin manager setup
-│   │   ├── keymaps.lua         # Custom keymaps (uses LazyVim defaults)
-│   │   └── options.lua         # Editor options
-│   └── plugins/
-│       ├── colorscheme.lua     # Catppuccin theme
-│       ├── copilot.lua         # GitHub Copilot
-│       ├── rust.lua            # Rust analyzer config
-│       └── tmux-navigator.lua  # Tmux integration
+├── init.lua                 # Leaders, options, vim.pack.add, colorscheme, keymaps
+├── nvim-pack-lock.json      # Plugin lock file for vim.pack
+├── stylua.toml              # Lua formatter config
+└── plugin/                  # Auto-loaded feature modules
+    ├── completion.lua       # blink.cmp + snippets
+    ├── copilot.lua          # GitHub Copilot
+    ├── editor.lua           # mini.*, flash, grug-far, persistence
+    ├── finder.lua           # fzf-lua + neo-tree
+    ├── format.lua           # conform.nvim + nvim-lint
+    ├── git.lua              # gitsigns
+    ├── lsp.lua              # lspconfig, mason, diagnostics
+    ├── python.lua           # venv-selector
+    ├── rust.lua             # rustaceanvim + crates.nvim
+    ├── sql.lua              # vim-dadbod stack
+    ├── tmux.lua             # vim-tmux-navigator keymaps
+    ├── treesitter.lua       # treesitter + textobjects
+    └── ui.lua               # bufferline, lualine, noice, which-key, trouble
 ```
+
+There is **no** `lua/config/` or `lua/plugins/` LazyVim layout.
 
 ## Quick Reference
 
@@ -38,237 +49,138 @@ nvim/
 
 | Key | Purpose |
 |-----|---------|
-| `Space` | Leader key |
-| `\` | Local leader (filetype-specific) |
+| `Space` | Leader |
+| `\` | Local leader |
 
-### Navigation
-
-| Action | Keybinding | Notes |
-|--------|------------|-------|
-| Navigate left | `Ctrl-h` | Works across tmux panes |
-| Navigate down | `Ctrl-j` | Works across tmux panes |
-| Navigate up | `Ctrl-k` | Works across tmux panes |
-| Navigate right | `Ctrl-l` | Works across tmux panes |
-| Previous pane/split | `Ctrl-\` | Toggle back |
-
-### Copilot
-
-| Action | Keybinding | Notes |
-|--------|------------|-------|
-| Accept suggestion | `Tab` | Full suggestion |
-| Accept word | `Ctrl-Right` | Next word only |
-| Accept line | `Ctrl-l` | Current line |
-| Next suggestion | `Alt-]` | Cycle forward |
-| Previous suggestion | `Alt-[` | Cycle backward |
-| Dismiss | `Ctrl-]` | Clear suggestion |
-
-### LazyVim Defaults
-
-This config uses LazyVim defaults. Common keybindings:
+### Navigation (tmux-aware)
 
 | Action | Keybinding |
 |--------|------------|
-| File explorer | `Space + e` |
-| Find files | `Space + Space` |
-| Live grep | `Space + /` |
-| Buffers | `Space + ,` |
-| Recent files | `Space + fr` |
-| Save file | `Space + w` or `Ctrl-s` |
-| Quit | `Space + qq` |
-| LSP actions | `Space + ca` |
-| Format | `Space + cf` |
+| Left / down / up / right | `Ctrl-h` / `j` / `k` / `l` |
+| Previous pane | `Ctrl-\` |
 
-See [LazyVim keymaps](https://www.lazyvim.org/keymaps) for the complete list.
+### Find / files
+
+| Action | Keybinding |
+|--------|------------|
+| Explorer (neo-tree) | `Space e` |
+| Find files | `Space Space` or `Space ff` |
+| Live grep | `Space /` or `Space fg` |
+| Buffers | `Space ,` or `Space fb` |
+| Recent files | `Space fr` |
+
+### Editor / windows
+
+| Action | Keybinding |
+|--------|------------|
+| Save | `Ctrl-s` |
+| Quit all | `Space qq` |
+| Delete buffer | `Space bd` |
+| Split below / right | `Space -` / `Space \|` |
+| Format | `Space cf` |
+| Line diagnostics | `Space cd` |
+| Code action / rename | `Space ca` / `Space cr` |
+
+### Diagnostics / todos
+
+| Action | Keybinding |
+|--------|------------|
+| Trouble diagnostics | `Space xx` |
+| Buffer diagnostics | `Space xX` |
+| Todo search | `Space st` |
+
+### Copilot
+
+Configured in `plugin/copilot.lua` (accept/dismiss bindings live there). Auth
+with `:Copilot auth` if suggestions do not appear.
 
 ## Features
 
 ### Theme: Catppuccin
 
-Catppuccin colorscheme with transparent background enabled, allowing Ghostty's transparency to show through.
+Applied in `init.lua` with `transparent_background = true` so Ghostty
+transparency shows through.
 
-```lua
--- nvim/lua/plugins/colorscheme.lua
-opts = {
-    transparent_background = true,
-}
-```
+### Plugin management: vim.pack
 
-### Language Support
+Plugins are added with `vim.pack.add({ ... })` in `init.lua`. On treesitter
+updates, a `PackChanged` autocmd runs `TSUpdate`.
 
-Enabled via LazyVim extras in `lua/config/lazy.lua`:
+To add a plugin:
 
-| Language | Extra | Features |
-|----------|-------|----------|
-| Rust | `lang.rust` | LSP, rustfmt, clippy |
-| Python | `lang.python` | pyright, ruff |
-| TypeScript | `lang.typescript` | tsserver, prettier |
-| Tailwind | `lang.tailwind` | CSS completions |
+1. Append the GitHub URL (or table with `src` / `name`) to `vim.pack.add` in `init.lua`.
+2. Put setup code in a new or existing file under `nvim/plugin/`.
+3. Restart Neovim (or reload as appropriate for your workflow).
 
-### Rust Configuration
+### Language support
 
-Custom `rustaceanvim` config with enhanced settings:
-
-```lua
--- nvim/lua/plugins/rust.lua
-["rust-analyzer"] = {
-    check = {
-        command = "clippy",  -- Use clippy instead of cargo check
-    },
-    cargo = {
-        allFeatures = true,  -- Enable all features for completions
-    },
-    procMacro = {
-        enable = true,       -- Proc macro support
-    },
-    inlayHints = {
-        bindingModeHints = { enable = true },
-        closingBraceHints = { minLines = 20 },
-        closureReturnTypeHints = { enable = "with_block" },
-        lifetimeElisionHints = { enable = "skip_trivial" },
-        parameterHints = { enable = true },
-        typeHints = { enable = true },
-    },
-}
-```
+| Area | Plugins / notes |
+|------|-----------------|
+| Rust | rustaceanvim, crates.nvim (`plugin/rust.lua`) |
+| Python | venv-selector (`plugin/python.lua`); LSP via Mason (e.g. pyright, ruff) |
+| SQL | vim-dadbod, dadbod-ui, dadbod-completion |
+| General LSP | nvim-lspconfig, mason.nvim, mason-lspconfig |
+| Completion | blink.cmp, friendly-snippets, blink-copilot |
+| Format / lint | conform.nvim, nvim-lint |
 
 ### GitHub Copilot
 
-Auto-trigger enabled with custom keybindings. Works in:
-- All code files (auto)
-- Markdown files
-- YAML files
-- Git commit messages
+`copilot.lua` + blink-copilot integration for inline and completion-menu
+suggestions.
 
-### Tmux Integration
+### Tmux integration
 
-`vim-tmux-navigator` provides seamless navigation. The same `Ctrl-h/j/k/l` keys work for:
-- Neovim splits
-- Tmux panes
+`christoomey/vim-tmux-navigator` with maps in `plugin/tmux.lua`. Same
+`Ctrl-h/j/k/l` move across Neovim splits and tmux panes when both are
+configured.
 
-No mental context switch needed.
+## Plugin inventory (from `init.lua`)
 
-## Plugin List
+**UI & theme:** catppuccin, bufferline, lualine, noice, nui, which-key, neo-tree  
+**Editor:** mini.ai/pairs/surround/icons, flash, grug-far, persistence  
+**LSP & tools:** nvim-lspconfig, mason, mason-lspconfig, lazydev, conform, nvim-lint  
+**Completion / AI:** blink.cmp, friendly-snippets, blink-copilot, copilot.lua  
+**Nav / git:** fzf-lua, gitsigns, plenary  
+**Diagnostics:** trouble, todo-comments  
+**Lang:** rustaceanvim, crates.nvim, vim-dadbod*, venv-selector  
+**Tmux:** vim-tmux-navigator  
+**Treesitter:** nvim-treesitter, textobjects, nvim-ts-autotag, ts-comments  
 
-40+ plugins managed by lazy.nvim. Key plugins:
+## Key settings
 
-**UI & Theme:**
-- `catppuccin` - Colorscheme
-- `bufferline.nvim` - Tab/buffer line
-- `lualine.nvim` - Status line
-- `neo-tree.nvim` - File explorer
-- `noice.nvim` - UI enhancements
-- `which-key.nvim` - Keybinding hints
+Set in `init.lua` (not a separate options file):
 
-**Editor:**
-- `flash.nvim` - Enhanced motions
-- `gitsigns.nvim` - Git decorations
-- `todo-comments.nvim` - TODO highlighting
-- `trouble.nvim` - Diagnostics list
-- `mini.pairs` - Auto-pairing
-
-**LSP & Completion:**
-- `nvim-lspconfig` - LSP configuration
-- `mason.nvim` - LSP/formatter installer
-- `blink.cmp` - Completion engine
-- `conform.nvim` - Formatting
-- `nvim-lint` - Linting
-
-**Language:**
-- `rustaceanvim` - Rust tools
-- `nvim-treesitter` - Syntax highlighting
-- `nvim-ts-autotag` - HTML/JSX auto-close
-
-**AI:**
-- `copilot.lua` - GitHub Copilot
-- `blink-copilot` - Copilot + completion
-
-**Navigation:**
-- `vim-tmux-navigator` - Tmux integration
-- `fzf-lua` - Fuzzy finder
-
-## Customization
-
-### Add a Plugin
-
-Create a new file in `nvim/lua/plugins/`:
-
-```lua
--- nvim/lua/plugins/example.lua
-return {
-    "author/plugin-name",
-    opts = {
-        -- configuration
-    },
-}
-```
-
-### Override LazyVim Defaults
-
-```lua
--- nvim/lua/plugins/override.lua
-return {
-    "LazyVim/LazyVim",
-    opts = {
-        colorscheme = "tokyonight",
-    },
-}
-```
-
-### Add Custom Keymaps
-
-Edit `nvim/lua/config/keymaps.lua`:
-
-```lua
-vim.keymap.set("n", "<leader>gg", "<cmd>LazyGit<cr>", { desc = "LazyGit" })
-```
-
-### Change Theme
-
-Edit `nvim/lua/plugins/colorscheme.lua`:
-
-```lua
-return {
-    "folke/tokyonight.nvim",
-    lazy = false,
-    priority = 1000,
-    config = function()
-        vim.cmd.colorscheme("tokyonight")
-    end,
-}
-```
-
-## Key Settings
-
-From `nvim/lua/config/options.lua`:
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `wrap` | `false` | No line wrapping |
-
-Most settings use LazyVim defaults.
+| Setting | Value | Notes |
+|---------|-------|--------|
+| `mapleader` | Space | Set before plugins |
+| `number` / `relativenumber` | on | |
+| `expandtab` / `shiftwidth` | true / 2 | |
+| `wrap` | false | |
+| `clipboard` | unnamedplus (unless SSH) | |
+| `termguicolors` | true | |
+| Folds | treesitter expr, level 99 | |
 
 ## Troubleshooting
 
 ### LSP not working
 
-1. Open neovim and run `:Mason`
-2. Install the language server (e.g., `rust-analyzer`, `pyright`)
-3. Restart neovim
+1. `:Mason` — install the server for the language
+2. Restart Neovim
+3. Check `:LspInfo` / `:checkhealth`
 
 ### Copilot not suggesting
 
-1. Run `:Copilot auth` to authenticate
-2. Check `:Copilot status`
-3. Ensure the filetype is supported
+1. `:Copilot auth`
+2. `:Copilot status`
+3. Confirm filetype is supported in `plugin/copilot.lua`
 
 ### Plugins not loading
 
-1. Run `:Lazy` to open plugin manager
-2. Press `S` to sync plugins
-3. Check for errors in `:messages`
+1. Confirm `vim.pack.add` entries in `init.lua`
+2. Check `nvim-pack-lock.json` and Neovim messages on startup
+3. There is no `:Lazy` UI — this is not lazy.nvim
 
 ### Tmux navigation not working
 
-Ensure both are configured:
-- Neovim: `vim-tmux-navigator` plugin loaded
-- tmux: Smart pane switching in `.tmux.conf`
+- Neovim: `plugin/tmux.lua` loaded (vim-tmux-navigator in pack list)
+- tmux: smart pane switching still present in `.tmux.conf`
