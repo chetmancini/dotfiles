@@ -1,4 +1,4 @@
-# Plan 008: Documentation reconciliation pass
+# Plan 006: Add a `dot` CLI dispatcher for `bin/`
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -7,157 +7,151 @@
 > in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a52b4b5..HEAD -- README.md CLAUDE.md docs/ bin/README.md`
-> Then reconcile docs against **live** tree, not against this plan’s older excerpts.
+> `git diff --stat a52b4b5..HEAD -- bin/ Makefile install.sh README.md bin/README.md`
 
 ## Status
 
 - **Priority**: P2
-- **Effort**: S
+- **Effort**: M
 - **Risk**: LOW
-- **Depends on**: best after 001–007; can run partial updates anytime
-- **Category**: docs
+- **Depends on**: none
+- **Category**: dx
 - **Planned at**: commit `a52b4b5`, 2026-08-07
 
 ## Why this matters
 
-Docs already drift from reality: **LazyVim** is documented while `nvim/init.lua`
-uses **`vim.pack`**; README still mentions oh-my-zsh/pyenv/`n` depending on
-which plans landed. Agent executors and future-you will reintroduce the wrong
-stack if docs stay stale.
+`bin/` has many useful tools (`doctor`, `brew-sync`, `update-everything`,
+`good-morning`, …) but discovery is weak unless you read `bin/README.md`. A
+single `dot` entrypoint (`dot doctor`, `dot brew-sync`, `dot help`) matches
+modern CLI UX and gives a place for shared flags later without renaming every
+script.
 
-## Current state (as of a52b4b5 — re-verify)
+## Current state
 
-Known falsehoods at plan time:
-
-| Doc claim | Reality |
-|-----------|---------|
-| Neovim is LazyVim / lazy.nvim | `nvim/init.lua` uses `vim.pack.add({...})` + `plugin/*.lua` |
-| zsh uses oh-my-zsh heavily | Minimal OMZ plugin use; theme custom (002 removes OMZ) |
-| pyenv + nvm / `n` primary | mise present; 001 consolidates |
-| `docs/neovim.md` tree shows `lua/config/lazy.lua` | Tree is `init.lua` + `plugin/*.lua` |
-
-Files to audit:
-
-- `README.md`
-- `CLAUDE.md` (and `Claude.md` if duplicate path — use actual filename in repo)
-- `docs/README.md`, `docs/neovim.md`, `docs/tmux.md`, `docs/yazi.md`, `docs/ghostty.md`, `docs/bin.md`
-- `bin/README.md`
-- `bin/lib/symlinks.sh` description strings (user-visible in install UI)
+- `PERSONAL_BIN="$DOTFILES_DIR/bin"` on PATH via `.zshrc` `path_add`
+- Scripts are standalone executables; some use `bin/lib/helpers.sh`
+- `bin/README.md` documents a subset
+- No top-level `dot` command
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| Find stale terms | `rg -n 'LazyVim|lazy\\.nvim|oh-my-zsh|pyenv|nvm|\\bn\\b' README.md CLAUDE.md docs/ bin/README.md` | only intentional historical mentions |
-| Tree sample | `find nvim -type f | head -40` | matches neovim docs |
-| Check | `make check` | exit 0 (docs-only usually no-op) |
+| Check | `make check` | exit 0 |
+| Shellcheck | `shellcheck bin/dot` (once added to Makefile list) | exit 0 |
+| Help | `dot help` or `bin/dot help` | lists subcommands |
+| Dispatch | `dot doctor --skip-tools` | same as `doctor --skip-tools` |
 
 ## Scope
 
 **In scope**:
-- All markdown docs listed above
-- Symlink description strings in `bin/lib/symlinks.sh` if they say LazyVim
-- Optional: short architecture diagram in README reflecting `zsh/` modules if 002 done
+- New `bin/dot` dispatcher script
+- `Makefile` `SHELLCHECK_FILES` include `bin/dot`
+- `bin/README.md` + root `README.md` short mention
+- Optional: `bin/lib/helpers.sh` only if shared arg parsing is tiny and reused
+- Optional thin zsh alias `alias dot=...` unnecessary if `bin` on PATH
 
 **Out of scope**:
-- Code behavior changes
-- Rewriting every bin script’s header comments
-- External blog posts
+- Rewriting all bin scripts into subcommands of one file
+- Removing direct `doctor` / `brew-sync` executables (keep both: direct and via `dot`)
+- Ruby/Python rewrites
 
 ## Git workflow
 
-- Branch: `advisor/008-docs-reconciliation`
-- Commit: `docs: reconcile README and neovim docs with vim.pack stack`
+- Branch: `advisor/006-dot-cli`
+- Commit: `feat: add dot CLI dispatcher`
 - Do NOT push/PR unless asked
 
 ## Steps
 
-### Step 1: Inventory live architecture
+### Step 1: Design subcommand map
+
+Map:
+
+| Subcommand | Invokes |
+|------------|---------|
+| `help` / `--help` / no args | print help |
+| `doctor` | `bin/doctor` |
+| `brew-sync` | `bin/brew-sync` |
+| `update` | `bin/update-everything` |
+| `good-morning` | `bin/good-morning` |
+| `cheatsheet` | `bin/cheatsheet` |
+| … | auto-discover other executables in `bin/` that are not `dot` itself and not under `lib/` |
+
+**Policy**:
+
+- Prefer **explicit** allowlist for first-class commands with descriptions
+- Plus **auto-list** any other executable files in `bin/` (not directories, not `lib/`, not `*.py` unless intentional) as secondary commands
+
+### Step 2: Implement `bin/dot`
+
+Requirements:
+
+- `#!/usr/bin/env bash` and `set -euo pipefail`
+- Resolve `DOTFILES_BIN` from script location
+- `dot <cmd> [args...]` → `exec "$DOTFILES_BIN/<cmd>" "$@"` after validating cmd is safe:
+  - no path separators in `<cmd>`
+  - target is executable regular file inside `DOTFILES_BIN`
+  - reject `lib` and hidden names
+- `dot help` prints formatted list (name + first `#` description line or static map)
+- Unknown command → stderr message + exit 1
+- Pass through exit codes from subcommands
+
+Exemplar patterns: see `bin/doctor` for helpers usage; keep `dot` dependency-light.
+
+**Verify**:
 
 ```bash
-# Editor
-ls nvim/; head -30 nvim/init.lua
-# Shell
-ls zsh 2>/dev/null || echo 'no zsh/ modules yet'
-# Brew profiles
-ls Brewfile* 
-# Secrets templates
-ls api_keys*.template
+chmod +x bin/dot
+bin/dot help | head -40
+bin/dot doctor --skip-tools
+bin/dot nosuchcommand; test $? -ne 0
 ```
 
-Build a checklist of “source of truth” facts from the tree.
+### Step 3: ShellCheck + Makefile
 
-### Step 2: Fix neovim docs
+Add `bin/dot` to `SHELLCHECK_FILES` in `Makefile`.
 
-Rewrite `docs/neovim.md` to describe:
+**Verify**: `make shellcheck` exit 0.
 
-- `vim.pack` plugin management
-- `nvim/plugin/*.lua` modules (completion, lsp, git, …)
-- Catppuccin, blink.cmp, mason, conform, etc. **as actually listed** in `init.lua`
-- Remove LazyVim keybind links as primary; document local leader and keymaps from `init.lua` / plugin files
-- Update `docs/README.md` neovim one-liner
+### Step 4: Documentation
 
-**Verify**: `rg -n 'LazyVim|lazy\\.nvim' docs/neovim.md` → no matches (unless a “Migration from LazyVim” note).
+- `bin/README.md`: top section “Use `dot help` to discover commands”
+- Root README: one line under features or scripts
 
-### Step 3: Fix root README + CLAUDE.md
+**Verify**: `rg -n '\\bdot\\b' README.md bin/README.md`.
 
-Align sections:
+### Step 5: Optional completion (stretch)
 
-- What’s included table
-- Shell features (modules / mise / atuin if present)
-- Languages: mise + uv + pnpm/bun
-- Tree diagram (`oh-my-zsh/` only if still relevant)
-- Bootstrap/doctor still accurate
-
-**Verify**: stale term `rg` from commands table is clean or justified.
-
-### Step 4: Symlink description strings
-
-```bash
-rg -n 'LazyVim|oh-my-zsh' bin/lib/symlinks.sh || echo clean
-```
-
-Update Neovim description to “Neovim config (vim.pack + modular plugin/*.lua)”.
-
-### Step 5: Cross-links to plans (optional)
-
-In `docs/README.md` or root README, optional one-liner: “Modernization plans live in `plans/`” — only if you want discoverability; not required.
-
-### Step 6: Final grep gate
-
-```bash
-rg -n 'LazyVim|lazy\\.nvim' README.md CLAUDE.md docs/ bin/ || true
-rg -n 'oh-my-zsh' README.md CLAUDE.md docs/ || true
-```
-
-Any remaining hits must be intentional (e.g. “removed in 2026”).
-
-**Verify**: `make check` still passes.
+If easy, add zsh completion file under a completions path already on fpath —
+**skip** if it requires large machinery. Not required for done criteria.
 
 ## Test plan
 
-- Human read of README quick start still works
-- `docs/neovim.md` file tree matches `find nvim`
-- No broken relative links in docs (`rg '\\]\\(\\.\\./|\\]\\(\\./' docs/`)
+- `bin/dot help` lists doctor
+- `bin/dot doctor --skip-tools` works
+- `bin/dot brew-sync --help` or dry-run if available
+- Path traversal rejected: `bin/dot ../.zshrc` must fail
+- `make check` passes
 
 ## Done criteria
 
-- [ ] No inaccurate LazyVim claims
-- [ ] Shell/version-manager docs match post-001/002 reality (as landed)
-- [ ] Symlink install descriptions accurate
+- [ ] `bin/dot` exists, executable, dispatches safely
+- [ ] `dot help` discovers primary tools
+- [ ] Existing scripts still runnable directly
+- [ ] Makefile shellcheck includes `bin/dot`
+- [ ] Docs mention `dot`
 - [ ] `make check` exit 0
-- [ ] `plans/README.md` 008 → DONE
+- [ ] `plans/README.md` 006 → DONE
 
 ## STOP conditions
 
-- Mid-migration tree (half 002) makes one coherent doc story impossible — write
-  docs for **current HEAD** and note TODOs rather than inventing end state
-- Conflicting CLAUDE.md vs Claude.md files — report duplication; don’t delete
-  without confirmation
+- Dispatch design would require rewriting `update-everything` interfaces
+- Security issue: cannot reliably prevent path escape — stop and simplify to
+  strict allowlist only
 
 ## Maintenance notes
 
-- Any future stack change should update `docs/neovim.md` in the same PR
-- Reviewers: compare docs tree blocks to `ls`
-- This plan should be re-run after large modernization merges
+- New bin scripts: add to allowlist descriptions when important; auto-discover covers the rest
+- Reviewers: focus on path safety in dispatcher
+- Follow-up: `dot install` wrapping `install.sh` flags
