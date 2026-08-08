@@ -18,10 +18,10 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 
 ### Homebrew Package Management
 
-Packages are managed via `Brewfile`:
-- `brew bundle` installs all packages from Brewfile
-- `brew bundle dump --force` updates Brewfile from installed packages
-- `brew bundle cleanup` removes packages not in Brewfile
+Packages are split across two files:
+- `Brewfile` — **core** daily CLI/dev stack (default `install.sh` brew step)
+- `Brewfile.optional` — AI IDEs, messaging, heavy casks; install via `--with-optional-brew` or `brew bundle --file=Brewfile.optional`
+- `brew-sync` checks drift against **core** only; optional packages are not treated as extras
 - Organized by category: CLI tools, development, databases, casks, fonts
 
 ### Symlink-based Installation
@@ -30,14 +30,13 @@ The `install.sh` script creates symlinks from this repository to home directory:
 - `~/dotfiles/yazi` → `~/.config/yazi`
 - `~/dotfiles/ghostty` → `~/.config/ghostty`
 - `~/dotfiles/nvim` → `~/.config/nvim`
-- `~/dotfiles/vim` → `~/.vim`
 - `~/dotfiles/.gitconfig` → `~/.gitconfig`
 - `~/dotfiles/.gitignore` → `~/.gitignore`
 - `~/dotfiles/.zshrc` → `~/.zshrc`
 - `~/dotfiles/.bashrc` → `~/.bashrc`
 - `~/dotfiles/.bash_profile` → `~/.bash_profile`
 - `~/dotfiles/.tmux.conf` → `~/.tmux.conf`
-- `~/dotfiles/.vimrc` → `~/.vimrc`
+- Legacy Vim (`.vimrc`, `vim` → `~/.vim`) is opt-in via `--with-legacy-vim`
 
 ### Git Configuration Structure
 
@@ -65,27 +64,23 @@ doctor
 
 # Or install just brew packages
 brew bundle --file=~/dotfiles/Brewfile
+brew bundle --file=~/dotfiles/Brewfile.optional   # optional profile
 ```
 
 ### Managing Brew Packages
 ```bash
-# Install all packages from Brewfile
+# Core packages
 brew bundle --file=~/dotfiles/Brewfile
-
-# Check what would be installed (dry run)
 brew bundle check --file=~/dotfiles/Brewfile
 
-# Update Brewfile from currently installed packages
-brew bundle dump --file=~/dotfiles/Brewfile --force
+# Optional packages (AI IDEs, messaging, heavy casks)
+brew bundle --file=~/dotfiles/Brewfile.optional
 
-# Remove packages not in Brewfile
-brew bundle cleanup --file=~/dotfiles/Brewfile
-
-# Check Brewfile drift (brew-sync)
+# Drift against core only (optional installs ignored as extras)
 brew-sync                           # Check for drift
-brew-sync --add                     # Add missing packages to Brewfile
-brew-sync --remove                  # Remove uninstalled packages from Brewfile
-brew-sync --update                  # Regenerate Brewfile from installed packages
+brew-sync --add                     # Add missing packages to core Brewfile
+brew-sync --remove                  # Remove uninstalled packages from core Brewfile
+brew-sync --update                  # Regenerate core Brewfile from installed packages
 brew-sync --dry-run                 # Preview changes without applying
 ```
 
@@ -109,7 +104,7 @@ This repository includes configurations for:
 
 - `.zshrc` - Thin shell orchestrator (sources `zsh/*.zsh`)
 - `zsh/` - Modular shell config (aliases, git helpers, tools, plugins)
-- `Brewfile` - Homebrew package manifest (formulae, casks, fonts)
+- `Brewfile` / `Brewfile.optional` - Core vs optional Homebrew manifests
 - `install.sh` - Setup script for new machines
 - `bin/doctor` - Installation verification script
 - `chetmancini.zsh-theme` - Custom λ prompt theme
@@ -153,7 +148,8 @@ LazyVim-based configuration located in `nvim/`:
 - New shell aliases go in `zsh/aliases.zsh` or `zsh/git.zsh`; new tools get `zsh/tools/<name>.zsh` plus an orchestrator entry in `.zshrc`
 - Plugins that wrap ZLE must load in `zsh/plugins.zsh` after custom widgets (syntax-highlighting last)
 - API keys go in `api_keys.sh` (not tracked) - use `api_keys.sh.template` as reference
-- When adding new tools, add them to `Brewfile` and run `brew bundle`
+- Daily tools → `Brewfile`; experimental/GUI → `Brewfile.optional`
+- Legacy `vim/` and `iterm/` are kept in-repo but not installed by default
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)

@@ -14,7 +14,7 @@ when done.
 | 001 | Consolidate version managers onto mise | P1 | M | — | DONE |
 | 002 | Modularize `.zshrc` and drop oh-my-zsh | P1 | L | 001 recommended | DONE |
 | 003 | 1Password-native secrets loading | P1 | M | — | TODO |
-| 004 | Prune legacy surface + Brewfile profiles | P2 | M | 002 | TODO |
+| 004 | Prune legacy surface + Brewfile profiles | P2 | M | 002 | DONE |
 | 005 | Shell UX: atuin + direnv | P2 | M | 002 | TODO |
 | 006 | `dot` CLI dispatcher for `bin/` | P2 | M | — | TODO |
 | 007 | Agent / MCP config layout | P3 | M | 003 helpful | TODO |

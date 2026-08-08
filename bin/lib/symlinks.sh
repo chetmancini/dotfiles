@@ -21,9 +21,14 @@ EOF
 .bashrc|.bashrc|Bash Configuration|Bash config|Compatibility shell config for environments that still start bash
 .bash_profile|.bash_profile|Bash Profile|Bash profile|Login-shell entry point for bash-based environments
 .tmux.conf|.tmux.conf|Tmux Configuration|tmux config|Terminal multiplexer config for managing multiple terminal sessions
+.npmrc|.npmrc|npm Configuration|npm config|npm config with min-release-age to avoid installing very new packages
+EOF
+            ;;
+        legacy)
+            # Not installed by default. install.sh prompts (default No); doctor does not require these.
+            cat <<'EOF'
 .vimrc|.vimrc|Vim Configuration|Vim config|Legacy Vim configuration for environments that still use Vim
 vim|.vim|Vim Runtime|Vim runtime|Legacy Vim runtime files, including colors and pathogen
-.npmrc|.npmrc|npm Configuration|npm config|npm config with min-release-age to avoid installing very new packages
 EOF
             ;;
         *)

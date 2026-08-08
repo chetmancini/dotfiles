@@ -23,6 +23,7 @@ DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 
 BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile}"
+BREWFILE_OPTIONAL="${BREWFILE_OPTIONAL:-$DOTFILES_DIR/Brewfile.optional}"
 DRY_RUN=false
 
 # Colors (redefine for standalone use)
@@ -42,23 +43,28 @@ print_header() {
 print_help() {
     echo "Usage: brew-sync [options]"
     echo ""
-    echo "Check and synchronize Brewfile with installed Homebrew packages."
+    echo "Check and synchronize the core Brewfile with installed Homebrew packages."
+    echo "Optional packages live in Brewfile.optional and are not required for a"
+    echo "healthy core install. They are excluded from 'extra install' drift and"
+    echo "are never removed by --remove from the optional file."
     echo ""
     echo "Options:"
-    echo "  --add          Add missing packages to Brewfile"
-    echo "  --remove       Remove uninstalled packages from Brewfile"
-    echo "  --update       Full update: brew bundle dump --force"
+    echo "  --add          Add missing packages to core Brewfile"
+    echo "  --remove       Remove uninstalled packages from core Brewfile"
+    echo "  --update       Full update: brew bundle dump --force (core only)"
     echo "  --check        Only check for drift (default)"
     echo "  --dry-run      Show what would be done without making changes"
     echo "  -h, --help     Show this help message"
     echo ""
     echo "Environment:"
-    echo "  BREWFILE=/path/to/Brewfile   Override the derived Brewfile path"
+    echo "  BREWFILE=/path/to/Brewfile             Override core Brewfile path"
+    echo "  BREWFILE_OPTIONAL=/path/to/Brewfile.optional  Optional profile path"
     echo ""
     echo "Examples:"
-    echo "  brew-sync              # Check for drift"
-    echo "  brew-sync --add        # Add missing packages"
-    echo "  brew-sync --update     # Regenerate Brewfile from installed"
+    echo "  brew-sync              # Check core Brewfile drift"
+    echo "  brew-sync --add        # Add missing packages to core"
+    echo "  brew-sync --update     # Regenerate core Brewfile from installed"
+    echo "  brew bundle --file=~/dotfiles/Brewfile.optional  # install optional"
     exit 0
 }
 
@@ -118,12 +124,37 @@ get_brewfile_casks() {
         sort -u
 }
 
+get_optional_formulae() {
+    if [ ! -f "$BREWFILE_OPTIONAL" ]; then
+        return 0
+    fi
+    grep -E '^\s*brew\s+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
+        sed -E 's/^\s*brew\s+"([^"]+)".*/\1/' |
+        # strip tap prefix for comparison with brew list short names
+        sed -E 's|.*/||' |
+        sort -u
+}
+
+get_optional_casks() {
+    if [ ! -f "$BREWFILE_OPTIONAL" ]; then
+        return 0
+    fi
+    grep -E '^\s*cask\s+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
+        sed -E 's/^\s*cask\s+"([^"]+)".*/\1/' |
+        sort -u
+}
+
 get_installed_formulae() {
     brew list --formula 2>/dev/null | sort -u
 }
 
 get_installed_casks() {
     brew list --cask 2>/dev/null | sort -u
+}
+
+# Normalize brewfile formula names to short form for brew list comparison
+short_formula_names() {
+    sed -E 's|.*/||'
 }
 
 # Compare and report drift
@@ -134,26 +165,35 @@ check_drift() {
     local brewfile_formulae installed_formulae
     local brewfile_casks installed_casks
 
-    brewfile_formulae=$(get_brewfile_formulae)
+    brewfile_formulae=$(get_brewfile_formulae | short_formula_names)
     installed_formulae=$(get_installed_formulae)
     brewfile_casks=$(get_brewfile_casks)
     installed_casks=$(get_installed_casks)
+    local optional_formulae optional_casks
+    optional_formulae=$(get_optional_formulae)
+    optional_casks=$(get_optional_casks)
 
     # Formulae in Brewfile but not installed
     local formulae_not_installed
     formulae_not_installed=$(comm -23 <(echo "$brewfile_formulae") <(echo "$installed_formulae"))
 
-    # Formulae installed but not in Brewfile
+    # Formulae installed but not in core Brewfile (ignore optional profile)
     local formulae_not_in_brewfile
     formulae_not_in_brewfile=$(comm -13 <(echo "$brewfile_formulae") <(echo "$installed_formulae"))
+    if [ -n "$optional_formulae" ]; then
+        formulae_not_in_brewfile=$(comm -23 <(echo "$formulae_not_in_brewfile") <(echo "$optional_formulae"))
+    fi
 
     # Casks in Brewfile but not installed
     local casks_not_installed
     casks_not_installed=$(comm -23 <(echo "$brewfile_casks") <(echo "$installed_casks"))
 
-    # Casks installed but not in Brewfile
+    # Casks installed but not in core Brewfile (ignore optional profile)
     local casks_not_in_brewfile
     casks_not_in_brewfile=$(comm -13 <(echo "$brewfile_casks") <(echo "$installed_casks"))
+    if [ -n "$optional_casks" ]; then
+        casks_not_in_brewfile=$(comm -23 <(echo "$casks_not_in_brewfile") <(echo "$optional_casks"))
+    fi
 
     # Print results
     local issues_found=false
@@ -218,13 +258,19 @@ check_drift() {
         echo ""
     fi
 
+    if [ -f "$BREWFILE_OPTIONAL" ]; then
+        echo -e "${BLUE}Note: optional packages in $(basename "$BREWFILE_OPTIONAL") are ignored for core drift.${NC}"
+        echo ""
+    fi
+
     if [ "$issues_found" = false ]; then
-        echo -e "${GREEN}✓ Brewfile is in sync with installed packages${NC}"
+        echo -e "${GREEN}✓ Core Brewfile is in sync with installed packages${NC}"
         return 0
     else
-        echo -e "${BLUE}Run 'brew-sync --add' to add missing packages${NC}"
-        echo -e "${BLUE}Run 'brew-sync --remove' to clean up Brewfile${NC}"
-        echo -e "${BLUE}Run 'brew-sync --update' to regenerate from installed${NC}"
+        echo -e "${BLUE}Run 'brew-sync --add' to add missing packages to core Brewfile${NC}"
+        echo -e "${BLUE}Run 'brew-sync --remove' to clean up core Brewfile${NC}"
+        echo -e "${BLUE}Run 'brew-sync --update' to regenerate core Brewfile from installed${NC}"
+        echo -e "${BLUE}Optional apps: brew bundle --file=$BREWFILE_OPTIONAL${NC}"
         return 1
     fi
 }
@@ -240,21 +286,30 @@ add_missing() {
     local brewfile_formulae installed_formulae
     local brewfile_casks installed_casks
 
-    brewfile_formulae=$(get_brewfile_formulae)
+    brewfile_formulae=$(get_brewfile_formulae | short_formula_names)
     installed_formulae=$(get_installed_formulae)
     brewfile_casks=$(get_brewfile_casks)
     installed_casks=$(get_installed_casks)
+    local optional_formulae optional_casks
+    optional_formulae=$(get_optional_formulae)
+    optional_casks=$(get_optional_casks)
 
-    # Find missing formulae
+    # Find formulae installed but missing from core (do not pull optional into core)
     local formulae_to_add
     formulae_to_add=$(comm -13 <(echo "$brewfile_formulae") <(echo "$installed_formulae"))
+    if [ -n "$optional_formulae" ]; then
+        formulae_to_add=$(comm -23 <(echo "$formulae_to_add") <(echo "$optional_formulae"))
+    fi
 
-    # Find missing casks
+    # Find casks installed but missing from core (do not pull optional into core)
     local casks_to_add
     casks_to_add=$(comm -13 <(echo "$brewfile_casks") <(echo "$installed_casks"))
+    if [ -n "$optional_casks" ]; then
+        casks_to_add=$(comm -23 <(echo "$casks_to_add") <(echo "$optional_casks"))
+    fi
 
     if [ -z "$formulae_to_add" ] && [ -z "$casks_to_add" ]; then
-        echo -e "${GREEN}✓ Nothing to add${NC}"
+        echo -e "${GREEN}✓ Nothing to add to core Brewfile${NC}"
         return 0
     fi
 

@@ -42,9 +42,6 @@ if [[ -n "$_pg_version" ]]; then
 fi
 unset _pg_version
 
-alias start_memcached='/usr/local/opt/memcached/bin/memcached'
-alias stop_memcached='killall memcached'
-
 alias brewski='brew update && brew upgrade && brew cleanup; brew doctor'
 
 # Other tools

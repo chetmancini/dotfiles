@@ -32,31 +32,41 @@ doctor
 
 ## Homebrew Packages
 
-All packages are managed via `Brewfile`:
+Packages are split into **core** and **optional** profiles:
+
+| File | Purpose | Default install |
+|------|---------|-----------------|
+| `Brewfile` | Daily CLI, languages, k8s, Ghostty, fonts | Yes (`install.sh` / `brew bundle`) |
+| `Brewfile.optional` | AI IDEs, messaging, heavy casks, fun extras | Opt-in |
 
 ```bash
-# Install all packages
+# Core (default)
 brew bundle --file=~/dotfiles/Brewfile
-
-# See what would be installed
 brew bundle check --file=~/dotfiles/Brewfile
 
-# Update Brewfile from installed packages
-brew bundle dump --file=~/dotfiles/Brewfile --force
+# Optional apps/tools
+brew bundle --file=~/dotfiles/Brewfile.optional
 
-# Remove packages not in Brewfile
-brew bundle cleanup --file=~/dotfiles/Brewfile
+# Via install.sh
+./install.sh --yes --skip-brew          # no brew
+./install.sh --with-optional-brew       # core + optional
+./install.sh --with-legacy-vim          # also symlink legacy Vim
+
+# Drift against core only (optional packages ignored as "extras")
+brew-sync
 ```
 
-### Categories in Brewfile
+### Core categories
 
-- **CLI Tools**: eza, bat, fzf, zoxide, jq, htop, yazi
-- **Development**: neovim, gh, git-delta, awscli
+- **CLI Tools**: eza, bat, fzf, zoxide, jq, htop, yazi, shellcheck, shfmt
+- **Development**: neovim, gh, git-delta, awscli, mise
 - **Kubernetes**: kubectl, kubectx, k9s, helm
 - **Languages**: mise (node/python), openjdk, bun, uv, pnpm
 - **Databases**: postgresql, redis, sqlite
-- **Apps**: Ghostty, Arc, Zed, JetBrains Toolbox, Slack, Discord
+- **Apps**: Ghostty, 1Password CLI
 - **Fonts**: Monaspace, Hack (+ Nerd Font variants)
+
+Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, etc.
 
 ## Key Features
 
@@ -70,8 +80,8 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 - fzf integration for fuzzy finding
 
 ### Bootstrap
-- `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, etc.)
-- `doctor` verifies symlinks, zsh modules, TPM, and repo health checks
+- `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
+- `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
@@ -92,11 +102,10 @@ fzfp        # fzf with bat preview
 
 ## Adding New Tools
 
-1. Add to `Brewfile`
-2. Run `brew bundle`
-3. If config needed, add symlink to `install.sh`
-4. Add validation to `doctor`
-5. Add any shell integration under `zsh/` (and one line in `.zshrc` if a new module)
+1. Daily CLI → `Brewfile`; experimental/GUI apps → `Brewfile.optional`
+2. Run `brew bundle --file=…` for the right profile
+3. If config needed, add symlink to `bin/lib/symlinks.sh` (+ install/doctor)
+4. Add any shell integration under `zsh/` (and one line in `.zshrc` if a new module)
 
 ## Structure
 
@@ -106,16 +115,20 @@ fzfp        # fzf with bat preview
 ├── zsh/                # Modular shell config (aliases, tools, plugins)
 ├── .gitconfig          # Git config (uses conditional includes)
 ├── .tmux.conf          # tmux config
-├── Brewfile            # Homebrew packages
+├── Brewfile            # Core Homebrew packages
+├── Brewfile.optional   # Optional apps/tools (opt-in)
 ├── install.sh          # Setup script
 ├── chetmancini.zsh-theme  # Custom λ theme
 ├── bin/                # Custom scripts (see bin/README.md)
-├── nvim/               # Neovim (LazyVim)
-├── vim/                # Legacy Vim runtime
+├── nvim/               # Neovim (primary editor)
+├── vim/                # Legacy Vim runtime (not installed by default)
+├── iterm/              # Legacy iTerm prefs (Ghostty is primary)
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
 └── api_keys.sh         # API keys (gitignored)
 ```
+
+**Legacy**: `vim/` and `iterm/` remain in the repo for reference but are not required. Primary stack is Ghostty + Neovim. Pass `--with-legacy-vim` to symlink Vim config.
 
 ## License
 

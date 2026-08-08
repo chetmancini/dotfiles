@@ -1,0 +1,89 @@
+# Optional packages — install with:
+#   brew bundle --file=~/dotfiles/Brewfile.optional
+# Not installed by default install.sh brew step (use --with-optional-brew).
+# brew-sync defaults to the core Brewfile; packages listed here are not treated
+# as "extra" drift against core, and --remove will not strip them from optional.
+
+# Taps (optional-only)
+tap "anomalyco/tap"
+tap "datadog/pack"
+tap "datadog-labs/pack"
+tap "schpet/tap"
+
+#==============================================================================
+# Optional CLI / fun
+#==============================================================================
+brew "ack"                      # Grep-like tool for programmers
+brew "ast-grep"                 # Code search/refactor
+brew "semgrep"                  # Code analysis/search
+brew "cmake"                    # Cross-platform make
+brew "cmatrix"                  # Matrix screensaver (used by zsh/fun.zsh if present)
+brew "ffmpeg"                   # Media processing
+brew "gti"                      # Fun typo for git
+brew "imagemagick"              # Image tools
+brew "jasper"                   # JPEG-2000 library
+brew "little-cms2"              # Color management
+brew "rust"                     # Systems programming language
+
+#==============================================================================
+# Optional development
+#==============================================================================
+brew "emacs"                    # Text editor
+brew "mob"                      # Mob programming tool
+brew "qt"                       # Application framework
+brew "gradle"                   # Java build tool
+brew "sbt"                      # Scala build tool
+brew "duckdb"                   # SQL OLAP database
+brew "pgvector"                 # Postgres vector search
+
+#==============================================================================
+# AI Tools
+#==============================================================================
+brew "anomalyco/tap/gifgrep"    # Clawdbot skill: GIF search
+brew "anomalyco/tap/goplaces"   # Clawdbot skill: Google Places
+brew "anomalyco/tap/imsg"       # Clawdbot skill: iMessage
+brew "anomalyco/tap/opencode"   # AI coding assistant CLI
+brew "huggingface-cli"          # HuggingFace model downloads
+brew "llm"                      # CLI for LLMs
+brew "ollama"                   # Run LLMs locally
+brew "datadog-labs/pack/pup"    # Datadog Pup CLI
+brew "schpet/tap/linear"        # Linear CLI
+
+#==============================================================================
+# Casks - Development Apps
+#==============================================================================
+cask "chatgpt"                  # OpenAI ChatGPT app
+cask "claude"                   # Anthropic Claude app
+cask "cursor"                   # AI-powered code editor
+cask "github"                   # GitHub Desktop
+cask "jetbrains-toolbox"        # JetBrains tools manager
+cask "kiro"                     # Agent-centric IDE
+cask "lm-studio"                # Local LLM runner
+cask "opencode-desktop"         # AI coding assistant
+cask "openlens"                 # Kubernetes IDE
+cask "postman"                  # API collaboration platform
+cask "zed"                      # Editor
+
+#==============================================================================
+# Casks - General Apps
+#==============================================================================
+cask "adobe-creative-cloud"     # Adobe creative apps
+cask "arc"                      # Browser
+cask "conductor"                # Claude code tool
+cask "dropbox"                  # Cloud storage client
+cask "firefox"                  # Mozilla web browser
+cask "mactex"                   # TeX Live distribution
+cask "opal-composer"            # Opal webcam software
+cask "raycast"                  # Spotlight launcher
+cask "reflect"                  # Networked note app
+cask "spotify"                  # Music streaming
+cask "todoist-app"              # Todo list app
+cask "zoom"                     # Video meetings
+
+#==============================================================================
+# Casks - Messaging
+#==============================================================================
+cask "discord"                  # Voice/text chat
+cask "slack"                    # Team chat app
+cask "telegram"                 # Secure messenger
+cask "whatsapp"                 # WhatsApp desktop

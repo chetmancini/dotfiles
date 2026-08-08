@@ -15,6 +15,8 @@ source "$SCRIPT_DIR/bin/lib/symlinks.sh"
 AUTO_YES=false
 SKIP_TPM=false
 SKIP_BREW=false
+WITH_OPTIONAL_BREW=false
+WITH_LEGACY_VIM=false
 SKIP_API_KEYS=false
 CLEAR_SCREEN=true
 PLAN_MODE=false
@@ -39,13 +41,15 @@ Usage: ./install.sh [options]
 Install dotfiles into the current HOME directory.
 
 Options:
-  --yes              Run non-interactively and accept all prompts
-  --plan, --dry-run  Preview changes without modifying files
-  --skip-tpm         Skip tmux plugin manager installation
-  --skip-brew        Skip Homebrew package installation
-  --skip-api-keys    Skip creating api_keys.sh from template
-  --no-clear         Do not clear the screen before starting
-  -h, --help         Show this help message
+  --yes                 Run non-interactively and accept all prompts
+  --plan, --dry-run     Preview changes without modifying files
+  --skip-tpm            Skip tmux plugin manager installation
+  --skip-brew           Skip Homebrew package installation
+  --with-optional-brew  Also install Brewfile.optional (default off under --yes)
+  --with-legacy-vim     Symlink legacy Vim runtime/config (default off under --yes)
+  --skip-api-keys       Skip creating api_keys.sh from template
+  --no-clear            Do not clear the screen before starting
+  -h, --help            Show this help message
 EOF
 }
 
@@ -66,6 +70,14 @@ parse_args() {
                 ;;
             --skip-brew)
                 SKIP_BREW=true
+                shift
+                ;;
+            --with-optional-brew)
+                WITH_OPTIONAL_BREW=true
+                shift
+                ;;
+            --with-legacy-vim)
+                WITH_LEGACY_VIM=true
                 shift
                 ;;
             --skip-api-keys)
@@ -250,8 +262,8 @@ install_tpm() {
 install_homebrew() {
     print_header "Step 2: Homebrew Packages"
 
-    echo "The Brewfile contains a list of CLI tools, applications, and fonts"
-    echo "that will be installed via Homebrew."
+    echo "Core CLI/dev tools install from Brewfile."
+    echo "Optional apps/tools are in Brewfile.optional (opt-in)."
     echo ""
 
     if [ "$SKIP_BREW" = true ]; then
@@ -259,25 +271,53 @@ install_homebrew() {
         return 0
     fi
 
-    if command -v brew >/dev/null 2>&1; then
-        if ask_yes_no "Install/update Homebrew packages from Brewfile?"; then
-            if [ "$PLAN_MODE" = true ]; then
-                print_step "Would run: brew update"
-                print_step "Would run: brew bundle --file=\"$DOTFILES_DIR/Brewfile\""
-                print_success "Homebrew package install planned"
-            else
-                print_step "Updating Homebrew..."
-                brew update
-                print_step "Installing packages from Brewfile..."
-                brew bundle --file="$DOTFILES_DIR/Brewfile"
-                print_success "Homebrew packages installed"
-            fi
-        else
-            print_warning "Skipped Homebrew packages"
-        fi
-    else
+    if ! command -v brew >/dev/null 2>&1; then
         print_warning "Homebrew is not installed. Skipping package installation."
         print_info "Install Homebrew from https://brew.sh"
+        return 0
+    fi
+
+    if ask_yes_no "Install/update core Homebrew packages from Brewfile?"; then
+        if [ "$PLAN_MODE" = true ]; then
+            print_step "Would run: brew update"
+            print_step "Would run: brew bundle --file=\"$DOTFILES_DIR/Brewfile\""
+            print_success "Core Homebrew package install planned"
+        else
+            print_step "Updating Homebrew..."
+            brew update
+            print_step "Installing core packages from Brewfile..."
+            brew bundle --file="$DOTFILES_DIR/Brewfile"
+            print_success "Core Homebrew packages installed"
+        fi
+    else
+        print_warning "Skipped core Homebrew packages"
+    fi
+
+    # Optional profile: default No under --yes (keep CI/bootstrap light).
+    local install_optional=false
+    if [ "$WITH_OPTIONAL_BREW" = true ]; then
+        install_optional=true
+    elif [ "$AUTO_YES" = true ]; then
+        print_info "Skipping optional Brewfile.optional under --yes (pass --with-optional-brew to include)"
+    elif ask_yes_no "Install optional Brew packages (Brewfile.optional)?" "n"; then
+        install_optional=true
+    fi
+
+    if [ "$install_optional" = true ]; then
+        if [ ! -f "$DOTFILES_DIR/Brewfile.optional" ]; then
+            print_warning "Brewfile.optional not found; skipping optional packages"
+            return 0
+        fi
+        if [ "$PLAN_MODE" = true ]; then
+            print_step "Would run: brew bundle --file=\"$DOTFILES_DIR/Brewfile.optional\""
+            print_success "Optional Homebrew package install planned"
+        else
+            print_step "Installing optional packages from Brewfile.optional..."
+            brew bundle --file="$DOTFILES_DIR/Brewfile.optional"
+            print_success "Optional Homebrew packages installed"
+        fi
+    else
+        print_info "Optional packages skipped (brew bundle --file=~/dotfiles/Brewfile.optional later)"
     fi
 }
 
@@ -307,7 +347,8 @@ install_config_symlinks() {
 install_home_symlinks() {
     print_header "Step 4: Home Directory Symlinks"
 
-    echo "These symlinks set up git, shell, and editor files in your home directory."
+    echo "These symlinks set up git, shell, and related files in your home directory."
+    echo "Legacy Vim is optional (primary editor is Neovim + Ghostty)."
     echo ""
 
     while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
@@ -317,6 +358,27 @@ install_home_symlinks() {
             "$install_name" \
             "$description"
     done < <(managed_symlinks_for_group home)
+
+    # Legacy Vim: default No under --yes; opt in with --with-legacy-vim or interactive yes.
+    local install_legacy_vim=false
+    if [ "$WITH_LEGACY_VIM" = true ]; then
+        install_legacy_vim=true
+    elif [ "$AUTO_YES" = true ]; then
+        print_info "Skipping legacy Vim symlinks under --yes (pass --with-legacy-vim to include)"
+    elif ask_yes_no "Install legacy Vim runtime/config symlinks?" "n"; then
+        install_legacy_vim=true
+    fi
+
+    if [ "$install_legacy_vim" = true ]; then
+        print_header "Step 4b: Legacy Vim Symlinks"
+        while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
+            create_symlink \
+                "$DOTFILES_DIR/$source_rel" \
+                "$HOME/$target_rel" \
+                "$install_name" \
+                "$description"
+        done < <(managed_symlinks_for_group legacy)
+    fi
 }
 
 install_api_keys_template() {
@@ -388,7 +450,8 @@ print_summary() {
         echo "  2. Run 'doctor' to verify the installed state"
         echo "  3. Open Neovim to let LazyVim install plugins automatically"
         echo "  4. In tmux, press prefix + I to install tmux plugins"
-        echo "  5. Run 'brew-sync --check' to verify Brewfile is in sync"
+        echo "  5. Run 'brew-sync --check' to verify core Brewfile is in sync"
+        echo "  6. Optional apps: brew bundle --file=~/dotfiles/Brewfile.optional"
         echo ""
         print_success "Happy coding!"
     fi
