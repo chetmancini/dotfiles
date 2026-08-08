@@ -32,7 +32,7 @@ doctor --strict
 
 **Features:**
 - Verifies expected symlinks and config directories
-- Confirms custom oh-my-zsh theme wiring and TPM presence
+- Confirms zsh modules, theme file, and TPM presence
 - Runs lightweight repo health checks
 - Optionally checks key commands are installed
 

@@ -10,11 +10,11 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 
 ### Configuration Loading Flow
 
-1. `.zshrc` is the main entry point for shell configuration
-2. Sources only the needed pieces from `oh-my-zsh/`, which `install.sh` clones if missing
-3. Sources platform-specific configs (`mac_specific.sh` or `linux_specific.sh`)
-4. Sources `api_keys.sh` for environment variables (not tracked in git, see `api_keys.sh.template`)
-5. Initializes various tools at the end: fzf, zoxide, mise, etc.
+1. `.zshrc` is a thin orchestrator that resolves `DOTFILES_DIR` and sources modules from `zsh/`
+2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/completions), fun extras, then plugins last
+3. Platform modules source `mac_specific.sh` or `linux_specific.sh`
+4. Secrets modules source `api_keys.sh` / `api_keys_1password.sh` (gitignored; see templates)
+5. Plugins (autosuggestions, history-substring-search, syntax-highlighting) load from Homebrew share paths
 
 ### Homebrew Package Management
 
@@ -38,7 +38,6 @@ The `install.sh` script creates symlinks from this repository to home directory:
 - `~/dotfiles/.bash_profile` → `~/.bash_profile`
 - `~/dotfiles/.tmux.conf` → `~/.tmux.conf`
 - `~/dotfiles/.vimrc` → `~/.vimrc`
-- `~/dotfiles/chetmancini.zsh-theme` → `~/dotfiles/oh-my-zsh/custom/themes/chetmancini.zsh-theme`
 
 ### Git Configuration Structure
 
@@ -108,11 +107,12 @@ This repository includes configurations for:
 
 ## Important Files and Directories
 
-- `.zshrc` - Primary shell configuration with aliases, functions, and tool initialization
+- `.zshrc` - Thin shell orchestrator (sources `zsh/*.zsh`)
+- `zsh/` - Modular shell config (aliases, git helpers, tools, plugins)
 - `Brewfile` - Homebrew package manifest (formulae, casks, fonts)
 - `install.sh` - Setup script for new machines
 - `bin/doctor` - Installation verification script
-- `chetmancini.zsh-theme` - Custom oh-my-zsh theme
+- `chetmancini.zsh-theme` - Custom λ prompt theme
 - `bin/` - Custom utility scripts (extract, imgcat, murder, removeexif, brew-sync, etc.)
 - `nvim/` - LazyVim-based neovim configuration
 - `yazi/` - File browser configuration
@@ -150,10 +150,12 @@ LazyVim-based configuration located in `nvim/`:
 
 ## Notes for Modifications
 
-- The oh-my-zsh directory is a cloned dependency - don't edit files directly in it
+- New shell aliases go in `zsh/aliases.zsh` or `zsh/git.zsh`; new tools get `zsh/tools/<name>.zsh` plus an orchestrator entry in `.zshrc`
+- Plugins that wrap ZLE must load in `zsh/plugins.zsh` after custom widgets (syntax-highlighting last)
 - API keys go in `api_keys.sh` (not tracked) - use `api_keys.sh.template` as reference
 - When adding new tools, add them to `Brewfile` and run `brew bundle`
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
-- mise is the single runtime version manager (activated in `.zshrc`); see `mise/config.toml`
+- mise is the single runtime version manager (`zsh/tools/mise.zsh`); see `mise/config.toml`
+- Optional cleanup: remove a leftover `~/dotfiles/oh-my-zsh` clone after confirming the shell works
