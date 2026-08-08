@@ -127,11 +127,5 @@ function y() {
 	rm -f -- "$tmp"
 }
 
-# Lazy-load thefuck (saves ~100ms on shell startup)
-if command -v thefuck &> /dev/null; then
-  fuck() {
-    unset -f fuck
-    eval $(thefuck --alias)
-    fuck "$@"
-  }
-fi
+# thefuck removed from default shell (prefer zsh CORRECT + atuin history).
+# Re-enable: brew install thefuck && eval $(thefuck --alias)

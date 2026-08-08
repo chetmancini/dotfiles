@@ -1,6 +1,8 @@
 ##############################
-# Paths
+# Paths (core)
 ##############################
+# Core daily-driver PATH. Product-specific bins live in path.extra.zsh
+# (still existence-checked). Keep this list short and intentional.
 export BREW_PATH=/opt/homebrew/bin
 export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
 export CODE_DIR="$HOME/code"
@@ -12,14 +14,6 @@ export BUN_INSTALL="$HOME/.bun"
 export USR_LOCAL_HOME=/usr/local/bin
 export USR_LOCAL_SBIN=/usr/local/sbin
 export PERSONAL_BIN="$DOTFILES_DIR/bin"
-export MODULAR_HOME="$HOME/.modular"
-export LMSTUDIO_PATH="$HOME/.lmstudio/bin"
-export ZEROBREW_PATH="/opt/zerobrew/prefix/bin"
-export OPENCODE_PATH="$HOME/.opencode/bin"
-export LMSTUDIO_CACHE_PATH="$HOME/.cache/lm-studio/bin"
-export ANTIGRAVITY_PATH="$HOME/.antigravity/antigravity/bin"
-export TURSO_PATH="$HOME/.turso"
-export BROWSER_USE_PATH="$HOME/.browser-use/bin"
 export GROK_PATH="$HOME/.grok/bin"
 # Keep PATH unique when this file is sourced multiple times.
 typeset -U path PATH
@@ -34,29 +28,21 @@ path_add() {
     done
 }
 
-# Add paths in order (later entries have higher priority)
+# Core paths (later entries have higher priority — prepended first = lower priority)
 path_add \
-    "$LMSTUDIO_PATH" \
-    "$LMSTUDIO_CACHE_PATH" \
-    "$MODULAR_HOME/bin" \
     "$BREW_PATH" \
     "$PERSONAL_BIN" \
     "$USR_LOCAL_SBIN" \
     "$USR_LOCAL_HOME" \
-    "$ZEROBREW_PATH" \
     "$NPM_GLOBAL_BIN" \
     "$UV_PATH" \
     "$PNPM_HOME" \
     "$BUN_INSTALL/bin" \
     "$JAVA_HOME/bin" \
-    "$OPENCODE_PATH" \
-    "$ANTIGRAVITY_PATH" \
-    "$TURSO_PATH" \
-    "$BROWSER_USE_PATH" \
     "$GROK_PATH" \
     "$HOME/bin"
 
 export PATH
-# Source tool-managed env files after PATH is built (may set additional vars)
-[[ -f "$HOME/.turso/env" ]] && . "$HOME/.turso/env"
-export CLASSPATH=$HOME/lib/jars
+
+# Optional product/tool bins (LM Studio, Turso, IDE helpers, …)
+[[ -r "$DOTFILES_DIR/zsh/path.extra.zsh" ]] && source "$DOTFILES_DIR/zsh/path.extra.zsh"

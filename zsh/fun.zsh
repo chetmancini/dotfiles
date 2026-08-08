@@ -29,15 +29,15 @@ if [[ "$TERM_PROGRAM" == "kiro" ]] && command -v kiro &> /dev/null; then
 fi
 
 ##############################
-# Terminal Screensaver
+# Terminal Screensaver (opt-in)
 ##############################
-# cmatrix after 15 min of idle (900 seconds)
-if command -v cmatrix &> /dev/null; then
+# cmatrix after 15 min idle — enable with: export DOTFILES_CMATRIX_SCREENSAVER=1
+# Formula is optional (Brewfile.optional).
+if [[ -n "${DOTFILES_CMATRIX_SCREENSAVER:-}" ]] && command -v cmatrix &>/dev/null; then
   TMOUT=900
   TRAPALRM() {
-    # Only run if terminal is idle (no background jobs, no text in prompt)
     if [[ -z "$(jobs)" ]] && [[ -z "$BUFFER" ]]; then
-      cmatrix -s  # -s exits on any keypress
+      cmatrix -s
       zle reset-prompt 2>/dev/null
     fi
   }

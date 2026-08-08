@@ -13,6 +13,7 @@
 - **Depends on**: none
 - **Category**: direction
 - **Planned at**: commit `5d08aa5`, 2026-08-08
+- **Status note**: Implemented — core PATH vs `zsh/path.extra.zsh`; thefuck demoted; cmatrix opt-in
 
 ## Why this matters
 

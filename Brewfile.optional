@@ -17,7 +17,8 @@ brew "ack"                      # Grep-like tool for programmers
 brew "ast-grep"                 # Code search/refactor
 brew "semgrep"                  # Code analysis/search
 brew "cmake"                    # Cross-platform make
-brew "cmatrix"                  # Matrix screensaver (used by zsh/fun.zsh if present)
+brew "cmatrix"                  # Matrix screensaver (opt-in: DOTFILES_CMATRIX_SCREENSAVER=1)
+brew "thefuck"                  # Command correction (not loaded in zsh by default)
 brew "ffmpeg"                   # Media processing
 brew "gti"                      # Fun typo for git
 brew "imagemagick"              # Image tools

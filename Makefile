@@ -10,7 +10,7 @@ SHELLCHECK_FLAGS := --severity=warning -x -P bin
 SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cheatsheet bin/colortest bin/dashboard bin/doctor bin/dot bin/dtgz bin/extract bin/flushdns bin/git-rm-gone bin/git-standup bin/good-morning bin/imgcat bin/killbyname bin/lib/helpers.sh bin/lib/symlinks.sh bin/my_ip bin/note bin/portpid bin/prettypath bin/removeexif bin/repo-report bin/running bin/server bin/update-everything install.sh mac_dev_install.sh
 TOML_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -path './yazi/plugins' -prune -o -type f -name '*.toml' -print | sort | sed 's,^\./,,')
 ZSH_FILES := .zshrc chetmancini.zsh-theme forge-zsh.sh linux_specific.sh mac_specific.sh \
-	zsh/options.zsh zsh/path.zsh zsh/platform.zsh zsh/theme.zsh zsh/aliases.zsh \
+	zsh/options.zsh zsh/path.zsh zsh/path.extra.zsh zsh/platform.zsh zsh/theme.zsh zsh/aliases.zsh \
 	zsh/git.zsh zsh/functions.zsh zsh/secrets.zsh zsh/plugins.zsh zsh/fun.zsh \
 	zsh/tools/fzf.zsh zsh/tools/zoxide.zsh zsh/tools/mise.zsh \
 	zsh/tools/direnv.zsh zsh/tools/atuin.zsh zsh/tools/completions.zsh

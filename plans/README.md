@@ -25,7 +25,7 @@ when done.
 | 009 | Doctor trusts relative symlinks; TPM soft | P1 | S | — | DONE |
 | 010 | Cheatsheet scans `zsh/`; nvim update via vim.pack | P1 | S | — | DONE |
 | 011 | Drop oh-my-zsh from CI (+ optional local clone) | P2 | S | 002 | DONE |
-| 012 | Slim shell PATH / toys | P3 | S | — | TODO (deferred) |
+| 012 | Slim shell PATH / toys | P3 | S | — | DONE |
 | 013 | `dot install` + install characterization | P3 | M | 006; 009 helpful | TODO (deferred) |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED` (reason)

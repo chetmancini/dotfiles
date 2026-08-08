@@ -106,7 +106,7 @@ brew "sqlite"                   # Self-contained database
 brew "bash-completion"          # Bash programmable completion
 brew "mas"                      # Mac App Store CLI
 brew "tldr"                     # Simplified man pages
-brew "thefuck"                  # Command correction
+# thefuck: optional — see Brewfile.optional (zsh CORRECT + atuin cover most typos)
 
 #==============================================================================
 # Casks - Core
