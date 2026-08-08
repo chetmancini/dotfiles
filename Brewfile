@@ -59,6 +59,7 @@ brew "xz"                       # File compression
 brew "yazi"                     # File browser
 brew "zoxide"                   # Smart cd
 brew "zsh-autosuggestions"      # Fish-style suggestions as you type
+brew "zsh-history-substring-search"  # Up/down substring history (replaces OMZ plugin)
 brew "zsh-syntax-highlighting"  # Command syntax coloring
 
 #==============================================================================

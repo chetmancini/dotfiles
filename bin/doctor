@@ -132,11 +132,14 @@ run_dependency_checks() {
     print_section "Checking bootstrap dependencies"
     echo ""
 
-    check_path_exists "Oh My Zsh checkout" "$DOTFILES_DIR/oh-my-zsh"
-    check_symlink \
-        "Oh My Zsh theme" \
-        "$DOTFILES_DIR/oh-my-zsh/custom/themes/chetmancini.zsh-theme" \
-        "$DOTFILES_DIR/chetmancini.zsh-theme"
+    check_path_exists "zsh modules directory" "$DOTFILES_DIR/zsh"
+    check_path_exists "zsh theme" "$DOTFILES_DIR/chetmancini.zsh-theme"
+    for module in \
+        options path platform theme aliases git functions secrets \
+        plugins fun \
+        tools/fzf tools/zoxide tools/mise tools/completions; do
+        check_path_exists "zsh module $module" "$DOTFILES_DIR/zsh/${module}.zsh"
+    done
     check_path_exists "TPM" "$HOME/.tmux/plugins/tpm"
 
     if [ -f "$DOTFILES_DIR/api_keys.sh" ] || [ -f "$DOTFILES_DIR/api_keys_1password.sh" ]; then

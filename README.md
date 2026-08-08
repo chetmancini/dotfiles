@@ -23,7 +23,7 @@ doctor
 
 | Tool | Config | Description |
 |------|--------|-------------|
-| zsh | `.zshrc` | Shell with oh-my-zsh, aliases, functions |
+| zsh | `.zshrc` + `zsh/` | Modular shell (aliases, functions, tools) |
 | neovim | `nvim/` | LazyVim-based config |
 | git | `.gitconfig` | Aliases, delta pager, conventional commits |
 | tmux | `.tmux.conf` | Terminal multiplexer |
@@ -61,8 +61,9 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 ## Key Features
 
 ### Shell (zsh)
+- Thin `.zshrc` orchestrator sourcing modules under `zsh/`
 - Custom theme with git status (`chetmancini.zsh-theme`)
-- Lightweight shell startup that sources only the needed oh-my-zsh components
+- Homebrew zsh plugins: autosuggestions, history-substring-search, syntax-highlighting
 - Vi mode with visual cursor indicator
 - **mise** for Node/Python versions (see `mise/config.toml`); **uv** / **pnpm** / **bun** for packages
 - zoxide for smart directory jumping
@@ -70,7 +71,7 @@ brew bundle cleanup --file=~/dotfiles/Brewfile
 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, etc.)
-- `doctor` verifies symlinks, theme wiring, TPM, and repo health checks
+- `doctor` verifies symlinks, zsh modules, TPM, and repo health checks
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
@@ -95,24 +96,24 @@ fzfp        # fzf with bat preview
 2. Run `brew bundle`
 3. If config needed, add symlink to `install.sh`
 4. Add validation to `doctor`
-5. Add any shell integration to `.zshrc`
+5. Add any shell integration under `zsh/` (and one line in `.zshrc` if a new module)
 
 ## Structure
 
 ```
 ~/dotfiles/
-├── .zshrc              # Main shell config
+├── .zshrc              # Thin shell orchestrator
+├── zsh/                # Modular shell config (aliases, tools, plugins)
 ├── .gitconfig          # Git config (uses conditional includes)
 ├── .tmux.conf          # tmux config
 ├── Brewfile            # Homebrew packages
 ├── install.sh          # Setup script
-├── chetmancini.zsh-theme  # Custom oh-my-zsh theme
+├── chetmancini.zsh-theme  # Custom λ theme
 ├── bin/                # Custom scripts (see bin/README.md)
 ├── nvim/               # Neovim (LazyVim)
 ├── vim/                # Legacy Vim runtime
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
-├── oh-my-zsh/          # Cloned install dependency
 └── api_keys.sh         # API keys (gitignored)
 ```
 

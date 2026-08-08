@@ -13,7 +13,6 @@ BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 source "$SCRIPT_DIR/bin/lib/symlinks.sh"
 
 AUTO_YES=false
-SKIP_OH_MY_ZSH=false
 SKIP_TPM=false
 SKIP_BREW=false
 SKIP_API_KEYS=false
@@ -42,7 +41,6 @@ Install dotfiles into the current HOME directory.
 Options:
   --yes              Run non-interactively and accept all prompts
   --plan, --dry-run  Preview changes without modifying files
-  --skip-oh-my-zsh   Skip cloning oh-my-zsh and theme installation
   --skip-tpm         Skip tmux plugin manager installation
   --skip-brew        Skip Homebrew package installation
   --skip-api-keys    Skip creating api_keys.sh from template
@@ -60,10 +58,6 @@ parse_args() {
                 ;;
             --plan | --dry-run)
                 PLAN_MODE=true
-                shift
-                ;;
-            --skip-oh-my-zsh)
-                SKIP_OH_MY_ZSH=true
                 shift
                 ;;
             --skip-tpm)
@@ -221,47 +215,8 @@ create_symlink() {
     fi
 }
 
-install_oh_my_zsh() {
-    print_header "Step 1: Oh My Zsh"
-
-    echo "Oh My Zsh is a framework for managing your Zsh configuration."
-    echo "It provides helpful functions, plugins, and themes."
-    echo ""
-
-    if [ "$SKIP_OH_MY_ZSH" = true ]; then
-        print_warning "Skipping Oh My Zsh installation by request"
-        return 0
-    fi
-
-    if [ -d "$DOTFILES_DIR/oh-my-zsh" ]; then
-        print_success "Oh My Zsh is already installed"
-    else
-        if ask_yes_no "Clone Oh My Zsh repository?"; then
-            if [ "$PLAN_MODE" = true ]; then
-                print_step "Would clone oh-my-zsh into $DOTFILES_DIR/oh-my-zsh"
-                print_success "Oh My Zsh clone planned"
-            else
-                print_step "Cloning oh-my-zsh..."
-                git clone https://github.com/ohmyzsh/ohmyzsh.git "$DOTFILES_DIR/oh-my-zsh"
-                print_success "Oh My Zsh cloned successfully"
-            fi
-        else
-            print_warning "Skipped Oh My Zsh installation"
-            return 0
-        fi
-    fi
-
-    print_header "Step 2: Oh My Zsh Theme"
-
-    create_symlink \
-        "$DOTFILES_DIR/chetmancini.zsh-theme" \
-        "$DOTFILES_DIR/oh-my-zsh/custom/themes/chetmancini.zsh-theme" \
-        "Chetmancini Theme" \
-        "Custom oh-my-zsh theme used by .zshrc for prompt and git status"
-}
-
 install_tpm() {
-    print_header "Step 3: Tmux Plugin Manager"
+    print_header "Step 1: Tmux Plugin Manager"
 
     echo "TPM manages tmux plugins like tmux-resurrect (session save/restore)"
     echo "and tmux-continuum (automatic session persistence across reboots)."
@@ -293,7 +248,7 @@ install_tpm() {
 }
 
 install_homebrew() {
-    print_header "Step 4: Homebrew Packages"
+    print_header "Step 2: Homebrew Packages"
 
     echo "The Brewfile contains a list of CLI tools, applications, and fonts"
     echo "that will be installed via Homebrew."
@@ -327,7 +282,7 @@ install_homebrew() {
 }
 
 install_config_symlinks() {
-    print_header "Step 5: Config Directory Symlinks"
+    print_header "Step 3: Config Directory Symlinks"
 
     echo "These symlinks set up application configurations in ~/.config/"
     echo ""
@@ -350,7 +305,7 @@ install_config_symlinks() {
 }
 
 install_home_symlinks() {
-    print_header "Step 6: Home Directory Symlinks"
+    print_header "Step 4: Home Directory Symlinks"
 
     echo "These symlinks set up git, shell, and editor files in your home directory."
     echo ""
@@ -365,7 +320,7 @@ install_home_symlinks() {
 }
 
 install_api_keys_template() {
-    print_header "Step 7: API Keys Setup"
+    print_header "Step 5: API Keys Setup"
 
     echo "The api_keys.sh file stores environment variables and API keys."
     echo "This file is gitignored to keep secrets out of version control."
@@ -472,7 +427,6 @@ if ! ask_yes_no "Ready to begin?"; then
     exit 0
 fi
 
-install_oh_my_zsh
 install_tpm
 install_homebrew
 install_config_symlinks

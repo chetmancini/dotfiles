@@ -16,5 +16,6 @@ carta_specific.sh
 norm_specific.sh
 api_keys.sh
 api_keys_1password.sh
+# legacy clone path; no longer installed by install.sh
 /.oh-my-zsh
 oh-my-zsh
