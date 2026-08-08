@@ -6,6 +6,7 @@ set -euo pipefail
 #
 # Usage:
 #   dot help
+#   dot install --plan --yes --skip-brew
 #   dot doctor --skip-tools
 #   dot brew-sync --help
 #   dot update
@@ -17,11 +18,15 @@ while [ -L "$SCRIPT_PATH" ]; do
     [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
 done
 DOTFILES_BIN="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+# Repo root (parent of bin/), resolved after symlink chase
+DOTFILES_DIR="$(cd -P "$DOTFILES_BIN/.." && pwd)"
 
 # Primary commands shown first in help (name -> description).
 # Alias "update" dispatches to update-everything.
+# "install" runs $DOTFILES_DIR/install.sh (not under bin/).
 primary_description() {
     case "$1" in
+        install) echo "Run install.sh (bootstrap / re-link; pass flags through)" ;;
         doctor) echo "Verify dotfiles installation health" ;;
         brew-sync) echo "Check and sync Brewfile with installed packages" ;;
         update | update-everything) echo "Run system/package update routine" ;;
@@ -38,12 +43,13 @@ Usage: dot <command> [args...]
 
 Run utilities from ${DOTFILES_BIN}.
 Scripts remain available directly on PATH (e.g. doctor, brew-sync).
+Repo root: ${DOTFILES_DIR}
 
 Primary commands:
 EOF
 
     local name desc
-    for name in doctor brew-sync update good-morning cheatsheet dashboard; do
+    for name in install doctor brew-sync update good-morning cheatsheet dashboard; do
         desc="$(primary_description "$name")"
         printf "  %-18s %s\n" "$name" "$desc"
     done
@@ -64,11 +70,26 @@ EOF
 
 Examples:
   dot help
+  dot install --plan --yes --skip-brew
   dot doctor --skip-tools
   dot brew-sync --check
   dot update
 
 EOF
+}
+
+# Run install.sh from the repo root with remaining args.
+run_install() {
+    local installer="$DOTFILES_DIR/install.sh"
+    if [ ! -f "$installer" ]; then
+        echo "dot: install.sh not found at $installer" >&2
+        exit 1
+    fi
+    if [ ! -x "$installer" ]; then
+        echo "dot: install.sh is not executable: $installer" >&2
+        exit 1
+    fi
+    exec "$installer" "$@"
 }
 
 # Extract a one-line description from a script's leading comments.
@@ -184,6 +205,10 @@ main() {
         help | -h | --help)
             print_help
             exit 0
+            ;;
+        install)
+            # Bootstrap lives at repo root, not under bin/
+            run_install "$@"
             ;;
     esac
 

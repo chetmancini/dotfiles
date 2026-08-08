@@ -7,6 +7,7 @@ available directly on PATH (`doctor`, `brew-sync`, …).
 
 ```bash
 dot help
+dot install --plan --yes --skip-brew   # → ../install.sh
 dot doctor --skip-tools
 dot brew-sync
 dot update          # → update-everything
@@ -38,13 +39,15 @@ script names still work.
 **Usage:**
 ```bash
 dot help
+dot install --plan --yes --skip-brew
 dot doctor --skip-tools
 dot brew-sync --check
 dot update
 ```
 
 **Features:**
-- Primary commands with descriptions (`doctor`, `brew-sync`, `update`, …)
+- Primary commands with descriptions (`install`, `doctor`, `brew-sync`, `update`, …)
+- `dot install` runs repo-root `install.sh` with flags passed through
 - Auto-lists other executables in `bin/`
 - Rejects path traversal (`dot ../.zshrc` fails)
 - Passes through arguments and exit codes

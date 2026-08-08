@@ -12,6 +12,7 @@
 - **Depends on**: 006 done; 009 recommended (green doctor)
 - **Category**: direction
 - **Planned at**: commit `5d08aa5`, 2026-08-08
+- **Status note**: Implemented — `dot install` + `scripts/test-install-smoke.sh` / `make install-smoke`
 
 ## Why this matters
 

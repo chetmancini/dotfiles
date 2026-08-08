@@ -26,7 +26,7 @@ when done.
 | 010 | Cheatsheet scans `zsh/`; nvim update via vim.pack | P1 | S | — | DONE |
 | 011 | Drop oh-my-zsh from CI (+ optional local clone) | P2 | S | 002 | DONE |
 | 012 | Slim shell PATH / toys | P3 | S | — | DONE |
-| 013 | `dot install` + install characterization | P3 | M | 006; 009 helpful | TODO (deferred) |
+| 013 | `dot install` + install characterization | P3 | M | 006; 009 helpful | DONE |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED` (reason)
 

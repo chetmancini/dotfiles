@@ -68,3 +68,6 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/home
         run: bin/doctor --skip-tools --strict
+
+      - name: Characterization smoke (dot install + temp HOME)
+        run: make install-smoke
