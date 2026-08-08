@@ -36,9 +36,19 @@ Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED`
 - **009 before trusting doctor in CI/local** for further bootstrap work.
 - **010** independent of 009; can parallel.
 - **011** independent; safe after 002.
-- **012 / 013** logged for later; do not start without operator go-ahead.
+- **012 / 013** completed; bodies under `plans/done/`.
+- **007** is the only active open plan file in `plans/`.
 
-## Wave 2 parallelism
+## Layout
+
+```
+plans/
+  README.md                 # this index
+  007-agent-mcp-layout.md   # open
+  done/                     # completed plan bodies (001–006, 008–013)
+```
+
+## Wave 2 parallelism (historical)
 
 1. **Trust & truth**: 009 ∥ 010 ∥ 011  
 2. **Later polish**: 012, 013  
@@ -55,12 +65,12 @@ Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED`
 ## How to execute a plan
 
 ```bash
-git checkout -b advisor/009-doctor-symlink-trust   # use plan’s branch name
-# Follow plans/009-….md step by step
+git checkout -b advisor/007-agent-mcp-layout   # use plan’s branch name
+# Follow plans/007-….md step by step
 make check
-# Update this README status row when done
+# When done: move plan to plans/done/ and mark DONE in this README
 ```
 
 Do **not** push or open a PR unless the operator asks.
 
-Completed wave-1 plan bodies are archived in `plans/done` (rolling last archive).
+Completed plan bodies live in **`plans/done/`** (one file per plan).
