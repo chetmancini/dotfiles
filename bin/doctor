@@ -142,9 +142,35 @@ run_dependency_checks() {
     done
     check_path_exists "TPM" "$HOME/.tmux/plugins/tpm"
 
-    if [ -f "$DOTFILES_DIR/api_keys.sh" ] || [ -f "$DOTFILES_DIR/api_keys_1password.sh" ]; then
-        print_success "API key bootstrap file present"
-    else
+    # Secrets: prefer 1Password-backed file. Never read or print file contents.
+    local has_plaintext=false
+    local has_1p=false
+    [ -f "$DOTFILES_DIR/api_keys.sh" ] && has_plaintext=true
+    [ -f "$DOTFILES_DIR/api_keys_1password.sh" ] && has_1p=true
+
+    if [ "$has_1p" = true ]; then
+        print_success "1Password secrets file present (api_keys_1password.sh)"
+        if command -v op >/dev/null 2>&1; then
+            print_success "Command available: op"
+            if op whoami >/dev/null 2>&1; then
+                print_success "1Password CLI session active (op whoami)"
+            else
+                record_warning "op is installed but not signed in (unlock 1Password / op signin)"
+            fi
+        else
+            record_warning "api_keys_1password.sh present but op (1Password CLI) is missing"
+        fi
+    fi
+
+    if [ "$has_plaintext" = true ]; then
+        if [ "$has_1p" = true ]; then
+            print_info "api_keys.sh also present; 1Password file loads second and can override"
+        else
+            record_warning "Only plaintext api_keys.sh present — prefer api_keys_1password.sh"
+        fi
+    fi
+
+    if [ "$has_plaintext" = false ] && [ "$has_1p" = false ]; then
         record_warning "No api_keys.sh or api_keys_1password.sh present"
     fi
 

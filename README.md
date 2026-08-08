@@ -88,6 +88,13 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
+### Secrets (1Password preferred)
+- **Preferred:** copy `api_keys_1password.sh.template` → `api_keys_1password.sh` (gitignored), set `op://` item refs via `op_secret`
+- Install 1Password CLI (`1password-cli` cask), enable app **Settings → Developer → Integrate with 1Password CLI**, unlock the app, check `op whoami`
+- **Bootstrap only:** `api_keys.sh` from `api_keys.sh.template` for machines without 1Password
+- Shell loads plaintext first, then 1Password (so 1P can override during migration) — see `zsh/secrets.zsh`
+- Never commit real keys; never put secrets in tracked templates
+
 ### Git
 - Conventional commit aliases: `git cc <type>`, `git feat`, `git fix`, `git chore`, etc.
 - Conditional includes for work vs personal repos
@@ -131,7 +138,9 @@ fzfp        # fzf with bat preview
 ├── ghostty/            # Ghostty terminal
 ├── plans/              # Implementation plans
 ├── docs/               # Extended documentation
-└── api_keys.sh         # API keys (gitignored)
+├── api_keys_1password.sh.template  # Preferred secrets template
+├── api_keys.sh.template            # Bootstrap plaintext template
+└── api_keys*.sh                    # Live secrets (gitignored)
 ```
 
 **Legacy**: `vim/` and `iterm/` remain in the repo for reference but are not required. Primary stack is Ghostty + Neovim. Pass `--with-legacy-vim` to symlink Vim config.

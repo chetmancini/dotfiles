@@ -1,6 +1,14 @@
+# Bootstrap / machines without 1Password ONLY.
+# Prefer api_keys_1password.sh (see api_keys_1password.sh.template).
+#
+# Copy this file to api_keys.sh only when you cannot use the 1Password CLI.
+# api_keys.sh is gitignored — never commit the real file.
+# During migration, api_keys_1password.sh is sourced after this file so 1P can override.
+
+# Placeholder names only — replace empty values in the gitignored copy, not here.
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-LANGCHAIN_API_KEY="<your-api-key>"
+LANGCHAIN_API_KEY=
 
 OPENAI_API_KEY=
 

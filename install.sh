@@ -47,7 +47,7 @@ Options:
   --skip-brew           Skip Homebrew package installation
   --with-optional-brew  Also install Brewfile.optional (default off under --yes)
   --with-legacy-vim     Symlink legacy Vim runtime/config (default off under --yes)
-  --skip-api-keys       Skip creating api_keys.sh from template
+  --skip-api-keys       Skip creating secrets stubs from templates
   --no-clear            Do not clear the screen before starting
   -h, --help            Show this help message
 EOF
@@ -382,35 +382,88 @@ install_home_symlinks() {
 }
 
 install_api_keys_template() {
-    print_header "Step 5: API Keys Setup"
+    print_header "Step 5: Secrets Setup (1Password preferred)"
 
-    echo "The api_keys.sh file stores environment variables and API keys."
-    echo "This file is gitignored to keep secrets out of version control."
+    echo "Secrets are gitignored. Prefer 1Password CLI (api_keys_1password.sh)."
+    echo "Plaintext api_keys.sh is bootstrap-only for machines without 1Password."
     echo ""
 
     if [ "$SKIP_API_KEYS" = true ]; then
-        print_warning "Skipping api_keys.sh creation by request"
+        print_warning "Skipping secrets template setup by request"
         return 0
     fi
 
-    if [ -f "$DOTFILES_DIR/api_keys.sh" ]; then
-        print_success "api_keys.sh already exists"
-    elif [ -f "$DOTFILES_DIR/api_keys.sh.template" ]; then
-        if ask_yes_no "Create api_keys.sh from template?"; then
+    local has_plaintext=false
+    local has_1p=false
+    [ -f "$DOTFILES_DIR/api_keys.sh" ] && has_plaintext=true
+    [ -f "$DOTFILES_DIR/api_keys_1password.sh" ] && has_1p=true
+
+    if [ "$has_1p" = true ]; then
+        print_success "api_keys_1password.sh already exists (preferred)"
+    fi
+    if [ "$has_plaintext" = true ]; then
+        print_info "api_keys.sh present (bootstrap/plaintext path)"
+        if [ "$has_1p" = true ]; then
+            print_info "Both files exist: 1Password file loads second and can override"
+        fi
+    fi
+
+    # Preferred: 1Password-backed stub
+    if [ "$has_1p" = false ] && [ -f "$DOTFILES_DIR/api_keys_1password.sh.template" ]; then
+        local create_1p=false
+        if [ "$AUTO_YES" = true ]; then
+            # Headless default: 1Password stub (not plaintext)
+            create_1p=true
+            print_info "Creating api_keys_1password.sh from template (--yes default)"
+        elif ask_yes_no "Create preferred api_keys_1password.sh from template?" "y"; then
+            create_1p=true
+        fi
+
+        if [ "$create_1p" = true ]; then
             if [ "$PLAN_MODE" = true ]; then
-                print_step "Would copy api_keys.sh.template to api_keys.sh"
-                print_success "api_keys.sh creation planned"
-                print_info "You would then edit $DOTFILES_DIR/api_keys.sh to add your API keys"
+                print_step "Would copy api_keys_1password.sh.template → api_keys_1password.sh"
+                print_success "1Password secrets stub planned"
+            else
+                cp "$DOTFILES_DIR/api_keys_1password.sh.template" "$DOTFILES_DIR/api_keys_1password.sh"
+                print_success "Created api_keys_1password.sh from template"
+            fi
+            print_info "Next: enable 1Password app CLI integration, unlock app, edit op:// refs"
+            print_info "Check session with: op whoami"
+            has_1p=true
+        else
+            print_warning "Skipped api_keys_1password.sh creation"
+        fi
+    elif [ "$has_1p" = false ]; then
+        print_warning "No api_keys_1password.sh.template found"
+    fi
+
+    # Fallback: plaintext bootstrap (interactive only unless neither 1P path possible)
+    if [ "$has_plaintext" = false ] && [ -f "$DOTFILES_DIR/api_keys.sh.template" ]; then
+        local create_plain=false
+        if [ "$AUTO_YES" = true ]; then
+            # Under --yes we already prefer 1P; only create plaintext if 1P stub missing
+            if [ "$has_1p" = false ]; then
+                create_plain=true
+                print_info "Creating bootstrap api_keys.sh (--yes, no 1Password stub available)"
+            fi
+        elif [ "$has_1p" = true ]; then
+            if ask_yes_no "Also create bootstrap api_keys.sh (plaintext, not recommended)?" "n"; then
+                create_plain=true
+            fi
+        elif ask_yes_no "Create bootstrap api_keys.sh from template (no 1Password)?" "n"; then
+            create_plain=true
+        fi
+
+        if [ "$create_plain" = true ]; then
+            if [ "$PLAN_MODE" = true ]; then
+                print_step "Would copy api_keys.sh.template → api_keys.sh"
+                print_success "Plaintext secrets stub planned"
             else
                 cp "$DOTFILES_DIR/api_keys.sh.template" "$DOTFILES_DIR/api_keys.sh"
                 print_success "Created api_keys.sh from template"
-                print_info "Edit $DOTFILES_DIR/api_keys.sh to add your API keys"
+                print_info "Prefer migrating to api_keys_1password.sh when possible"
             fi
-        else
-            print_warning "Skipped api_keys.sh creation"
         fi
-    else
-        print_warning "No api_keys.sh.template found"
     fi
 }
 

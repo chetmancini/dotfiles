@@ -1,4 +1,4 @@
-# Plan 006: Add a `dot` CLI dispatcher for `bin/`
+# Plan 003: 1Password-native secrets loading
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -7,151 +7,227 @@
 > in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a52b4b5..HEAD -- bin/ Makefile install.sh README.md bin/README.md`
+> `git diff --stat a52b4b5..HEAD -- api_keys.sh.template api_keys_1password.sh.template .zshrc install.sh bin/doctor README.md CLAUDE.md`
+> Never print or commit real secret values. Reference paths and variable **names** only.
 
 ## Status
 
-- **Priority**: P2
+- **Priority**: P1
 - **Effort**: M
-- **Risk**: LOW
-- **Depends on**: none
-- **Category**: dx
+- **Risk**: MED (auth UX / missing `op` session)
+- **Depends on**: none (independent of 001/002; if 002 landed, edit `zsh/secrets.zsh` instead of `.zshrc`)
+- **Category**: security
 - **Planned at**: commit `a52b4b5`, 2026-08-07
 
 ## Why this matters
 
-`bin/` has many useful tools (`doctor`, `brew-sync`, `update-everything`,
-`good-morning`, …) but discovery is weak unless you read `bin/README.md`. A
-single `dot` entrypoint (`dot doctor`, `dot brew-sync`, `dot help`) matches
-modern CLI UX and gives a place for shared flags later without renaming every
-script.
+Secrets are loaded by sourcing `api_keys.sh` (plain exports) and optionally
+`api_keys_1password.sh`. The 1Password template exists but is example-only; the
+install path still pushes people toward a plaintext `api_keys.sh`. Long-lived
+API keys in every interactive shell increase exposure (shell history, process
+environments, accidental `env` dumps, backups).
+
+This plan makes **1Password the preferred path**, keeps a narrow plaintext
+escape hatch for bootstrap/non-1P machines, avoids putting secret values in the
+repo, and documents `op` session requirements.
 
 ## Current state
 
-- `PERSONAL_BIN="$DOTFILES_DIR/bin"` on PATH via `.zshrc` `path_add`
-- Scripts are standalone executables; some use `bin/lib/helpers.sh`
-- `bin/README.md` documents a subset
-- No top-level `dot` command
+```zsh
+# .zshrc (~335–339)
+[ -f "$DOTFILES_DIR/api_keys.sh" ] && source "$DOTFILES_DIR/api_keys.sh"
+[ -f "$DOTFILES_DIR/api_keys_1password.sh" ] && source "$DOTFILES_DIR/api_keys_1password.sh"
+```
+
+```gitignore
+api_keys.sh
+api_keys_1password.sh
+```
+
+- `api_keys.sh.template` — sample `LANGCHAIN_*`, `OPENAI_API_KEY`, `TAVILY_API_KEY`
+- `api_keys_1password.sh.template` — defines `op_secret` helper + commented examples
+- `Brewfile` — `cask "1password-cli"`
+- `install.sh` — `install_api_keys_template` copies **only** `api_keys.sh.template` → `api_keys.sh`
+
+**Security rules for this plan**: never write real keys into templates, commits,
+plan files, or command output. If you encounter a live `api_keys.sh` while
+testing, do not `cat` it into logs.
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| Check | `make check` | exit 0 |
-| Shellcheck | `shellcheck bin/dot` (once added to Makefile list) | exit 0 |
-| Help | `dot help` or `bin/dot help` | lists subcommands |
-| Dispatch | `dot doctor --skip-tools` | same as `doctor --skip-tools` |
+| Lint | `make check` | exit 0 |
+| op present | `command -v op` | path to op |
+| op auth (operator) | `op whoami` | signed-in account; if fails, document offline mode |
+| Zsh parse | `zsh -n` on touched shell files | exit 0 |
+| Doctor | `bin/doctor` | warns if no secrets file; does not fail closed on missing op |
 
 ## Scope
 
 **In scope**:
-- New `bin/dot` dispatcher script
-- `Makefile` `SHELLCHECK_FILES` include `bin/dot`
-- `bin/README.md` + root `README.md` short mention
-- Optional: `bin/lib/helpers.sh` only if shared arg parsing is tiny and reused
-- Optional thin zsh alias `alias dot=...` unnecessary if `bin` on PATH
+- `api_keys_1password.sh.template` (primary)
+- `api_keys.sh.template` (clarify bootstrap-only)
+- `.zshrc` **or** `zsh/secrets.zsh` if plan 002 merged
+- `install.sh` api-keys install flow
+- `bin/doctor` secrets checks (presence + optional `op` health)
+- `README.md` / `CLAUDE.md` short secrets section
+- Optional: `docs/secrets.md` **only if** README would become too long (prefer one new doc)
 
 **Out of scope**:
-- Rewriting all bin scripts into subcommands of one file
-- Removing direct `doctor` / `brew-sync` executables (keep both: direct and via `dot`)
-- Ruby/Python rewrites
+- Storing or rotating the operator’s real vault items
+- AWS credential process deep integration (may mention `op` plugin as optional)
+- Changing mcp.json tokens
+- Committing `api_keys.sh` or `api_keys_1password.sh`
 
 ## Git workflow
 
-- Branch: `advisor/006-dot-cli`
-- Commit: `feat: add dot CLI dispatcher`
+- Branch: `advisor/003-1password-secrets`
+- Commit style: `feat: prefer 1Password for API keys`, `docs: secrets loading`
 - Do NOT push/PR unless asked
 
 ## Steps
 
-### Step 1: Design subcommand map
+### Step 1: Drift check + confirm templates
 
-Map:
+```bash
+test -f api_keys.sh.template && test -f api_keys_1password.sh.template
+# Ensure real secret files are gitignored
+git check-ignore -v api_keys.sh api_keys_1password.sh
+```
 
-| Subcommand | Invokes |
-|------------|---------|
-| `help` / `--help` / no args | print help |
-| `doctor` | `bin/doctor` |
-| `brew-sync` | `bin/brew-sync` |
-| `update` | `bin/update-everything` |
-| `good-morning` | `bin/good-morning` |
-| `cheatsheet` | `bin/cheatsheet` |
-| … | auto-discover other executables in `bin/` that are not `dot` itself and not under `lib/` |
+**Verify**: both templates tracked; both live files ignored.
 
-**Policy**:
+### Step 2: Harden `api_keys_1password.sh.template`
 
-- Prefer **explicit** allowlist for first-class commands with descriptions
-- Plus **auto-list** any other executable files in `bin/` (not directories, not `lib/`, not `*.py` unless intentional) as secondary commands
+Rewrite the template to be **ready to copy** with safer defaults:
 
-### Step 2: Implement `bin/dot`
+1. Keep `op_secret` but make it:
+   - no-op with empty output if `op` missing or not signed in
+   - optional one-time stderr warning (rate-limited or only if `DOTFILES_DEBUG=1`)
+2. Prefer documenting **`op://Vault/Item/field`** refs clearly.
+3. Add a header comment: “Copy to `api_keys_1password.sh` (gitignored). Prefer this over `api_keys.sh`.”
+4. Add optional pattern for lazy export if appropriate — **only if simple**:
 
-Requirements:
+```bash
+# Example pattern (illustrative — put real item paths in the gitignored copy only):
+# export OPENAI_API_KEY=$(op_secret "Private/OpenAI/credential")
+```
 
-- `#!/usr/bin/env bash` and `set -euo pipefail`
-- Resolve `DOTFILES_BIN` from script location
-- `dot <cmd> [args...]` → `exec "$DOTFILES_BIN/<cmd>" "$@"` after validating cmd is safe:
-  - no path separators in `<cmd>`
-  - target is executable regular file inside `DOTFILES_BIN`
-  - reject `lib` and hidden names
-- `dot help` prints formatted list (name + first `#` description line or static map)
-- Unknown command → stderr message + exit 1
-- Pass through exit codes from subcommands
+5. Document alternative: `op run --env-file=... -- <command>` for one-shot commands
+   without exporting into the parent shell (comment block is enough).
 
-Exemplar patterns: see `bin/doctor` for helpers usage; keep `dot` dependency-light.
+6. **Do not** add real vault paths that look like production secrets from the operator’s machine into the tracked template beyond the existing Private/Service examples.
+
+**Verify**: `bash -n api_keys_1password.sh.template` or `zsh -n` as appropriate; file contains `op_secret` and no long random-looking tokens.
+
+### Step 3: Demote `api_keys.sh.template`
+
+Update header to say:
+
+- Bootstrap / machines without 1Password only
+- Prefer `api_keys_1password.sh`
+- Never commit the real file
+
+Keep placeholder variable names; empty values OK.
+
+**Verify**: first 15 lines mention bootstrap / 1Password preference.
+
+### Step 4: Install flow prefers 1Password template
+
+In `install.sh` `install_api_keys_template` (or successor):
+
+1. If neither live file exists, offer:
+   - **Preferred**: copy `api_keys_1password.sh.template` → `api_keys_1password.sh`
+   - **Fallback**: copy `api_keys.sh.template` → `api_keys.sh`
+2. In `--yes` headless mode: create **1Password** stub by default (not plaintext), unless `--skip-api-keys`.
+3. Print next steps: enable 1Password CLI integration; run `op signin`; edit refs.
 
 **Verify**:
 
 ```bash
-chmod +x bin/dot
-bin/dot help | head -40
-bin/dot doctor --skip-tools
-bin/dot nosuchcommand; test $? -ne 0
+./install.sh --plan --skip-brew --skip-oh-my-zsh 2>&1 | rg -i 'api.key|1password|op' || true
+# Plan mode should mention 1Password path
 ```
 
-### Step 3: ShellCheck + Makefile
+(Adjust `--skip-oh-my-zsh` if plan 002 removed the flag.)
 
-Add `bin/dot` to `SHELLCHECK_FILES` in `Makefile`.
+### Step 5: Shell load order and safety
 
-**Verify**: `make shellcheck` exit 0.
+In `.zshrc` or `zsh/secrets.zsh`:
 
-### Step 4: Documentation
+```zsh
+# Secrets: 1Password-backed file preferred; plaintext bootstrap optional.
+# Plaintext may override if sourced second — prefer only one file active.
+[ -f "$DOTFILES_DIR/api_keys.sh" ] && source "$DOTFILES_DIR/api_keys.sh"
+[ -f "$DOTFILES_DIR/api_keys_1password.sh" ] && source "$DOTFILES_DIR/api_keys_1password.sh"
+```
 
-- `bin/README.md`: top section “Use `dot help` to discover commands”
-- Root README: one line under features or scripts
+Document that **1Password file is sourced second** so it can override plaintext
+during migration. Add comment that long-term users should delete plaintext keys
+from `api_keys.sh`.
 
-**Verify**: `rg -n '\\bdot\\b' README.md bin/README.md`.
+Optional improvement (nice-to-have, not required): if both exist and
+`DOTFILES_DEBUG=1`, print which files were sourced (names only).
 
-### Step 5: Optional completion (stretch)
+**Verify**: `zsh -n` on the file; `rg -n 'api_keys' .zshrc zsh/secrets.zsh 2>/dev/null`.
 
-If easy, add zsh completion file under a completions path already on fpath —
-**skip** if it requires large machinery. Not required for done criteria.
+### Step 6: Doctor checks
+
+Extend `bin/doctor`:
+
+1. Keep warning if **neither** secrets file exists.
+2. If `api_keys_1password.sh` exists:
+   - `command -v op` → warning if missing
+   - `op whoami` → warning if not signed in (do not fail entire doctor by default)
+3. If only `api_keys.sh` exists → info/warning: “prefer 1Password-backed secrets”
+4. **Never** read or print file contents
+
+**Verify**: `bin/doctor --skip-tools` still runs; with no op session, warnings only.
+
+### Step 7: Docs
+
+Add a short “Secrets” subsection to `README.md` (and one paragraph in `CLAUDE.md`):
+
+- 1Password CLI + app integration
+- copy template → gitignored file
+- `op whoami` / Desktop app unlock
+- plaintext template is bootstrap-only
+- reminder: no secrets in git
+
+**Verify**: `rg -n '1Password|api_keys' README.md CLAUDE.md`.
 
 ## Test plan
 
-- `bin/dot help` lists doctor
-- `bin/dot doctor --skip-tools` works
-- `bin/dot brew-sync --help` or dry-run if available
-- Path traversal rejected: `bin/dot ../.zshrc` must fail
+- Templates parse; install plan mode mentions 1P
+- Doctor warning paths (simulate by renaming files only in a temp HOME if easy;
+  otherwise manual)
+- **Operator** (not executor) validates `op read` for one dummy item
 - `make check` passes
+- `git status` does not show `api_keys.sh` with secrets staged
 
 ## Done criteria
 
-- [ ] `bin/dot` exists, executable, dispatches safely
-- [ ] `dot help` discovers primary tools
-- [ ] Existing scripts still runnable directly
-- [ ] Makefile shellcheck includes `bin/dot`
-- [ ] Docs mention `dot`
+- [ ] 1Password template is the documented preferred path
+- [ ] install.sh default/prefer creates `api_keys_1password.sh` from template
+- [ ] Shell still sources both files with documented order
+- [ ] doctor checks op presence/session without leaking secrets
+- [ ] README/CLAUDE document the flow
+- [ ] No real secrets in any tracked file (`git grep` for high-entropy strings if unsure — do not add secrets)
 - [ ] `make check` exit 0
-- [ ] `plans/README.md` 006 → DONE
+- [ ] `plans/README.md` 003 → DONE
 
 ## STOP conditions
 
-- Dispatch design would require rewriting `update-everything` interfaces
-- Security issue: cannot reliably prevent path escape — stop and simplify to
-  strict allowlist only
+- Live `api_keys.sh` is accidentally staged — unstage immediately; never commit
+- `op` integration requires policy changes the operator must approve interactively
+  beyond template docs
+- Conflicting secret loaders appear in `mac_specific.sh` / gitignored org files
+  that redefine the same vars in unsafe ways — report, don’t rewrite org files
 
 ## Maintenance notes
 
-- New bin scripts: add to allowlist descriptions when important; auto-discover covers the rest
-- Reviewers: focus on path safety in dispatcher
-- Follow-up: `dot install` wrapping `install.sh` flags
+- New API keys: add vault item + one line in **gitignored** `api_keys_1password.sh`
+- Reviewers: ensure templates stay placeholder-only
+- Follow-up: shell plugins for gh/aws; `direnv` + `op inject` per project (plan 005)
+- If plan 007 agents need keys, point them at the same 1P-backed env, not new plaintext files

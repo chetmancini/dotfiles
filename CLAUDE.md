@@ -13,7 +13,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 1. `.zshrc` is a thin orchestrator that resolves `DOTFILES_DIR` and sources modules from `zsh/`
 2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/direnv/atuin/completions), fun extras, then plugins last
 3. Platform modules source `mac_specific.sh` or `linux_specific.sh`
-4. Secrets modules source `api_keys.sh` / `api_keys_1password.sh` (gitignored; see templates)
+4. Secrets (`zsh/secrets.zsh`): optional plaintext `api_keys.sh`, then preferred `api_keys_1password.sh` (both gitignored; templates tracked)
 5. Tools include fzf, zoxide, mise, direnv, atuin (Ctrl-R); plugins (autosuggestions, history-substring-search, syntax-highlighting) load last from Homebrew
 
 ### Homebrew Package Management
@@ -114,7 +114,8 @@ This repository includes configurations for:
 - `yazi/` - File browser configuration
 - `ghostty/` - Ghostty terminal configuration
 - `atuin/` - Atuin history-search config
-- `api_keys.sh` - Environment variables and API keys (gitignored, template provided)
+- `api_keys_1password.sh.template` / `api_keys.sh.template` - Secrets stubs (prefer 1Password path)
+- `api_keys*.sh` - Live secrets (gitignored; never commit)
 - `plans/` - Modernization plans and status
 
 ## Key Aliases and Functions
@@ -150,7 +151,7 @@ Modular configuration in `nvim/` (no LazyVim / lazy.nvim):
 
 - New shell aliases go in `zsh/aliases.zsh` or `zsh/git.zsh`; new tools get `zsh/tools/<name>.zsh` plus an orchestrator entry in `.zshrc`
 - Plugins that wrap ZLE must load in `zsh/plugins.zsh` after custom widgets (syntax-highlighting last)
-- API keys go in `api_keys.sh` (not tracked) - use `api_keys.sh.template` as reference
+- Prefer API keys via `api_keys_1password.sh` + `op_secret` (template tracked; live file gitignored). Plaintext `api_keys.sh` is bootstrap-only.
 - Daily tools → `Brewfile`; experimental/GUI → `Brewfile.optional`
 - Legacy `vim/` and `iterm/` are kept in-repo but not installed by default
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
