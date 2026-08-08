@@ -4,10 +4,18 @@ set -euo pipefail
 
 # cheatsheet: Quick reference for your dotfiles aliases, keybindings, and functions
 #
-# Parses .zshrc, .tmux.conf, and .gitconfig for aliases/keybindings
+# Parses .zshrc, zsh/**/*.zsh, .tmux.conf, and .gitconfig for aliases/keybindings
 # and displays them with fzf for fuzzy searching
 
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+
+# .zshrc orchestrator + modular shell config (plan 002)
+zsh_config_files() {
+    [[ -f "$DOTFILES_DIR/.zshrc" ]] && printf '%s\n' "$DOTFILES_DIR/.zshrc"
+    if [[ -d "$DOTFILES_DIR/zsh" ]]; then
+        find "$DOTFILES_DIR/zsh" -type f -name '*.zsh' 2>/dev/null | sort
+    fi
+}
 
 print_help() {
     echo "Usage: cheatsheet [filter]"
@@ -31,56 +39,53 @@ print_help() {
 }
 
 parse_zsh_aliases() {
-    local zshrc="$DOTFILES_DIR/.zshrc"
-    [[ -f "$zshrc" ]] || return
+    local file line name value
+    while IFS= read -r file; do
+        [[ -f "$file" ]] || continue
+        # Simple aliases: alias foo='bar' (|| true: no matches must not trip pipefail)
+        while IFS= read -r line; do
+            name=$(echo "$line" | sed "s/^alias //" | cut -d'=' -f1)
+            value=$(echo "$line" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")
+            printf "[zsh-alias]  %-16s → %s\n" "$name" "$value"
+        done < <(grep -E "^alias [^-]" "$file" 2>/dev/null || true)
 
-    # Simple aliases: alias foo='bar'
-    grep -E "^alias [^-]" "$zshrc" 2>/dev/null | while IFS= read -r line; do
-        local name value
-        name=$(echo "$line" | sed "s/^alias //" | cut -d'=' -f1)
-        value=$(echo "$line" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")
-        printf "[zsh-alias]  %-16s → %s\n" "$name" "$value"
-    done
-
-    # Global aliases: alias -g FOO='bar'
-    grep -E "^alias -g " "$zshrc" 2>/dev/null | while IFS= read -r line; do
-        local name value
-        name=$(echo "$line" | sed "s/^alias -g //" | cut -d'=' -f1)
-        value=$(echo "$line" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")
-        printf "[zsh-global] %-16s → %s\n" "$name" "$value"
-    done
+        # Global aliases: alias -g FOO='bar'
+        while IFS= read -r line; do
+            name=$(echo "$line" | sed "s/^alias -g //" | cut -d'=' -f1)
+            value=$(echo "$line" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")
+            printf "[zsh-global] %-16s → %s\n" "$name" "$value"
+        done < <(grep -E "^alias -g " "$file" 2>/dev/null || true)
+    done < <(zsh_config_files)
 }
 
 parse_zsh_functions() {
-    local zshrc="$DOTFILES_DIR/.zshrc"
-    [[ -f "$zshrc" ]] || return
-
-    # Functions defined as: function name() { or name() {
-    grep -E "^(function )?[a-zA-Z_][a-zA-Z0-9_]*\(\)" "$zshrc" 2>/dev/null | while IFS= read -r line; do
-        local name
-        name=$(echo "$line" | sed 's/^function //' | sed 's/().*//')
-        printf "[zsh-func]   %-16s   defined in .zshrc\n" "$name"
-    done
+    local file line name
+    while IFS= read -r file; do
+        [[ -f "$file" ]] || continue
+        while IFS= read -r line; do
+            name=$(echo "$line" | sed 's/^function //' | sed 's/().*//')
+            printf "[zsh-func]   %-16s   defined in zsh/\n" "$name"
+        done < <(grep -E "^(function )?[a-zA-Z_][a-zA-Z0-9_]*\(\)" "$file" 2>/dev/null || true)
+    done < <(zsh_config_files)
 }
 
 parse_zsh_fzf() {
-    local zshrc="$DOTFILES_DIR/.zshrc"
-    [[ -f "$zshrc" ]] || return
-
-    # fzf functions
-    grep -E "^\s+(fcd|fkill|fbr|flog|fsearch)\(\)" "$zshrc" 2>/dev/null | while IFS= read -r line; do
-        local name
-        name=$(echo "$line" | sed 's/().*//' | xargs)
-        local desc=""
-        case "$name" in
-            fcd) desc="Fuzzy cd into directory" ;;
-            fkill) desc="Fuzzy kill process" ;;
-            fbr) desc="Fuzzy git checkout branch" ;;
-            flog) desc="Fuzzy git log browser" ;;
-            fsearch) desc="Fuzzy search file contents + open in editor" ;;
-        esac
-        printf "[fzf]        %-16s   %s\n" "$name" "$desc"
-    done
+    local file line name desc
+    while IFS= read -r file; do
+        [[ -f "$file" ]] || continue
+        while IFS= read -r line; do
+            name=$(echo "$line" | sed 's/().*//' | xargs)
+            desc=""
+            case "$name" in
+                fcd) desc="Fuzzy cd into directory" ;;
+                fkill) desc="Fuzzy kill process" ;;
+                fbr) desc="Fuzzy git checkout branch" ;;
+                flog) desc="Fuzzy git log browser" ;;
+                fsearch) desc="Fuzzy search file contents + open in editor" ;;
+            esac
+            printf "[fzf]        %-16s   %s\n" "$name" "$desc"
+        done < <(grep -E "^[[:space:]]*(fcd|fkill|fbr|flog|fsearch)\(\)" "$file" 2>/dev/null || true)
+    done < <(zsh_config_files)
 }
 
 parse_git_aliases() {

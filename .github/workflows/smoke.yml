@@ -47,7 +47,6 @@ jobs:
 
       - name: Prepare bootstrap fixtures
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/oh-my-zsh/custom/themes"
           mkdir -p "$RUNNER_TEMP/home"
           mkdir -p "$RUNNER_TEMP/home-plan"
 

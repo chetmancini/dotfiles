@@ -301,7 +301,7 @@ run_docker_prune() {
     } >"$output_file"
 }
 
-# Update Neovim plugins via Lazy
+# Update Neovim plugins via vim.pack (not LazyVim)
 update_nvim_plugins() {
     local output_file="$TEMP_DIR/nvim.out"
 
@@ -315,9 +315,9 @@ update_nvim_plugins() {
             exit 0
         fi
 
-        echo "section:Updating Neovim plugins..."
+        echo "section:Updating Neovim plugins (vim.pack)..."
 
-        if nvim --headless "+Lazy! sync" +qa 2>/dev/null; then
+        if nvim --headless "+lua vim.pack.update()" +qa 2>/dev/null; then
             echo "success:Neovim plugins updated"
         else
             echo "error:Failed to update Neovim plugins"
@@ -548,7 +548,7 @@ dry_run() {
     fi
     if [ "$UPDATE_NVIM_PLUGINS" = true ]; then
         if command -v nvim &>/dev/null; then
-            echo "Would run: nvim --headless \"+Lazy! sync\" +qa"
+            echo "Would run: nvim --headless \"+lua vim.pack.update()\" +qa"
         else
             echo "Would run: nvim plugin update (nvim not installed)"
         fi

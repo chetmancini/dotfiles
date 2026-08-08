@@ -38,22 +38,37 @@ record_warning() {
     WARNINGS=$((WARNINGS + 1))
 }
 
+# Canonical absolute path (accepts relative symlink targets).
+resolve_path() {
+    python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null
+}
+
 check_symlink() {
     local label="$1"
     local target="$2"
     local expected="$3"
+    local resolved_target resolved_expected raw
 
     if [ ! -L "$target" ]; then
         record_failure "$label is not a symlink: $target"
         return
     fi
 
-    if [ "$(readlink "$target")" != "$expected" ]; then
-        record_failure "$label points to $(readlink "$target") instead of $expected"
+    raw="$(readlink "$target")"
+    resolved_target="$(resolve_path "$target")"
+    resolved_expected="$(resolve_path "$expected")"
+
+    if [ -z "$resolved_target" ] || [ -z "$resolved_expected" ]; then
+        record_failure "$label could not resolve path (link=$raw expected=$expected)"
         return
     fi
 
-    print_success "$label -> $expected"
+    if [ "$resolved_target" != "$resolved_expected" ]; then
+        record_failure "$label resolves to $resolved_target instead of $resolved_expected (link=$raw)"
+        return
+    fi
+
+    print_success "$label -> $resolved_expected"
 }
 
 check_path_exists() {
@@ -140,7 +155,11 @@ run_dependency_checks() {
         tools/fzf tools/zoxide tools/mise tools/direnv tools/atuin tools/completions; do
         check_path_exists "zsh module $module" "$DOTFILES_DIR/zsh/${module}.zsh"
     done
-    check_path_exists "TPM" "$HOME/.tmux/plugins/tpm"
+    if [ -e "$HOME/.tmux/plugins/tpm" ]; then
+        print_success "TPM exists: $HOME/.tmux/plugins/tpm"
+    else
+        record_warning "TPM is missing (optional; install via install.sh tmux step)"
+    fi
 
     # Secrets: prefer 1Password-backed file. Never read or print file contents.
     local has_plaintext=false
