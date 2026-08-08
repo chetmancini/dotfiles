@@ -9,11 +9,15 @@ SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cheatsheet bin/color
 TOML_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -path './yazi/plugins' -prune -o -type f -name '*.toml' -print | sort | sed 's,^\./,,')
 ZSH_FILES := .zshrc chetmancini.zsh-theme forge-zsh.sh linux_specific.sh mac_specific.sh
 
-.PHONY: format check shell-format shell-format-check shell-syntax shellcheck toml-lint zsh-check
+STYLUA ?= stylua
+STYLUA_CONFIG := nvim/stylua.toml
+STYLUA_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -name '*.lua' -type f -print | sort | sed 's,^\./,,')
 
-format: shell-format
+.PHONY: format check shell-format shell-format-check shell-syntax shellcheck toml-lint zsh-check stylua-check stylua-format
 
-check: shell-format-check shell-syntax shellcheck toml-lint zsh-check
+format: shell-format stylua-format
+
+check: shell-format-check shell-syntax shellcheck toml-lint zsh-check stylua-check
 
 shell-format:
 	$(SHFMT) $(SHFMT_FLAGS) -w $(SHFMT_FILES)
@@ -34,3 +38,9 @@ toml-lint:
 
 zsh-check:
 	zsh -n $(ZSH_FILES)
+
+stylua-check:
+	$(STYLUA) --config-path $(STYLUA_CONFIG) --check $(STYLUA_FILES)
+
+stylua-format:
+	$(STYLUA) --config-path $(STYLUA_CONFIG) $(STYLUA_FILES)
