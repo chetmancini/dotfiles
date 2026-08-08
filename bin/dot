@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# dot: Discover and run utilities from ~/dotfiles/bin
+#
+# Usage:
+#   dot help
+#   dot doctor --skip-tools
+#   dot brew-sync --help
+#   dot update
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+DOTFILES_BIN="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+# Primary commands shown first in help (name -> description).
+# Alias "update" dispatches to update-everything.
+primary_description() {
+    case "$1" in
+        doctor) echo "Verify dotfiles installation health" ;;
+        brew-sync) echo "Check and sync Brewfile with installed packages" ;;
+        update | update-everything) echo "Run system/package update routine" ;;
+        good-morning) echo "Run a configurable set of tasks to start the day" ;;
+        cheatsheet) echo "Quick reference for aliases, keybindings, and functions" ;;
+        dashboard) echo "Show useful information at a glance" ;;
+        *) return 1 ;;
+    esac
+}
+
+print_help() {
+    cat <<EOF
+Usage: dot <command> [args...]
+
+Run utilities from ${DOTFILES_BIN}.
+Scripts remain available directly on PATH (e.g. doctor, brew-sync).
+
+Primary commands:
+EOF
+
+    local name desc
+    for name in doctor brew-sync update good-morning cheatsheet dashboard; do
+        desc="$(primary_description "$name")"
+        printf "  %-18s %s\n" "$name" "$desc"
+    done
+
+    echo ""
+    echo "Other commands in bin/:"
+    list_secondary_commands | while read -r name; do
+        [ -z "$name" ] && continue
+        desc="$(command_description "$name")"
+        if [ -n "$desc" ]; then
+            printf "  %-18s %s\n" "$name" "$desc"
+        else
+            printf "  %s\n" "$name"
+        fi
+    done
+
+    cat <<EOF
+
+Examples:
+  dot help
+  dot doctor --skip-tools
+  dot brew-sync --check
+  dot update
+
+EOF
+}
+
+# Extract a one-line description from a script's leading comments.
+command_description() {
+    local name="$1"
+    local file="$DOTFILES_BIN/$name"
+    local line
+
+    [ -f "$file" ] || return 0
+
+    # Prefer "# name: description"
+    line="$(
+        grep -E "^#[[:space:]]*${name}:[[:space:]]+" "$file" 2>/dev/null | head -1 || true
+    )"
+    if [ -n "$line" ]; then
+        echo "$line" | sed -E "s/^#[[:space:]]*${name}:[[:space:]]*//"
+        return 0
+    fi
+
+    # Else first useful comment after shebang / shellcheck
+    while IFS= read -r line; do
+        case "$line" in
+            '#!'*) continue ;;
+            '' | \#) continue ;;
+            \#\ shellcheck*) continue ;;
+            \#\ set\ *) continue ;;
+            \#*)
+                echo "$line" | sed -E 's/^#[[:space:]]*//'
+                return 0
+                ;;
+            *)
+                return 0
+                ;;
+        esac
+    done <"$file"
+}
+
+# Resolve a user-facing subcommand name to a binary under DOTFILES_BIN.
+resolve_command() {
+    case "$1" in
+        update) echo "update-everything" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+is_safe_command_name() {
+    local cmd="$1"
+
+    if [ -z "$cmd" ]; then
+        return 1
+    fi
+    # Reject path separators and reserved names (regex covers ./.. and hidden).
+    case "$cmd" in
+        *'/'* | *'\\'*) return 1 ;;
+        lib) return 1 ;;
+    esac
+    # Only simple identifiers (allow hyphens); rejects ., .., and leading dots
+    if [[ ! "$cmd" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+command_path() {
+    local target="$1"
+    local path="$DOTFILES_BIN/$target"
+
+    if [ ! -f "$path" ] || [ ! -x "$path" ]; then
+        return 1
+    fi
+
+    # Resolved path must stay under DOTFILES_BIN (blocks symlink escape).
+    local resolved
+    resolved="$(cd -P "$(dirname "$path")" && pwd)/$(basename "$path")"
+    case "$resolved" in
+        "$DOTFILES_BIN"/*)
+            echo "$resolved"
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+list_secondary_commands() {
+    local f base
+    for f in "$DOTFILES_BIN"/*; do
+        [ -e "$f" ] || continue
+        [ -f "$f" ] || continue
+        [ -x "$f" ] || continue
+        base="$(basename "$f")"
+        case "$base" in
+            dot | README.md | *.py | .* | lib) continue ;;
+            doctor | brew-sync | update-everything | good-morning | cheatsheet | dashboard)
+                continue
+                ;;
+        esac
+        printf '%s\n' "$base"
+    done | sort -u
+}
+
+main() {
+    if [ $# -eq 0 ]; then
+        print_help
+        exit 0
+    fi
+
+    local cmd="$1"
+    shift || true
+
+    case "$cmd" in
+        help | -h | --help)
+            print_help
+            exit 0
+            ;;
+    esac
+
+    if ! is_safe_command_name "$cmd"; then
+        echo "dot: invalid command name: $cmd" >&2
+        echo "Run 'dot help' for available commands." >&2
+        exit 1
+    fi
+
+    local target
+    target="$(resolve_command "$cmd")"
+
+    if ! is_safe_command_name "$target"; then
+        echo "dot: invalid target for command: $cmd" >&2
+        exit 1
+    fi
+
+    local path
+    if ! path="$(command_path "$target")"; then
+        echo "dot: unknown command: $cmd" >&2
+        echo "Run 'dot help' for available commands." >&2
+        exit 1
+    fi
+
+    exec "$path" "$@"
+}
+
+main "$@"

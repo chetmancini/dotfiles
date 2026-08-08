@@ -2,10 +2,21 @@
 
 This directory contains custom utility scripts that enhance the command-line experience.
 
+**Discover commands:** run `dot help` (or `bin/dot help`). Primary tools also stay
+available directly on PATH (`doctor`, `brew-sync`, …).
+
+```bash
+dot help
+dot doctor --skip-tools
+dot brew-sync
+dot update          # → update-everything
+```
+
 ## Scripts Overview
 
 | Script | Language | Purpose |
 |--------|----------|---------|
+| [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`extract`](#extract) | Bash | Archive extraction utility |
 | [`imgcat`](#imgcat) | Bash | Display images in terminal |
@@ -18,6 +29,27 @@ This directory contains custom utility scripts that enhance the command-line exp
 | [`pyexample.py`](#pyexamplepy) | Python | Example Python script with uv |
 
 ## Detailed Documentation
+
+### `dot`
+
+Dispatcher for tools in this directory. Prefer `dot help` for discovery; direct
+script names still work.
+
+**Usage:**
+```bash
+dot help
+dot doctor --skip-tools
+dot brew-sync --check
+dot update
+```
+
+**Features:**
+- Primary commands with descriptions (`doctor`, `brew-sync`, `update`, …)
+- Auto-lists other executables in `bin/`
+- Rejects path traversal (`dot ../.zshrc` fails)
+- Passes through arguments and exit codes
+
+---
 
 ### `doctor`
 

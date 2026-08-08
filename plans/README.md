@@ -16,7 +16,7 @@ when done.
 | 003 | 1Password-native secrets loading | P1 | M | — | TODO |
 | 004 | Prune legacy surface + Brewfile profiles | P2 | M | 002 | DONE |
 | 005 | Shell UX: atuin + direnv | P2 | M | 002 | DONE |
-| 006 | `dot` CLI dispatcher for `bin/` | P2 | M | — | TODO |
+| 006 | `dot` CLI dispatcher for `bin/` | P2 | M | — | DONE |
 | 007 | Agent / MCP config layout | P3 | M | 003 helpful | TODO |
 | 008 | Documentation reconciliation pass | P2 | S | 001–007 best-effort | TODO |
 

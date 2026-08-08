@@ -84,6 +84,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
+- `dot` dispatches `bin/` tools (`dot help`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
 
