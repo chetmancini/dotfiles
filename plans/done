@@ -1,4 +1,4 @@
-# Plan 005: Shell UX — atuin and direnv
+# Plan 008: Documentation reconciliation pass
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -7,182 +7,157 @@
 > in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a52b4b5..HEAD -- .zshrc zsh/ Brewfile bin/lib/symlinks.sh README.md`
+> `git diff --stat a52b4b5..HEAD -- README.md CLAUDE.md docs/ bin/README.md`
+> Then reconcile docs against **live** tree, not against this plan’s older excerpts.
 
 ## Status
 
 - **Priority**: P2
-- **Effort**: M
-- **Risk**: LOW–MED (history binding conflicts with fzf/`^R`)
-- **Depends on**: plan 002 strongly preferred (add `zsh/tools/atuin.zsh`, `zsh/tools/direnv.zsh`)
-- **Category**: dx
+- **Effort**: S
+- **Risk**: LOW
+- **Depends on**: best after 001–007; can run partial updates anytime
+- **Category**: docs
 - **Planned at**: commit `a52b4b5`, 2026-08-07
 
 ## Why this matters
 
-History is large (`HISTSIZE=1000000`) but still file-based and local; search is
-basic incremental/`history-substring-search`. Project-specific env currently
-leans on global `api_keys*` and ad-hoc exports. **atuin** modernizes history
-(SQLite, better search, optional sync). **direnv** loads project `.envrc`
-safely and pairs well with mise and 1Password (`op inject`).
+Docs already drift from reality: **LazyVim** is documented while `nvim/init.lua`
+uses **`vim.pack`**; README still mentions oh-my-zsh/pyenv/`n` depending on
+which plans landed. Agent executors and future-you will reintroduce the wrong
+stack if docs stay stale.
 
-## Current state
+## Current state (as of a52b4b5 — re-verify)
 
-- `.zshrc`: `^R` → `history-incremental-search-backward`; fzf zsh integration;
-  zoxide owns `cd`; no atuin/direnv
-- `Brewfile`: no atuin/direnv at plan time (confirm when executing)
-- Secrets: plan 003 patterns
+Known falsehoods at plan time:
 
-If 002 not merged, create modules anyway and source them from `.zshrc` as a
-minimal two-line addition — but prefer 002 layout.
+| Doc claim | Reality |
+|-----------|---------|
+| Neovim is LazyVim / lazy.nvim | `nvim/init.lua` uses `vim.pack.add({...})` + `plugin/*.lua` |
+| zsh uses oh-my-zsh heavily | Minimal OMZ plugin use; theme custom (002 removes OMZ) |
+| pyenv + nvm / `n` primary | mise present; 001 consolidates |
+| `docs/neovim.md` tree shows `lua/config/lazy.lua` | Tree is `init.lua` + `plugin/*.lua` |
+
+Files to audit:
+
+- `README.md`
+- `CLAUDE.md` (and `Claude.md` if duplicate path — use actual filename in repo)
+- `docs/README.md`, `docs/neovim.md`, `docs/tmux.md`, `docs/yazi.md`, `docs/ghostty.md`, `docs/bin.md`
+- `bin/README.md`
+- `bin/lib/symlinks.sh` description strings (user-visible in install UI)
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| Check | `make check` | exit 0 |
-| atuin | `atuin --version` | version prints after brew |
-| direnv | `direnv version` | version prints |
-| Zsh | `zsh -n` on modules | exit 0 |
+| Find stale terms | `rg -n 'LazyVim|lazy\\.nvim|oh-my-zsh|pyenv|nvm|\\bn\\b' README.md CLAUDE.md docs/ bin/README.md` | only intentional historical mentions |
+| Tree sample | `find nvim -type f | head -40` | matches neovim docs |
+| Check | `make check` | exit 0 (docs-only usually no-op) |
 
 ## Scope
 
 **In scope**:
-- `Brewfile` (core): `atuin`, `direnv`
-- New shell modules + orchestrator source lines
-- Optional minimal configs: `atuin/` or XDG config if repo-managed; `direnv` rarely needs global config
-- `bin/lib/symlinks.sh` only if committing atuin config into repo
-- README short UX section
-- Interaction with existing `^R` / fzf: document chosen binding
+- All markdown docs listed above
+- Symlink description strings in `bin/lib/symlinks.sh` if they say LazyVim
+- Optional: short architecture diagram in README reflecting `zsh/` modules if 002 done
 
 **Out of scope**:
-- Forcing atuin account sync / login (operator opt-in)
-- starship prompt migration
-- Replacing zoxide
-- Removing thefuck (optional one-line “consider removing” in docs only)
+- Code behavior changes
+- Rewriting every bin script’s header comments
+- External blog posts
 
 ## Git workflow
 
-- Branch: `advisor/005-atuin-direnv`
+- Branch: `advisor/008-docs-reconciliation`
+- Commit: `docs: reconcile README and neovim docs with vim.pack stack`
 - Do NOT push/PR unless asked
 
 ## Steps
 
-### Step 1: Add brew formulas
-
-```ruby
-brew "atuin"
-brew "direnv"
-```
-
-Place under CLI tools section in **core** Brewfile (or post-004 core file).
-
-**Verify**: formulas valid (`brew info atuin`, `brew info direnv`).
-
-### Step 2: direnv module
-
-Create `zsh/tools/direnv.zsh` (or `.zshrc` snippet):
-
-```zsh
-if command -v direnv &>/dev/null; then
-  eval "$(direnv hook zsh)"
-fi
-```
-
-Document in README: use `direnv allow` per project; never commit secrets in `.envrc` —
-use `.envrc` + gitignored `.env` or `op inject`.
-
-**Verify**: `zsh -ic 'type direnv'` shows function/hook after install.
-
-### Step 3: atuin module — resolve `^R` conflict
-
-Create `zsh/tools/atuin.zsh`:
-
-```zsh
-if command -v atuin &>/dev/null; then
-  eval "$(atuin init zsh)"
-fi
-```
-
-**Binding policy** (pick one, document in comments):
-
-1. **Preferred**: Let atuin take `^R` (modern search). Keep fzf file widgets on
-   Ctrl-T / Alt-C.
-2. If operator must keep zsh incremental search: configure atuin to another
-   binding per atuin docs (e.g. only up-arrow) — use `atuin init zsh` flags/docs
-   at execution time via `atuin init zsh --help` or current upstream docs.
-
-Load **after** other history keybinds so atuin wins, or remove obsolete
-`bindkey '^R' history-incremental-search-backward` when atuin owns it.
-
-**Verify**:
+### Step 1: Inventory live architecture
 
 ```bash
-zsh -ic 'bindkey | rg "\\^R|atuin|history"' 2>/dev/null | head -20
+# Editor
+ls nvim/; head -30 nvim/init.lua
+# Shell
+ls zsh 2>/dev/null || echo 'no zsh/ modules yet'
+# Brew profiles
+ls Brewfile* 
+# Secrets templates
+ls api_keys*.template
 ```
 
-### Step 4: Optional atuin config in repo
+Build a checklist of “source of truth” facts from the tree.
 
-Only if you want shared defaults (not account secrets):
+### Step 2: Fix neovim docs
 
-- e.g. `atuin/config.toml` with non-sensitive defaults (filter modes, enter behavior)
-- Symlink via `symlinks.sh` to `~/.config/atuin/config.toml`
+Rewrite `docs/neovim.md` to describe:
 
-Skip sync tokens entirely.
+- `vim.pack` plugin management
+- `nvim/plugin/*.lua` modules (completion, lsp, git, …)
+- Catppuccin, blink.cmp, mason, conform, etc. **as actually listed** in `init.lua`
+- Remove LazyVim keybind links as primary; document local leader and keymaps from `init.lua` / plugin files
+- Update `docs/README.md` neovim one-liner
 
-**Verify**: no API keys in tracked atuin config.
+**Verify**: `rg -n 'LazyVim|lazy\\.nvim' docs/neovim.md` → no matches (unless a “Migration from LazyVim” note).
 
-### Step 5: Doctor optional commands
+### Step 3: Fix root README + CLAUDE.md
 
-Add `atuin` and `direnv` to doctor’s soft command list (warnings, not failures).
+Align sections:
 
-**Verify**: `bin/doctor` warns if missing when `--skip-tools` is false.
+- What’s included table
+- Shell features (modules / mise / atuin if present)
+- Languages: mise + uv + pnpm/bun
+- Tree diagram (`oh-my-zsh/` only if still relevant)
+- Bootstrap/doctor still accurate
 
-### Step 6: Docs
+**Verify**: stale term `rg` from commands table is clean or justified.
 
-README: 2–4 bullets on atuin history + direnv projects; binding choice; link to
-`direnv allow` safety.
-
-**Verify**: `rg -n 'atuin|direnv' README.md`.
-
-### Step 7: make check + smoke
+### Step 4: Symlink description strings
 
 ```bash
-make check
-# After brew install (operator machine):
-# atuin import auto   # only if migrating history — ask before running
+rg -n 'LazyVim|oh-my-zsh' bin/lib/symlinks.sh || echo clean
 ```
 
-Do **not** run `atuin import` without noting it rewrites history DB — optional
-operator step in Maintenance.
+Update Neovim description to “Neovim config (vim.pack + modular plugin/*.lua)”.
+
+### Step 5: Cross-links to plans (optional)
+
+In `docs/README.md` or root README, optional one-liner: “Modernization plans live in `plans/`” — only if you want discoverability; not required.
+
+### Step 6: Final grep gate
+
+```bash
+rg -n 'LazyVim|lazy\\.nvim' README.md CLAUDE.md docs/ bin/ || true
+rg -n 'oh-my-zsh' README.md CLAUDE.md docs/ || true
+```
+
+Any remaining hits must be intentional (e.g. “removed in 2026”).
+
+**Verify**: `make check` still passes.
 
 ## Test plan
 
-- Modules parse; brew formulas exist
-- Interactive: `^R` opens atuin UI (or documented binding)
-- Interactive: `cd` into dir with `.envrc` triggers direnv after `direnv allow`
-- No regression: fzf Ctrl-T still works
+- Human read of README quick start still works
+- `docs/neovim.md` file tree matches `find nvim`
+- No broken relative links in docs (`rg '\\]\\(\\.\\./|\\]\\(\\./' docs/`)
 
 ## Done criteria
 
-- [ ] atuin + direnv in core Brewfile
-- [ ] shell hooks installed in modules / zshrc
-- [ ] `^R` behavior documented and intentional
-- [ ] doctor soft-checks the commands
-- [ ] README updated
+- [ ] No inaccurate LazyVim claims
+- [ ] Shell/version-manager docs match post-001/002 reality (as landed)
+- [ ] Symlink install descriptions accurate
 - [ ] `make check` exit 0
-- [ ] `plans/README.md` 005 → DONE
+- [ ] `plans/README.md` 008 → DONE
 
 ## STOP conditions
 
-- atuin init conflicts with zsh vi-mode widgets and breaks line editor after two
-  fix attempts
-- direnv hook causes non-interactive scripts to fail — ensure hook only in
-  interactive zsh (standard direnv pattern)
-- Brew formulas renamed/unavailable — stop and report alternatives
+- Mid-migration tree (half 002) makes one coherent doc story impossible — write
+  docs for **current HEAD** and note TODOs rather than inventing end state
+- Conflicting CLAUDE.md vs Claude.md files — report duplication; don’t delete
+  without confirmation
 
 ## Maintenance notes
 
-- Project env: prefer `.envrc` + mise; secrets via `op inject` / 1P (plan 003)
-- Reviewers: keybind section carefully
-- Optional later: remove `thefuck` lazy wrapper if atuin + CORRECT suffice
+- Any future stack change should update `docs/neovim.md` in the same PR
+- Reviewers: compare docs tree blocks to `ls`
+- This plan should be re-run after large modernization merges
