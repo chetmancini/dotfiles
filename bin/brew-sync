@@ -113,14 +113,16 @@ print_header
 
 # Get lists of packages
 get_brewfile_formulae() {
-    grep -E '^\s*brew\s+"' "$BREWFILE" 2>/dev/null |
-        sed -E 's/^\s*brew\s+"([^"]+)".*/\1/' |
+    grep -E '^[[:space:]]*brew[[:space:]]+"' "$BREWFILE" 2>/dev/null |
+        sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' |
+        # strip tap prefix (brew "org/repo/name") for brew list comparison
+        sed -E 's|^.*/||' |
         sort -u
 }
 
 get_brewfile_casks() {
-    grep -E '^\s*cask\s+"' "$BREWFILE" 2>/dev/null |
-        sed -E 's/^\s*cask\s+"([^"]+)".*/\1/' |
+    grep -E '^[[:space:]]*cask[[:space:]]+"' "$BREWFILE" 2>/dev/null |
+        sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/' |
         sort -u
 }
 
@@ -128,8 +130,8 @@ get_optional_formulae() {
     if [ ! -f "$BREWFILE_OPTIONAL" ]; then
         return 0
     fi
-    grep -E '^\s*brew\s+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
-        sed -E 's/^\s*brew\s+"([^"]+)".*/\1/' |
+    grep -E '^[[:space:]]*brew[[:space:]]+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
+        sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' |
         # strip tap prefix for comparison with brew list short names
         sed -E 's|.*/||' |
         sort -u
@@ -139,8 +141,8 @@ get_optional_casks() {
     if [ ! -f "$BREWFILE_OPTIONAL" ]; then
         return 0
     fi
-    grep -E '^\s*cask\s+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
-        sed -E 's/^\s*cask\s+"([^"]+)".*/\1/' |
+    grep -E '^[[:space:]]*cask[[:space:]]+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
+        sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/' |
         sort -u
 }
 
@@ -165,7 +167,7 @@ check_drift() {
     local brewfile_formulae installed_formulae
     local brewfile_casks installed_casks
 
-    brewfile_formulae=$(get_brewfile_formulae | short_formula_names)
+    brewfile_formulae=$(get_brewfile_formulae)
     installed_formulae=$(get_installed_formulae)
     brewfile_casks=$(get_brewfile_casks)
     installed_casks=$(get_installed_casks)
@@ -218,9 +220,12 @@ check_drift() {
 
     if [ -n "$formulae_not_in_brewfile" ]; then
         echo -e "${YELLOW}Formulae installed but not in Brewfile:${NC}"
+        # Resolve autoremovable deps once instead of once per package
+        local autoremovable
+        autoremovable=$(brew autoremove --dry-run 2>/dev/null || true)
         echo "$formulae_not_in_brewfile" | while read -r pkg; do
             # Skip autoremovable packages
-            if ! brew autoremove --dry-run 2>/dev/null | grep -q "^$pkg$"; then
+            if ! echo "$autoremovable" | grep -qx "$pkg"; then
                 echo "  • $pkg"
             fi
         done
@@ -286,7 +291,7 @@ add_missing() {
     local brewfile_formulae installed_formulae
     local brewfile_casks installed_casks
 
-    brewfile_formulae=$(get_brewfile_formulae | short_formula_names)
+    brewfile_formulae=$(get_brewfile_formulae)
     installed_formulae=$(get_installed_formulae)
     brewfile_casks=$(get_brewfile_casks)
     installed_casks=$(get_installed_casks)
@@ -408,18 +413,18 @@ remove_uninstalled() {
             local should_keep=true
 
             # Check if line is a brew line with a package to remove
-            if echo "$line" | grep -qE '^\s*brew\s+"'; then
+            if echo "$line" | grep -qE '^[[:space:]]*brew[[:space:]]+"'; then
                 local pkg
-                pkg=$(echo "$line" | sed -E 's/^\s*brew\s+"([^"]+)".*/\1/')
+                pkg=$(echo "$line" | sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' | short_formula_names)
                 if echo "$formulae_to_remove" | grep -q "^${pkg}$"; then
                     should_keep=false
                 fi
             fi
 
             # Check if line is a cask line with a package to remove
-            if echo "$line" | grep -qE '^\s*cask\s+"'; then
+            if echo "$line" | grep -qE '^[[:space:]]*cask[[:space:]]+"'; then
                 local pkg
-                pkg=$(echo "$line" | sed -E 's/^\s*cask\s+"([^"]+)".*/\1/')
+                pkg=$(echo "$line" | sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/')
                 if echo "$casks_to_remove" | grep -q "^${pkg}$"; then
                     should_keep=false
                 fi
