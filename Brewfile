@@ -6,7 +6,6 @@
 # Taps (core)
 tap "can1357/tap"
 tap "github/gh"
-tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
 
 #==============================================================================
