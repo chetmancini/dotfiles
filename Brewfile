@@ -4,6 +4,7 @@
 # Update core only: brew bundle dump --file=~/dotfiles/Brewfile --force  (prefer brew-sync)
 
 # Taps (core)
+tap "can1357/tap"
 tap "github/gh"
 tap "homebrew/cask-fonts"
 tap "oven-sh/bun"
@@ -15,6 +16,7 @@ brew "atuin"                    # SQLite shell history + better search (^R)
 brew "bat"                      # Better cat
 brew "brotli"                   # Lossless compression
 brew "btop"                     # Resource monitor
+brew "ca-certificates"          # Mozilla CA certificate store
 brew "chafa"                    # Terminal image viewer (yazi fallback)
 brew "coreutils"                # GNU utilities
 brew "curl"                     # URL transfer tool
@@ -63,14 +65,10 @@ brew "mise"                     # Polyglot version manager
 brew "git-lfs"                  # Large file storage
 brew "neovim"                   # Hyperextensible Vim
 brew "tig"                      # Git TUI
-
-#==============================================================================
-# Development - Kubernetes
-#==============================================================================
-brew "helm"                     # Kubernetes package manager
-brew "kubernetes-cli"           # kubectl
-brew "kubectx"                  # kubectl context switcher
-brew "k9s"                      # Kubernetes CLI UI
+brew "bats-core"                # Bash Automated Testing System
+brew "herdr"                    # Agent multiplexer that lives in your terminal
+brew "can1357/tap/omp"          # Coding agent with the IDE wired in
+brew "rtk"                      # CLI proxy to minimize LLM token consumption
 
 #==============================================================================
 # Development - Java/JVM
@@ -113,6 +111,8 @@ brew "tldr"                     # Simplified man pages
 #==============================================================================
 cask "1password-cli"            # 1Password CLI
 cask "ghostty"                  # Terminal
+cask "grok-build"               # Extensible coding agent for the terminal
+cask "willow-voice"             # AI-powered voice dictation and writing assistant
 
 #==============================================================================
 # Fonts
