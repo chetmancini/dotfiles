@@ -1,0 +1,360 @@
+#!/usr/bin/env bash
+# validate-api-keys: Pull API keys (via 1Password or env) and validate they are real.
+# Sources api_keys_1password.sh / api_keys.sh like zsh/secrets.zsh does, then hits
+# minimal validation endpoints. Never prints secret values — only masked previews.
+#
+# Usage:
+#   validate-api-keys              # validate all configured keys
+#   validate-api-keys --verbose    # show HTTP codes and masked previews
+#   validate-api-keys --json       # JSON summary to stdout
+#   validate-api-keys --help
+#
+# Exit: 0 if every present key validates, 1 if any missing/invalid/error.
+# Keys that are unset are reported as MISSING (counts as failure).
+# To validate only a subset: OPENAI_API_KEY=... validate-api-keys (env fallback)
+
+set -euo pipefail
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# shellcheck source=bin/lib/helpers.sh
+if [[ -f "$SCRIPT_DIR/lib/helpers.sh" ]]; then
+  source "$SCRIPT_DIR/lib/helpers.sh"
+else
+  GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; RED='\033[0;31m'; NC='\033[0m'
+  print_section() { echo -e "${YELLOW}▶ $1${NC}"; }
+  print_success() { echo -e "${GREEN}  ✓ $1${NC}"; }
+  print_error()   { echo -e "${RED}  ✗ $1${NC}"; }
+  print_info()    { echo -e "  $1"; }
+fi
+
+VERBOSE=false
+JSON=false
+TIMEOUT=10
+
+print_help() {
+  cat <<'EOF'
+Usage: validate-api-keys [options]
+
+Pull API keys from 1Password (api_keys_1password.sh) or environment and
+validate each key against its provider. Secrets are never printed.
+
+Options:
+  --verbose   Show HTTP status and masked key preview
+  --json      Output JSON summary instead of human table
+  --timeout N Seconds per API check (default: 10)
+  -h, --help  Show this help
+
+Keys checked (if configured):
+  OPENAI_API_KEY      -> GET https://api.openai.com/v1/models
+  ANTHROPIC_API_KEY   -> GET https://api.anthropic.com/v1/models
+  GITHUB_TOKEN        -> GET https://api.github.com/user
+  TAVILY_API_KEY      -> POST https://api.tavily.com/search
+  LANGCHAIN_API_KEY   -> GET https://api.smith.langchain.com/info
+
+Source order (like zsh/secrets.zsh):
+  1. $DOTFILES_DIR/api_keys.sh (if present)
+  2. $DOTFILES_DIR/api_keys_1password.sh (if present, can override)
+  Env vars already exported are kept if no file overrides them.
+
+Exit codes:
+  0  all present keys valid
+  1  any key missing, invalid, or error
+  2  usage error
+
+Examples:
+  validate-api-keys
+  validate-api-keys --verbose
+  validate-api-keys --json | jq .
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --verbose) VERBOSE=true; shift ;;
+    --json) JSON=true; shift ;;
+    --timeout) TIMEOUT="$2"; shift 2 ;;
+    -h|--help) print_help; exit 0 ;;
+    --) shift; break ;;
+    -*) echo "Unknown option: $1" >&2; print_help; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+# ── Load secrets like zsh/secrets.zsh ──────────────────────────────────────
+# Save env keys before sourcing so a failing op (empty) doesn't clobber them.
+_orig_openai="${OPENAI_API_KEY:-}"
+_orig_anthropic="${ANTHROPIC_API_KEY:-}"
+_orig_github="${GITHUB_TOKEN:-}"
+_orig_github_pat="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
+_orig_tavily="${TAVILY_API_KEY:-}"
+_orig_langchain="${LANGCHAIN_API_KEY:-}"
+
+if [[ -f "$DOTFILES_DIR/api_keys.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$DOTFILES_DIR/api_keys.sh" || true
+fi
+if [[ -f "$DOTFILES_DIR/api_keys_1password.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$DOTFILES_DIR/api_keys_1password.sh" || true
+fi
+
+# Restore env values if sourcing overwrote them with empty (op not signed in).
+[[ -z "${OPENAI_API_KEY:-}" && -n "$_orig_openai" ]] && export OPENAI_API_KEY="$_orig_openai"
+[[ -z "${ANTHROPIC_API_KEY:-}" && -n "$_orig_anthropic" ]] && export ANTHROPIC_API_KEY="$_orig_anthropic"
+[[ -z "${TAVILY_API_KEY:-}" && -n "$_orig_tavily" ]] && export TAVILY_API_KEY="$_orig_tavily"
+[[ -z "${LANGCHAIN_API_KEY:-}" && -n "$_orig_langchain" ]] && export LANGCHAIN_API_KEY="$_orig_langchain"
+# GITHUB_TOKEN and GITHUB_PERSONAL_ACCESS_TOKEN are aliases — keep both in sync
+[[ -z "${GITHUB_TOKEN:-}" && -n "$_orig_github" ]] && export GITHUB_TOKEN="$_orig_github"
+[[ -z "${GITHUB_TOKEN:-}" && -n "${_orig_github_pat:-}" ]] && export GITHUB_TOKEN="$_orig_github_pat"
+[[ -z "${GITHUB_TOKEN:-}" && -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ]] && export GITHUB_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN"
+# Mirror back if only GITHUB_TOKEN was set
+[[ -z "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" && -n "${GITHUB_TOKEN:-}" ]] && export GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN"
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+mask_key() {
+  local k="${1:-}"
+  local len=${#k}
+  if [[ $len -eq 0 ]]; then echo "(empty)"; return; fi
+  if [[ $len -le 8 ]]; then echo "****"; return; fi
+  echo "${k:0:4}…${k: -4} (${len} chars)"
+}
+
+# curl wrapper: prints HTTP code to stdout, body to temp file
+# Usage: http_code=$(curl_check <tmp_body> <curl args...>)
+curl_check() {
+  local body_file="$1"; shift
+  local code
+  if ! code=$(curl -sS --max-time "$TIMEOUT" -o "$body_file" -w "%{http_code}" "$@" 2>/dev/null); then
+    echo "000"
+    return
+  fi
+  # curl may still emit empty on some failures; normalize
+  if [[ -z "$code" ]]; then echo "000"; else echo "$code"; fi
+}
+
+# ── Validators (each prints "STATUS|DETAIL" and returns 0) ────────────────
+validate_openai() {
+  local key="${OPENAI_API_KEY:-}"
+  [[ -z "$key" ]] && { echo "MISSING|not set"; return 0; }
+  local body code
+  body=$(mktemp); trap 'rm -f "$body"' RETURN
+  code=$(curl_check "$body" -H "Authorization: Bearer $key" https://api.openai.com/v1/models)
+  case "$code" in
+    200) echo "OK|HTTP $code" ;;
+    401) echo "INVALID|HTTP 401 unauthorized" ;;
+    429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
+    000) echo "ERROR|network/timeout" ;;
+    *)   echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+  esac
+}
+
+validate_anthropic() {
+  local key="${ANTHROPIC_API_KEY:-}"
+  [[ -z "$key" ]] && { echo "MISSING|not set"; return 0; }
+  local body code
+  body=$(mktemp); trap 'rm -f "$body"' RETURN
+  # Models listing is cheapest; falls back to messages probe if endpoint 404s for older keys
+  code=$(curl_check "$body" -H "x-api-key: $key" -H "anthropic-version: 2023-06-01" https://api.anthropic.com/v1/models)
+  case "$code" in
+    200) echo "OK|HTTP $code" ;;
+    401) echo "INVALID|HTTP 401 unauthorized" ;;
+    403) echo "INVALID|HTTP 403 forbidden" ;;
+    429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
+    404)
+      # Fallback: tiny messages call — costs ~1 token, proves auth
+      local body2 code2
+      body2=$(mktemp); trap 'rm -f "$body" "$body2"' RETURN
+      code2=$(curl_check "$body2" -X POST \
+        -H "x-api-key: $key" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+        -d '{"model":"claude-3-haiku-20240307","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' \
+        https://api.anthropic.com/v1/messages)
+      case "$code2" in
+        200) echo "OK|HTTP $code2 (via messages probe)" ;;
+        401|403) echo "INVALID|HTTP $code2 unauthorized" ;;
+        429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
+        *) echo "ERROR|HTTP $code2 $(head -c 200 "$body2" | tr -d '\n')" ;;
+      esac
+      ;;
+    000) echo "ERROR|network/timeout" ;;
+    *)   echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+  esac
+}
+
+validate_github() {
+  local key="${GITHUB_TOKEN:-}"
+  [[ -z "$key" ]] && { echo "MISSING|not set"; return 0; }
+  local body code
+  body=$(mktemp); trap 'rm -f "$body"' RETURN
+  code=$(curl_check "$body" -H "Authorization: token $key" -H "Accept: application/vnd.github.v3+json" https://api.github.com/user)
+  case "$code" in
+    200) echo "OK|HTTP $code" ;;
+    401) echo "INVALID|HTTP 401 bad credentials" ;;
+    403) echo "ERROR|HTTP 403 (rate-limit or scope) — key may be valid" ;;
+    000) echo "ERROR|network/timeout" ;;
+    *)   echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+  esac
+}
+
+validate_tavily() {
+  local key="${TAVILY_API_KEY:-}"
+  [[ -z "$key" ]] && { echo "MISSING|not set"; return 0; }
+  local body code
+  body=$(mktemp); trap 'rm -f "$body"' RETURN
+  code=$(curl_check "$body" -X POST -H "Content-Type: application/json" \
+    -d "{\"api_key\":\"$key\",\"query\":\"test\",\"max_results\":1,\"include_answer\":false}" \
+    https://api.tavily.com/search)
+  case "$code" in
+    200) echo "OK|HTTP $code" ;;
+    401|403) echo "INVALID|HTTP $code unauthorized" ;;
+    429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
+    000) echo "ERROR|network/timeout" ;;
+    *)   echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+  esac
+}
+
+validate_langchain() {
+  local key="${LANGCHAIN_API_KEY:-}"
+  [[ -z "$key" ]] && { echo "MISSING|not set"; return 0; }
+  local body code
+  body=$(mktemp); trap 'rm -f "$body"' RETURN
+  code=$(curl_check "$body" -H "x-api-key: $key" https://api.smith.langchain.com/info 2>/dev/null)
+  # LangSmith returns 200/401; some deployments use /api/v1/info — try fallback on 404
+  if [[ "$code" == "404" ]]; then
+    local body2 code2
+    body2=$(mktemp); trap 'rm -f "$body" "$body2"' RETURN
+    code2=$(curl_check "$body2" -H "x-api-key: $key" https://api.smith.langchain.com/api/v1/sessions 2>/dev/null || echo "000")
+    case "$code2" in
+      200|201) echo "OK|HTTP $code2 (via sessions)" ;;
+      401|403) echo "INVALID|HTTP $code2 unauthorized" ;;
+      *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+    esac
+    return
+  fi
+  case "$code" in
+    200) echo "OK|HTTP $code" ;;
+    401|403) echo "INVALID|HTTP 401 unauthorized" ;;
+    429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
+    000) echo "ERROR|network/timeout" ;;
+    *)   echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+  esac
+}
+
+# ── Registry ─────────────────────────────────────────────────────────────────
+# Order matters for display
+KEYS=(OPENAI_API_KEY ANTHROPIC_API_KEY GITHUB_TOKEN TAVILY_API_KEY LANGCHAIN_API_KEY)
+LABELS=(OpenAI Anthropic GitHub Tavily "LangChain/LangSmith")
+
+# ── Run all ──────────────────────────────────────────────────────────────────
+results=()
+statuses=()
+details=()
+previews=()
+
+for i in "${!KEYS[@]}"; do
+  var="${KEYS[$i]}"
+  val="${!var:-}"
+  previews+=("$(mask_key "$val")")
+  case "$var" in
+    OPENAI_API_KEY)    out=$(validate_openai) ;;
+    ANTHROPIC_API_KEY) out=$(validate_anthropic) ;;
+    GITHUB_TOKEN)      out=$(validate_github) ;;
+    TAVILY_API_KEY)    out=$(validate_tavily) ;;
+    LANGCHAIN_API_KEY) out=$(validate_langchain) ;;
+    *) out="ERROR|unknown key" ;;
+  esac
+  status="${out%%|*}"
+  detail="${out#*|}"
+  statuses+=("$status")
+  details+=("$detail")
+done
+
+# ── Output ───────────────────────────────────────────────────────────────────
+failures=0
+for s in "${statuses[@]}"; do
+  [[ "$s" != "OK" ]] && failures=$((failures+1))
+done
+
+if [[ "$JSON" == true ]]; then
+  # Minimal JSON without jq dependency
+  printf '{\n'
+  printf '  "dotfiles_dir": "%s",\n' "$DOTFILES_DIR"
+  printf '  "timeout_s": %s,\n' "$TIMEOUT"
+  printf '  "results": [\n'
+  for i in "${!KEYS[@]}"; do
+    comma=","
+    [[ $i -eq $((${#KEYS[@]}-1)) ]] && comma=""
+    # escape detail for JSON
+    esc_detail=$(printf '%s' "${details[$i]}" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    printf '    {"key":"%s","label":"%s","status":"%s","detail":"%s","preview":"%s"}%s\n' \
+      "${KEYS[$i]}" "${LABELS[$i]}" "${statuses[$i]}" "$esc_detail" "${previews[$i]}" "$comma"
+  done
+  printf '  ],\n'
+  printf '  "failures": %d,\n' "$failures"
+  if [[ $failures -eq 0 ]]; then printf '  "ok": true\n'; else printf '  "ok": false\n'; fi
+  printf '}\n'
+  [[ $failures -eq 0 ]] && exit 0 || exit 1
+fi
+
+# Human table
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}  API Key Validation${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+if [[ -f "$DOTFILES_DIR/api_keys_1password.sh" ]]; then
+  print_info "Source: $DOTFILES_DIR/api_keys_1password.sh (op-backed)"
+elif [[ -f "$DOTFILES_DIR/api_keys.sh" ]]; then
+  print_info "Source: $DOTFILES_DIR/api_keys.sh (plaintext)"
+else
+  print_info "Source: environment only (no api_keys*.sh found)"
+fi
+if command -v op &>/dev/null; then
+  if op whoami &>/dev/null; then
+    print_info "1Password: op signed in"
+  else
+    print_info "1Password: op installed but not signed in — values may be empty"
+  fi
+else
+  print_info "1Password: op not installed"
+fi
+echo ""
+
+printf "  %-22s %-10s %-18s %s\n" "SERVICE" "STATUS" "KEY" "DETAIL"
+printf "  %-22s %-10s %-18s %s\n" "-------" "------" "---" "------"
+for i in "${!KEYS[@]}"; do
+  var="${KEYS[$i]}"
+  label="${LABELS[$i]}"
+  status="${statuses[$i]}"
+  detail="${details[$i]}"
+  preview="${previews[$i]}"
+  # colorize status
+  case "$status" in
+    OK)      col="$GREEN"; sym="✓" ;;
+    INVALID) col="$RED"; sym="✗" ;;
+    MISSING) col="$YELLOW"; sym="○" ;;
+    *)       col="$RED"; sym="!" ;;
+  esac
+  # In non-verbose mode, hide detail unless not OK
+  if [[ "$VERBOSE" != true && "$status" == "OK" ]]; then
+    detail="valid"
+  fi
+  printf "  %-22s ${col}%-10s${NC} %-18s %s\n" "$label ($var)" "$sym $status" "$preview" "$detail"
+done
+echo ""
+if [[ $failures -eq 0 ]]; then
+  print_success "All ${#KEYS[@]} keys valid"
+  exit 0
+else
+  print_error "$failures of ${#KEYS[@]} keys need attention (MISSING/INVALID/ERROR)"
+  if [[ "$VERBOSE" != true ]]; then
+    print_info "Run with --verbose for HTTP codes or --json for machine output"
+  fi
+  exit 1
+fi
