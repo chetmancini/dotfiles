@@ -5,6 +5,9 @@ PYTHON ?= python3
 SHFMT_FLAGS := -i 4 -ci
 # shfmt/bash -n only for tracked bash-compatible scripts. Skip untracked/local
 # files, legacy oh-my-zsh clones (not in git), and modular zsh (zsh-check).
+# zsh/ is intentionally excluded from shfmt/shellcheck(bash): zsh syntax
+# (glob qualifiers, zle, typeset -U, etc.) is not bash; those files are
+# covered by zsh -n in ZSH_FILES/zsh-check below.
 SHFMT_FILES := $(shell git ls-files -z | xargs -0 $(SHFMT) -f | grep -Ev '^zsh/' | sort -u)
 SHELLCHECK_FLAGS := --severity=warning -x -P bin
 SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cheatsheet bin/colortest bin/dashboard bin/doctor bin/dot bin/dtgz bin/extract bin/flushdns bin/git-rm-gone bin/git-standup bin/good-morning bin/imgcat bin/killbyname bin/lib/helpers.sh bin/lib/symlinks.sh bin/my_ip bin/note bin/portpid bin/prettypath bin/removeexif bin/repo-report bin/running bin/server bin/update-everything install.sh mac_dev_install.sh scripts/test-install-smoke.sh

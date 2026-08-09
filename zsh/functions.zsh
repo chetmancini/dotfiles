@@ -4,7 +4,7 @@
 function lt() { eza -la --sort=modified "$@" | tail; }
 function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
 function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
-function take() { mkdir -p "$1" && builtin cd "$1"; }
+function take() { mkdir -p "$1" && builtin cd "$1" || return; }
 
 function strip_quotes() { sed 's/\"//g' "$@"; }
 
@@ -64,13 +64,13 @@ function xtitle()      # Adds some text in the terminal frame.
 # Stupid shortcuts
 ##############################
 function svim {
-    sudo vim $@
+    sudo vim "$@"
 }
 
 # Find a file with a pattern in name:
 function ff() { fd --type f --ignore-case "$*" ; }
 
-function my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
+function my_ps() { ps "$@" -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
 function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
 
 # Kill by process name.
