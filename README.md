@@ -136,6 +136,8 @@ fzfp        # fzf with bat preview
 ├── iterm/              # Legacy iTerm prefs (Ghostty is primary)
 ├── yazi/               # Yazi file browser
 ├── ghostty/            # Ghostty terminal
+├── claude/             # Claude Code agents & commands (see docs/agents.md)
+├── mcp.json.example    # MCP servers example (copy to mcp.json, gitignored)
 ├── plans/              # Implementation plans
 ├── docs/               # Extended documentation
 ├── api_keys_1password.sh.template  # Preferred secrets template

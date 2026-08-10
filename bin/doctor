@@ -216,6 +216,39 @@ run_repo_checks() {
         record_failure "install.sh failed bash syntax check"
     fi
 
+    # MCP example: valid JSON and no placeholder live paths
+    if [ -f "$DOTFILES_DIR/mcp.json.example" ]; then
+        if python3 -m json.tool "$DOTFILES_DIR/mcp.json.example" >/dev/null 2>&1; then
+            print_success "mcp.json.example is valid JSON"
+        else
+            record_warning "mcp.json.example is not valid JSON"
+        fi
+        if grep -q "/Users/username" "$DOTFILES_DIR/mcp.json.example" 2>/dev/null; then
+            record_warning "mcp.json.example still contains placeholder /Users/username"
+        fi
+    else
+        record_warning "mcp.json.example not found (see docs/agents.md)"
+    fi
+    # Live mcp.json is gitignored; warn only if it would be committed
+    if [ -f "$DOTFILES_DIR/mcp.json" ] && ! grep -q "^mcp\.json" "$DOTFILES_DIR/.gitignore" 2>/dev/null; then
+        record_warning "mcp.json exists but is not gitignored"
+    fi
+
+    # Claude agent layout: soft checks
+    if [ -d "$DOTFILES_DIR/claude" ]; then
+        [ -d "$DOTFILES_DIR/claude/agents" ] && print_success "claude/agents exists" || record_warning "claude/agents missing"
+        [ -d "$DOTFILES_DIR/claude/commands" ] && print_success "claude/commands exists" || record_warning "claude/commands missing"
+        # Guard against committed secrets in tracked agent files
+        if grep -R -q "sk-[A-Za-z0-9]\{20,\}\|api_key\s*=" "$DOTFILES_DIR/claude" 2>/dev/null; then
+            record_warning "claude/ contains possible secret literals (sk- / api_key=)"
+        fi
+        if grep -R -q "sk-[A-Za-z0-9]\{20,\}\|api_key\s*=" "$DOTFILES_DIR/mcp.json.example" 2>/dev/null; then
+            record_warning "mcp.json.example contains possible secret literals"
+        fi
+    else
+        record_warning "claude/ directory not found"
+    fi
+
     echo ""
 }
 
