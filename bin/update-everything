@@ -104,81 +104,74 @@ timestamp() {
     date "+%Y-%m-%d %H:%M:%S"
 }
 
-# Run a command and append all output to a log file with timestamps.
-# Arguments: log_file label cmd [args...]
-run_logged_command() {
-    local log_file="$1"
-    local label="$2"
-    shift 2
-    local status=0
+# Run a command and stream its output to the invoking terminal. Task functions
+# redirect their structured summaries to files, so fd 3 is the original stdout
+# captured before those redirects are installed.
+# Arguments: label cmd [args...]
+run_streamed_command() {
+    local label="$1"
+    shift
 
-    {
-        echo "[$(timestamp)] START: $label"
-        if "$@"; then
-            status=0
-        else
-            status=$?
-        fi
-        echo "[$(timestamp)] END: $label (exit $status)"
-    } >>"$log_file" 2>&1
+    echo "[$(timestamp)] Running $label" >&3
+    "$@" >&3 2>&3
+}
 
-    return "$status"
+# Run a command directly in the invoking terminal when the surrounding task
+# is collecting its structured result in a temporary file.
+run_live_command() {
+    "$@" >&3 2>&3
+}
+
+print_live_section() {
+    print_section "$1" >&3
+    echo >&3
 }
 
 # Homebrew tasks (must run sequentially: update -> upgrade -> cleanup)
 run_brew_tasks() {
     local output_file="$TEMP_DIR/brew.out"
-    local log_file="$TEMP_DIR/brew.log"
 
     {
-        : >"$log_file"
-
         if [ "$RUN_BREW_UPDATE" = true ]; then
-            echo "section:Updating Homebrew..."
-            echo "info:Homebrew log: $log_file"
+            print_live_section "Updating Homebrew..."
             echo "info:[$(timestamp)] Running brew update"
-            if run_logged_command "$log_file" "brew update" brew update; then
+            if run_streamed_command "brew update" brew update; then
                 echo "success:Homebrew updated"
             else
                 echo "error:Failed to update Homebrew"
-                echo "info:Check log: $log_file"
             fi
         fi
 
         if [ "$RUN_BREW_UPGRADE" = true ]; then
-            echo "section:Upgrading packages..."
-            echo "info:Homebrew log: $log_file"
+            print_live_section "Upgrading packages..."
             echo "info:[$(timestamp)] Capturing outdated package snapshots"
             local formula_before="$TEMP_DIR/brew_formula_before.out"
             local formula_after="$TEMP_DIR/brew_formula_after.out"
             local cask_before="$TEMP_DIR/brew_cask_before.out"
             local cask_after="$TEMP_DIR/brew_cask_after.out"
 
-            brew outdated --formula --verbose >"$formula_before" 2>>"$log_file" || true
-            brew outdated --cask --verbose >"$cask_before" 2>>"$log_file" || true
+            brew outdated --formula --verbose >"$formula_before" 2>&3 || true
+            brew outdated --cask --verbose >"$cask_before" 2>&3 || true
 
             echo "info:[$(timestamp)] Running brew upgrade"
-            if run_logged_command "$log_file" "brew upgrade" brew upgrade; then
-                brew outdated --formula >"$formula_after" 2>>"$log_file" || true
-                brew outdated --cask >"$cask_after" 2>>"$log_file" || true
+            if run_streamed_command "brew upgrade" brew upgrade; then
+                brew outdated --formula >"$formula_after" 2>&3 || true
+                brew outdated --cask >"$cask_after" 2>&3 || true
                 echo "success:Packages upgraded"
                 emit_brew_upgrade_report "Packages" "$formula_before" "$formula_after"
                 emit_brew_upgrade_report "Apps" "$cask_before" "$cask_after"
             else
                 echo "error:Failed to upgrade packages"
-                echo "info:Check log: $log_file"
             fi
         fi
 
         if [ "$RUN_BREW_CLEANUP" = true ]; then
-            echo "section:Cleaning up Homebrew..."
-            echo "info:Homebrew log: $log_file"
+            print_live_section "Cleaning up Homebrew..."
             echo "info:[$(timestamp)] Running brew cleanup"
-            if run_logged_command "$log_file" "brew cleanup" brew cleanup; then
+            if run_streamed_command "brew cleanup" brew cleanup; then
                 echo "success:Homebrew cleaned up"
             else
                 echo "error:Failed to cleanup Homebrew"
-                echo "info:Check log: $log_file"
             fi
         fi
     } >"$output_file"
@@ -186,29 +179,25 @@ run_brew_tasks() {
 
 run_npm_global_update() {
     local output_file="$TEMP_DIR/npm.out"
-    local log_file="$TEMP_DIR/npm-global.log"
 
     {
         if [ "$RUN_NPM_GLOBAL_UPDATE" != true ]; then
             exit 0
         fi
 
-        echo "section:Updating global npm packages..."
+        print_live_section "Updating global npm packages..."
 
         if ! command -v npm &>/dev/null; then
             echo "info:npm is not installed, skipping"
             exit 0
         fi
 
-        : >"$log_file"
-        echo "info:npm global update log: $log_file"
         echo "info:[$(timestamp)] Running npm update -g"
 
-        if run_logged_command "$log_file" "npm update -g" npm update -g; then
+        if run_streamed_command "npm update -g" npm update -g; then
             echo "success:Global npm packages updated"
         else
             echo "error:Failed to update global npm packages"
-            echo "info:Check log: $log_file"
         fi
     } >"$output_file"
 }
@@ -283,17 +272,17 @@ run_docker_prune() {
         fi
 
         if ! docker info &>/dev/null; then
-            echo "section:Docker cleanup..."
+            print_live_section "Docker cleanup..."
             echo "info:Docker is not running, skipping"
             exit 0
         fi
 
-        echo "section:Cleaning up Docker..."
+        print_live_section "Cleaning up Docker..."
 
         # Get space before cleanup
         space_before=$(docker system df --format '{{.Reclaimable}}' 2>/dev/null | head -1)
 
-        if docker system prune -f &>/dev/null; then
+        if run_live_command docker system prune -f; then
             echo "success:Docker cleaned up (was reclaimable: $space_before)"
         else
             echo "error:Failed to clean up Docker"
@@ -315,9 +304,9 @@ update_nvim_plugins() {
             exit 0
         fi
 
-        echo "section:Updating Neovim plugins (vim.pack)..."
+        print_live_section "Updating Neovim plugins (vim.pack)..."
 
-        if nvim --headless "+lua vim.pack.update()" +qa 2>/dev/null; then
+        if run_live_command nvim --headless "+lua vim.pack.update()" +qa; then
             echo "success:Neovim plugins updated"
         else
             echo "error:Failed to update Neovim plugins"
@@ -337,7 +326,8 @@ fetch_single_repo() {
     (
         cd "$repo"
 
-        if ! git fetch origin 2>/dev/null; then
+        echo "[$(timestamp)] Fetching $repo_name..." >&3
+        if ! run_live_command git fetch origin; then
             echo "error:$repo_name: failed to fetch" >>"$output_file"
             echo "$repo" >>"$failed_file"
             exit 0
@@ -382,7 +372,8 @@ update_single_repo() {
                 fi
             fi
 
-            if git pull --ff-only origin "$branch" 2>/dev/null; then
+            echo "[$(timestamp)] Pulling $repo_name ($branch)..." >&3
+            if run_live_command git pull --ff-only origin "$branch"; then
                 if [ "$stashed" = true ]; then
                     if git stash pop 2>/dev/null; then
                         echo "success:$repo_name: pulled latest on $branch (stashed changes restored)" >>"$output_file"
@@ -579,11 +570,9 @@ run_sequential() {
     check_macos_updates
     print_task_output "$TEMP_DIR/macos.out"
 
-    print_info "Homebrew command log: $TEMP_DIR/brew.log"
     run_brew_tasks
     print_task_output "$TEMP_DIR/brew.out"
 
-    print_info "npm global update log: $TEMP_DIR/npm-global.log"
     run_npm_global_update
     print_task_output "$TEMP_DIR/npm.out"
 
@@ -652,6 +641,10 @@ main() {
     fi
 
     setup_temp_dir
+
+    # Task functions write their summaries to temporary files. Keep a handle
+    # to the caller's stdout so installer output remains visible immediately.
+    exec 3>&1
 
     if [ "$SHOW_HEADER" = true ]; then
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
