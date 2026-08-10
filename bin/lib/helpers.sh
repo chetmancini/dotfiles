@@ -58,10 +58,11 @@ run_with_spinner() {
     # Run command in background, capture output
     local tmpfile
     tmpfile=$(mktemp)
-
-    # Set up cleanup trap for temp file
-    # shellcheck disable=SC2064
-    trap "rm -f '$tmpfile'" EXIT INT TERM
+    # Clean up tmpfile on return or interruption — RETURN is function-scoped
+    # (unlike EXIT which would clobber a caller's global trap).
+    # shellcheck disable=SC2329
+    _run_with_spinner_cleanup() { rm -f "$tmpfile"; }
+    trap _run_with_spinner_cleanup RETURN INT TERM
 
     "$@" >"$tmpfile" 2>&1 &
     pid=$!
@@ -81,8 +82,9 @@ run_with_spinner() {
     printf "\b \b"
     printf "\r"
 
-    # Clean up (trap will also clean up on signals)
+    # Clean up tmpfile and restore traps
     rm -f "$tmpfile"
-    trap - EXIT INT TERM
+    trap - RETURN INT TERM
+    unset -f _run_with_spinner_cleanup
     return $status
 }

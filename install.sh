@@ -501,7 +501,7 @@ print_summary() {
         echo -e "${BOLD}Next steps:${NC}"
         echo "  1. Restart your terminal or run: source ~/.zshrc"
         echo "  2. Run 'doctor' to verify the installed state"
-        echo "  3. Open Neovim to let LazyVim install plugins automatically"
+        echo "  3. Open Neovim — plugins sync via vim.pack on first launch (may take a moment)"
         echo "  4. In tmux, press prefix + I to install tmux plugins"
         echo "  5. Run 'brew-sync --check' to verify core Brewfile is in sync"
         echo "  6. Optional apps: brew bundle --file=~/dotfiles/Brewfile.optional"
