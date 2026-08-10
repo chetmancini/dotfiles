@@ -155,6 +155,7 @@ Modular configuration in `nvim/` (no LazyVim / lazy.nvim):
 - Daily tools → `Brewfile`; experimental/GUI → `Brewfile.optional`
 - Legacy `vim/` and `iterm/` are kept in-repo but not installed by default
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
+- Agent/MCP layout: `claude/agents/`, `claude/commands/`, `mcp.json.example` (see `docs/agents.md`; live `mcp.json` gitignored)
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
 - mise is the single runtime version manager (`zsh/tools/mise.zsh`); see `mise/config.toml`
