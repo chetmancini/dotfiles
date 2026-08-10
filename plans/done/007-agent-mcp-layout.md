@@ -11,6 +11,8 @@
 
 ## Status
 
+- **Status note**: Implemented by commit `6b70b94` (`007 (#44)`); reconciled and archived during the 2026-08-10 direction pass.
+- **Status**: DONE
 - **Priority**: P3
 - **Effort**: M
 - **Risk**: LOW
@@ -162,12 +164,12 @@ JSON/TOML as applicable; shell if install changed.
 
 ## Done criteria
 
-- [ ] MCP example is clearly example-shaped and valid JSON
-- [ ] Agent layout documented; install story clear
-- [ ] No placeholder `/Users/username` paths left in tracked config without explanation
-- [ ] Secrets guidance cross-linked
-- [ ] `make check` exit 0
-- [ ] `plans/README.md` 007 → DONE
+- [x] MCP example is clearly example-shaped and valid JSON
+- [x] Agent layout documented; install story clear
+- [x] No placeholder `/Users/username` paths left in tracked config without explanation
+- [x] Secrets guidance cross-linked
+- [x] `make check` exit 0
+- [x] `plans/README.md` 007 → DONE
 
 ## STOP conditions
 
