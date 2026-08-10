@@ -12,6 +12,7 @@ SHFMT_FLAGS := -i 4 -ci
 # (glob qualifiers, zle, typeset -U, etc.) is not bash; those files are
 # covered by zsh -n in ZSH_FILES/zsh-check below.
 SHFMT_FILES := $(shell git ls-files -z | xargs -0 $(SHFMT) -f | grep -Ev '^zsh/' | sort -u)
+BASH_SYNTAX_FILES := $(filter-out %.bats,$(SHFMT_FILES))
 SHELLCHECK_FLAGS := --severity=warning -x -P bin
 SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cheatsheet bin/colortest bin/dashboard bin/doctor bin/dot bin/dtgz bin/extract bin/flushdns bin/git-rm-gone bin/git-standup bin/good-morning bin/imgcat bin/killbyname bin/lib/helpers.sh bin/lib/symlinks.sh bin/my_ip bin/note bin/portpid bin/prettypath bin/removeexif bin/repo-report bin/running bin/server bin/update-everything install.sh mac_dev_install.sh scripts/test-install-smoke.sh scripts/pre-commit scripts/install-hooks.sh
 TOML_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -path './yazi/plugins' -prune -o -type f -name '*.toml' -print | sort | sed 's,^\./,,')
@@ -34,7 +35,7 @@ shell-format-check:
 	$(SHFMT) $(SHFMT_FLAGS) -d $(SHFMT_FILES)
 
 shell-syntax:
-	@for file in $(SHFMT_FILES); do \
+	@for file in $(BASH_SYNTAX_FILES); do \
 		bash -n "$$file"; \
 	done
 
