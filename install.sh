@@ -18,6 +18,7 @@ SKIP_BREW=false
 WITH_OPTIONAL_BREW=false
 WITH_LEGACY_VIM=false
 SKIP_API_KEYS=false
+SKIP_HOOKS=false
 CLEAR_SCREEN=true
 PLAN_MODE=false
 
@@ -48,6 +49,7 @@ Options:
   --with-optional-brew  Also install Brewfile.optional (default off under --yes)
   --with-legacy-vim     Symlink legacy Vim runtime/config (default off under --yes)
   --skip-api-keys       Skip creating secrets stubs from templates
+  --skip-hooks          Skip installing git pre-commit hook
   --no-clear            Do not clear the screen before starting
   -h, --help            Show this help message
 EOF
@@ -82,6 +84,10 @@ parse_args() {
                 ;;
             --skip-api-keys)
                 SKIP_API_KEYS=true
+                shift
+                ;;
+            --skip-hooks)
+                SKIP_HOOKS=true
                 shift
                 ;;
             --no-clear)
@@ -467,6 +473,40 @@ install_api_keys_template() {
     fi
 }
 
+install_git_hooks() {
+    print_header "Step 6: Git Hooks"
+
+    echo "Pre-commit hook runs 'make check' (formatting, lint, bats) before each commit."
+    echo "Bypass per-commit with: SKIP_HOOK=1 git commit  or  git commit --no-verify"
+    echo ""
+
+    if [ "$SKIP_HOOKS" = true ]; then
+        print_warning "Skipping git hooks by request (--skip-hooks)"
+        return 0
+    fi
+
+    if [ "$PLAN_MODE" = true ]; then
+        if [ -f "$DOTFILES_DIR/scripts/pre-commit" ]; then
+            print_plan "Would install pre-commit hook to .git/hooks/pre-commit"
+            print_success "Git hook install planned"
+        else
+            print_warning "scripts/pre-commit not found; skipping hook install"
+        fi
+        return 0
+    fi
+
+    if [ ! -f "$DOTFILES_DIR/scripts/install-hooks.sh" ]; then
+        print_warning "scripts/install-hooks.sh not found; skipping hook install"
+        return 0
+    fi
+
+    if bash "$DOTFILES_DIR/scripts/install-hooks.sh"; then
+        print_success "Git pre-commit hook installed"
+    else
+        print_warning "Git hook install failed (see output above)"
+    fi
+}
+
 print_summary() {
     if [ "$PLAN_MODE" = true ]; then
         print_header "Installation Plan Complete!"
@@ -548,4 +588,5 @@ install_homebrew
 install_config_symlinks
 install_home_symlinks
 install_api_keys_template
+install_git_hooks
 print_summary

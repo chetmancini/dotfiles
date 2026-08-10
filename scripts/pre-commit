@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# scripts/pre-commit — git pre-commit hook (runs make check)
+# Installed to .git/hooks/pre-commit via scripts/install-hooks.sh or install.sh
+# Bypass with: SKIP_HOOK=1 git commit  (or git commit --no-verify)
+set -euo pipefail
+
+if [[ "${SKIP_HOOK:-}" == "1" ]]; then
+    exit 0
+fi
+
+# Only run when staged changes include tracked shell/zsh/toml/bats files.
+# This keeps commits that only touch docs/README fast.
+staged="$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)"
+if [[ -z "$staged" ]]; then
+    exit 0
+fi
+
+# Quick filter: if no staged file matches our lintable patterns, skip
+if ! echo "$staged" | grep -Eq '\.(sh|bash|zsh|toml|bats)$|^(Makefile|Brewfile|install\.sh|bin/|zsh/|scripts/|tests/)'; then
+    exit 0
+fi
+
+echo "pre-commit: running make check..."
+if ! make check 2>&1; then
+    echo ""
+    echo "pre-commit: make check failed — fix issues before committing"
+    echo "  bypass (not recommended): SKIP_HOOK=1 git commit  or  git commit --no-verify"
+    exit 1
+fi
+echo "pre-commit: checks passed"

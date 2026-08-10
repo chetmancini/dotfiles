@@ -86,7 +86,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
 - `dot` dispatches `bin/` tools (`dot help`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
-- `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, and zsh checks
+- `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, zsh checks, and bats tests (`tests/`)
 
 ### Secrets (1Password preferred)
 - **Preferred:** copy `api_keys_1password.sh.template` → `api_keys_1password.sh` (gitignored), set `op://` item refs via `op_secret`

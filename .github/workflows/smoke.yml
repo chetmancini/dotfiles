@@ -17,7 +17,7 @@ jobs:
 
       - name: Install shell tools
         run: |
-          sudo apt-get update && sudo apt-get install -y zsh shellcheck
+          sudo apt-get update && sudo apt-get install -y zsh shellcheck bats
           go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
 
@@ -35,6 +35,9 @@ jobs:
 
       - name: Check zsh config
         run: make zsh-check
+
+      - name: Run bats tests
+        run: make bats
 
   install-smoke:
     runs-on: ubuntu-latest
