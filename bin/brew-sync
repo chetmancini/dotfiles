@@ -111,53 +111,35 @@ fi
 
 print_header
 
-# Get lists of packages
-get_brewfile_formulae() {
-    grep -E '^[[:space:]]*brew[[:space:]]+"' "$BREWFILE" 2>/dev/null |
-        sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' |
-        # strip tap prefix (brew "org/repo/name") for brew list comparison
-        sed -E 's|^.*/||' |
-        sort -u
-}
-
-get_brewfile_casks() {
-    grep -E '^[[:space:]]*cask[[:space:]]+"' "$BREWFILE" 2>/dev/null |
-        sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/' |
-        sort -u
-}
-
-get_optional_formulae() {
-    if [ ! -f "$BREWFILE_OPTIONAL" ]; then
-        return 0
-    fi
-    grep -E '^[[:space:]]*brew[[:space:]]+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
-        sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' |
-        # strip tap prefix for comparison with brew list short names
-        sed -E 's|.*/||' |
-        sort -u
-}
-
-get_optional_casks() {
-    if [ ! -f "$BREWFILE_OPTIONAL" ]; then
-        return 0
-    fi
-    grep -E '^[[:space:]]*cask[[:space:]]+"' "$BREWFILE_OPTIONAL" 2>/dev/null |
-        sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/' |
-        sort -u
-}
-
-get_installed_formulae() {
-    brew list --formula 2>/dev/null | sort -u
-}
-
-get_installed_casks() {
-    brew list --cask 2>/dev/null | sort -u
-}
-
 # Normalize brewfile formula names to short form for brew list comparison
 short_formula_names() {
     sed -E 's|.*/||'
 }
+
+# Shared helper to extract package names for a given type from a Brewfile.
+# Handles both " and ' quotes, trailing args/comments, and for brew strips tap prefix.
+_extract_brewfile_names() {
+    local file="$1"
+    local kind="$2" # brew or cask
+    grep -E '^[[:space:]]*'"${kind}"'[[:space:]]+["'\'']' "$file" 2>/dev/null |
+        sed -E "s/^[[:space:]]*${kind}[[:space:]]+[\"']([^\"']+)[\"'].*/\1/" |
+        { if [ "$kind" = "brew" ]; then short_formula_names; else cat; fi; } |
+        sort -u
+}
+
+get_brewfile_formulae() { _extract_brewfile_names "$BREWFILE" brew; }
+get_brewfile_casks() { _extract_brewfile_names "$BREWFILE" cask; }
+get_optional_formulae() {
+    [ -f "$BREWFILE_OPTIONAL" ] || return 0
+    _extract_brewfile_names "$BREWFILE_OPTIONAL" brew
+}
+get_optional_casks() {
+    [ -f "$BREWFILE_OPTIONAL" ] || return 0
+    _extract_brewfile_names "$BREWFILE_OPTIONAL" cask
+}
+
+get_installed_formulae() { brew list --formula 2>/dev/null | sort -u; }
+get_installed_casks() { brew list --cask 2>/dev/null | sort -u; }
 
 # Compare and report drift
 check_drift() {
@@ -413,19 +395,19 @@ remove_uninstalled() {
             local should_keep=true
 
             # Check if line is a brew line with a package to remove
-            if echo "$line" | grep -qE '^[[:space:]]*brew[[:space:]]+"'; then
+            if echo "$line" | grep -qE '^[[:space:]]*brew[[:space:]]+["'\'']'; then
                 local pkg
-                pkg=$(echo "$line" | sed -E 's/^[[:space:]]*brew[[:space:]]+"([^"]+)".*/\1/' | short_formula_names)
-                if echo "$formulae_to_remove" | grep -q "^${pkg}$"; then
+                pkg=$(echo "$line" | sed -E "s/^[[:space:]]*brew[[:space:]]+[\"']([^\"']+)[\"'].*/\1/" | short_formula_names)
+                if echo "$formulae_to_remove" | grep -Fxq "$pkg"; then
                     should_keep=false
                 fi
             fi
 
             # Check if line is a cask line with a package to remove
-            if echo "$line" | grep -qE '^[[:space:]]*cask[[:space:]]+"'; then
+            if echo "$line" | grep -qE '^[[:space:]]*cask[[:space:]]+["'\'']'; then
                 local pkg
-                pkg=$(echo "$line" | sed -E 's/^[[:space:]]*cask[[:space:]]+"([^"]+)".*/\1/')
-                if echo "$casks_to_remove" | grep -q "^${pkg}$"; then
+                pkg=$(echo "$line" | sed -E "s/^[[:space:]]*cask[[:space:]]+[\"']([^\"']+)[\"'].*/\1/")
+                if echo "$casks_to_remove" | grep -Fxq "$pkg"; then
                     should_keep=false
                 fi
             fi
