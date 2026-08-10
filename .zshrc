@@ -18,6 +18,7 @@ _zsh_modules=(
   tools/direnv
   tools/atuin
   tools/completions
+  tools/workbench
   fun
   plugins
 )

@@ -10,7 +10,11 @@ trusted_config_paths = [
   "~/code",
   "~/norm",
   "~/projects",
+  "~/conductor/workspaces",
 ]
+
+[settings.npm]
+shell_out = true
 
 [tools]
 # Global defaults — override per-project with mise.toml / .tool-versions
