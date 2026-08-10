@@ -10,6 +10,7 @@ dot help
 dot install --plan --yes --skip-brew   # → ../install.sh
 dot doctor --skip-tools
 dot brew-sync
+dot package-sync --update
 dot update          # → update-everything
 ```
 
@@ -19,6 +20,7 @@ dot update          # → update-everything
 |--------|----------|---------|
 | [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
+| [`package-sync`](#package-sync) | Bash | Inspect or update global npm and pnpm packages |
 | [`extract`](#extract) | Bash | Archive extraction utility |
 | [`imgcat`](#imgcat) | Bash | Display images in terminal |
 | [`removeexif`](#removeexif) | Bash | Remove EXIF metadata from images |
@@ -42,11 +44,12 @@ dot help
 dot install --plan --yes --skip-brew
 dot doctor --skip-tools
 dot brew-sync --check
+dot package-sync --update
 dot update
 ```
 
 **Features:**
-- Primary commands with descriptions (`install`, `doctor`, `brew-sync`, `update`, …)
+- Primary commands with descriptions (`install`, `doctor`, `brew-sync`, `package-sync`, `update`, …)
 - `dot install` runs repo-root `install.sh` with flags passed through
 - Auto-lists other executables in `bin/`
 - Rejects path traversal (`dot ../.zshrc` fails)
@@ -70,6 +73,22 @@ doctor --strict
 - Confirms zsh modules, theme file, and TPM presence
 - Runs lightweight repo health checks
 - Optionally checks key commands are installed
+
+---
+
+### `package-sync`
+
+Verify the global npm and pnpm stores, or update both without running the full
+daily maintenance routine.
+
+```bash
+package-sync
+package-sync --update
+package-sync --update --npm
+```
+
+See [`../docs/package-managers.md`](../docs/package-managers.md) for the
+installer policy and the rule for moving a tool away from Homebrew.
 
 ---
 

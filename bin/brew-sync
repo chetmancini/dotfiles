@@ -21,6 +21,8 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
+# shellcheck source=bin/lib/package-policy.sh
+source "${PACKAGE_POLICY:-$SCRIPT_DIR/lib/package-policy.sh}"
 
 BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile}"
 BREWFILE_OPTIONAL="${BREWFILE_OPTIONAL:-$DOTFILES_DIR/Brewfile.optional}"
@@ -47,6 +49,8 @@ print_help() {
     echo "Optional packages live in Brewfile.optional and are not required for a"
     echo "healthy core install. They are excluded from 'extra install' drift and"
     echo "are never removed by --remove from the optional file."
+    echo "Tools listed in the package policy are also healthy when their preferred"
+    echo "non-Homebrew installer supplies the executable."
     echo ""
     echo "Options:"
     echo "  --add          Add missing packages to core Brewfile"
@@ -121,7 +125,7 @@ short_formula_names() {
 _extract_brewfile_names() {
     local file="$1"
     local kind="$2" # brew or cask
-    grep -E '^[[:space:]]*'"${kind}"'[[:space:]]+["'\'']' "$file" 2>/dev/null |
+    { grep -E '^[[:space:]]*'"${kind}"'[[:space:]]+["'\'']' "$file" 2>/dev/null || true; } |
         sed -E "s/^[[:space:]]*${kind}[[:space:]]+[\"']([^\"']+)[\"'].*/\1/" |
         { if [ "$kind" = "brew" ]; then short_formula_names; else cat; fi; } |
         sort -u
@@ -140,6 +144,41 @@ get_optional_casks() {
 
 get_installed_formulae() { brew list --formula 2>/dev/null | sort -u; }
 get_installed_casks() { brew list --cask 2>/dev/null | sort -u; }
+
+# Remove package names represented by policy-satisfaction records. Arguments:
+# newline-delimited package names, newline-delimited package|owner|command|hint.
+exclude_policy_satisfied_packages() {
+    local packages="$1"
+    local satisfactions="$2"
+    local package
+
+    [ -n "$packages" ] || return 0
+    while IFS= read -r package; do
+        [ -n "$package" ] || continue
+        if ! printf '%s\n' "$satisfactions" | cut -d'|' -f1 | grep -Fxq "$package"; then
+            printf '%s\n' "$package"
+        fi
+    done <<EOF
+$packages
+EOF
+
+    return 0
+}
+
+print_policy_satisfaction() {
+    local satisfactions="$1"
+    local package owner command install_hint
+
+    [ -n "$satisfactions" ] || return 0
+    echo -e "${BLUE}Tools supplied outside Homebrew by policy:${NC}"
+    while IFS='|' read -r package owner command install_hint; do
+        [ -n "$package" ] || continue
+        echo "  • $package: $owner via $command ($install_hint)"
+    done <<EOF
+$satisfactions
+EOF
+    echo ""
+}
 
 # Compare and report drift
 check_drift() {
@@ -160,6 +199,9 @@ check_drift() {
     # Formulae in Brewfile but not installed
     local formulae_not_installed
     formulae_not_installed=$(comm -23 <(echo "$brewfile_formulae") <(echo "$installed_formulae"))
+    local external_formulae
+    external_formulae=$(package_policy_external_satisfaction brew "$formulae_not_installed")
+    formulae_not_installed=$(exclude_policy_satisfied_packages "$formulae_not_installed" "$external_formulae")
 
     # Formulae installed but not in core Brewfile (ignore optional profile)
     local formulae_not_in_brewfile
@@ -171,6 +213,9 @@ check_drift() {
     # Casks in Brewfile but not installed
     local casks_not_installed
     casks_not_installed=$(comm -23 <(echo "$brewfile_casks") <(echo "$installed_casks"))
+    local external_casks
+    external_casks=$(package_policy_external_satisfaction cask "$casks_not_installed")
+    casks_not_installed=$(exclude_policy_satisfied_packages "$casks_not_installed" "$external_casks")
 
     # Casks installed but not in core Brewfile (ignore optional profile)
     local casks_not_in_brewfile
@@ -181,6 +226,9 @@ check_drift() {
 
     # Print results
     local issues_found=false
+
+    print_policy_satisfaction "$external_formulae"
+    print_policy_satisfaction "$external_casks"
 
     if [ -n "$formulae_not_installed" ]; then
         echo -e "${YELLOW}Formulae in Brewfile but not installed:${NC}"
@@ -357,10 +405,19 @@ remove_uninstalled() {
     # Find formulae to remove
     local formulae_to_remove
     formulae_to_remove=$(comm -23 <(echo "$brewfile_formulae") <(echo "$installed_formulae"))
+    local external_formulae
+    external_formulae=$(package_policy_external_satisfaction brew "$formulae_to_remove")
+    formulae_to_remove=$(exclude_policy_satisfied_packages "$formulae_to_remove" "$external_formulae")
 
     # Find casks to remove
     local casks_to_remove
     casks_to_remove=$(comm -23 <(echo "$brewfile_casks") <(echo "$installed_casks"))
+    local external_casks
+    external_casks=$(package_policy_external_satisfaction cask "$casks_to_remove")
+    casks_to_remove=$(exclude_policy_satisfied_packages "$casks_to_remove" "$external_casks")
+
+    print_policy_satisfaction "$external_formulae"
+    print_policy_satisfaction "$external_casks"
 
     if [ -z "$formulae_to_remove" ] && [ -z "$casks_to_remove" ]; then
         echo -e "${GREEN}✓ Nothing to remove${NC}"
@@ -425,6 +482,36 @@ remove_uninstalled() {
     fi
 }
 
+# Drop entries from a generated Brewfile when the policy's preferred non-Brew
+# owner already provides them. `brew bundle dump` cannot express this itself.
+prune_policy_satisfied_entries() {
+    local temp_file line kind package satisfaction
+
+    temp_file=$(mktemp)
+    while IFS= read -r line; do
+        kind=""
+        package=""
+        if echo "$line" | grep -qE '^[[:space:]]*brew[[:space:]]+["'\'']'; then
+            kind="brew"
+            package=$(echo "$line" | sed -E "s/^[[:space:]]*brew[[:space:]]+[\"']([^\"']+)[\"'].*/\1/" | short_formula_names)
+        elif echo "$line" | grep -qE '^[[:space:]]*cask[[:space:]]+["'\'']'; then
+            kind="cask"
+            package=$(echo "$line" | sed -E "s/^[[:space:]]*cask[[:space:]]+[\"']([^\"']+)[\"'].*/\1/")
+        fi
+
+        if [ -n "$kind" ]; then
+            satisfaction=$(package_policy_external_satisfaction "$kind" "$package")
+            if [ -n "$satisfaction" ]; then
+                print_policy_satisfaction "$satisfaction"
+                continue
+            fi
+        fi
+        echo "$line" >>"$temp_file"
+    done <"$BREWFILE"
+
+    mv "$temp_file" "$BREWFILE"
+}
+
 # Full update - regenerate Brewfile
 update_brewfile() {
     if [ "$DRY_RUN" = true ]; then
@@ -444,6 +531,7 @@ update_brewfile() {
 
         # Regenerate
         brew bundle dump --file="$BREWFILE" --force
+        prune_policy_satisfied_entries
 
         echo ""
         echo -e "${GREEN}✓ Brewfile updated${NC}"

@@ -365,6 +365,16 @@ install_home_symlinks() {
             "$description"
     done < <(managed_symlinks_for_group home)
 
+    # npm's portable user-level prefix is managed by npm/npmrc. Create it here
+    # so npm list/update work on a freshly bootstrapped machine before its first
+    # global install.
+    if [ "$PLAN_MODE" = true ]; then
+        print_plan "Would create npm global prefix directory $HOME/.npm-global"
+    else
+        mkdir -p "$HOME/.npm-global"
+        print_success "npm global prefix directory exists: $HOME/.npm-global"
+    fi
+
     # Legacy Vim: default No under --yes; opt in with --with-legacy-vim or interactive yes.
     local install_legacy_vim=false
     if [ "$WITH_LEGACY_VIM" = true ]; then

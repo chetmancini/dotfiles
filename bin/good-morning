@@ -98,6 +98,8 @@ generate_config() {
 
 # npm global package updates
 # RUN_NPM_GLOBAL_UPDATE=true
+# pnpm global package updates
+# RUN_PNPM_GLOBAL_UPDATE=true
 
 # Run git fetch across repos in parallel (true) or sequentially (false)
 # PARALLEL=true

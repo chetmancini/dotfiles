@@ -29,6 +29,7 @@ DEFAULT_RUN_BREW_UPDATE=true
 DEFAULT_RUN_BREW_UPGRADE=true
 DEFAULT_RUN_BREW_CLEANUP=true
 DEFAULT_RUN_NPM_GLOBAL_UPDATE=true
+DEFAULT_RUN_PNPM_GLOBAL_UPDATE=true
 DEFAULT_PULL_REPOS=true
 DEFAULT_DOCKER_PRUNE=true
 DEFAULT_CHECK_MACOS_UPDATES=true
@@ -43,6 +44,7 @@ load_config() {
     RUN_BREW_UPGRADE="$DEFAULT_RUN_BREW_UPGRADE"
     RUN_BREW_CLEANUP="$DEFAULT_RUN_BREW_CLEANUP"
     RUN_NPM_GLOBAL_UPDATE="$DEFAULT_RUN_NPM_GLOBAL_UPDATE"
+    RUN_PNPM_GLOBAL_UPDATE="$DEFAULT_RUN_PNPM_GLOBAL_UPDATE"
     PULL_REPOS="$DEFAULT_PULL_REPOS"
     DOCKER_PRUNE="$DEFAULT_DOCKER_PRUNE"
     CHECK_MACOS_UPDATES="$DEFAULT_CHECK_MACOS_UPDATES"
@@ -198,6 +200,31 @@ run_npm_global_update() {
             echo "success:Global npm packages updated"
         else
             echo "error:Failed to update global npm packages"
+        fi
+    } >"$output_file"
+}
+
+run_pnpm_global_update() {
+    local output_file="$TEMP_DIR/pnpm.out"
+
+    {
+        if [ "$RUN_PNPM_GLOBAL_UPDATE" != true ]; then
+            exit 0
+        fi
+
+        print_live_section "Updating global pnpm packages..."
+
+        if ! command -v pnpm &>/dev/null; then
+            echo "info:pnpm is not installed, skipping"
+            exit 0
+        fi
+
+        echo "info:[$(timestamp)] Running pnpm update --global"
+
+        if run_streamed_command "pnpm update --global" pnpm update --global; then
+            echo "success:Global pnpm packages updated"
+        else
+            echo "error:Failed to update global pnpm packages"
         fi
     } >"$output_file"
 }
@@ -489,6 +516,7 @@ print_help() {
     echo "  - Check for macOS updates"
     echo "  - brew update / upgrade / cleanup"
     echo "  - npm update -g"
+    echo "  - pnpm update --global"
     echo "  - Docker system prune"
     echo "  - Update Neovim plugins"
     echo "  - Pull latest main branch on all git repos in ~/code and ~/norm (only git fetch is parallelized)"
@@ -505,6 +533,7 @@ dry_run() {
     echo "  RUN_BREW_UPGRADE=$RUN_BREW_UPGRADE"
     echo "  RUN_BREW_CLEANUP=$RUN_BREW_CLEANUP"
     echo "  RUN_NPM_GLOBAL_UPDATE=$RUN_NPM_GLOBAL_UPDATE"
+    echo "  RUN_PNPM_GLOBAL_UPDATE=$RUN_PNPM_GLOBAL_UPDATE"
     echo "  PULL_REPOS=$PULL_REPOS"
     echo "  DOCKER_PRUNE=$DOCKER_PRUNE"
     echo "  CHECK_MACOS_UPDATES=$CHECK_MACOS_UPDATES"
@@ -528,6 +557,13 @@ dry_run() {
             echo "Would run: npm update -g"
         else
             echo "Would run: npm update -g (npm not installed)"
+        fi
+    fi
+    if [ "$RUN_PNPM_GLOBAL_UPDATE" = true ]; then
+        if command -v pnpm &>/dev/null; then
+            echo "Would run: pnpm update --global"
+        else
+            echo "Would run: pnpm update --global (pnpm not installed)"
         fi
     fi
     if [ "$DOCKER_PRUNE" = true ]; then
@@ -575,6 +611,9 @@ run_sequential() {
 
     run_npm_global_update
     print_task_output "$TEMP_DIR/npm.out"
+
+    run_pnpm_global_update
+    print_task_output "$TEMP_DIR/pnpm.out"
 
     run_docker_prune
     print_task_output "$TEMP_DIR/docker.out"

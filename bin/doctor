@@ -9,6 +9,8 @@ DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 # shellcheck source=bin/lib/symlinks.sh
 source "$SCRIPT_DIR/lib/symlinks.sh"
+# shellcheck source=bin/lib/package-policy.sh
+source "$SCRIPT_DIR/lib/package-policy.sh"
 
 STRICT=false
 CHECK_TOOLS=true
@@ -96,6 +98,74 @@ check_command() {
     else
         record_warning "Missing command: $command_name"
     fi
+}
+
+check_mise_runtime() {
+    local runtime="$1"
+    local resolved
+
+    if ! command -v mise >/dev/null 2>&1; then
+        record_warning "$runtime should be managed by mise, but mise is not installed"
+        return
+    fi
+
+    resolved="$(mise which "$runtime" 2>/dev/null || true)"
+    if [ -n "$resolved" ]; then
+        print_success "Mise manages $runtime: $resolved"
+        return
+    fi
+
+    if command -v "$runtime" >/dev/null 2>&1; then
+        record_warning "$runtime is available outside Mise; prefer: mise use -g $runtime"
+    else
+        record_warning "$runtime is missing; install it with: mise use -g $runtime"
+    fi
+}
+
+check_global_package_paths() {
+    local npm_prefix pnpm_global_bin
+
+    if command -v npm >/dev/null 2>&1; then
+        npm_prefix="$(npm prefix --global 2>/dev/null || true)"
+        if [ "$npm_prefix" != "$HOME/.npm-global" ]; then
+            record_warning "npm global prefix is ${npm_prefix:-unknown}; expected $HOME/.npm-global"
+        elif [ ! -d "$npm_prefix" ]; then
+            record_warning "npm global prefix is missing: $npm_prefix (re-run install.sh)"
+        elif [[ ":$PATH:" != *":$npm_prefix/bin:"* ]]; then
+            record_warning "npm global bin is not on PATH: $npm_prefix/bin"
+        else
+            print_success "npm global prefix is portable and on PATH"
+        fi
+    fi
+
+    if command -v pnpm >/dev/null 2>&1; then
+        pnpm_global_bin="$(pnpm bin --global 2>/dev/null || true)"
+        if [ -z "$pnpm_global_bin" ]; then
+            record_warning "pnpm global bin is not configured (run: pnpm setup)"
+        elif [[ ":$PATH:" != *":$pnpm_global_bin:"* ]]; then
+            record_warning "pnpm global bin is not on PATH: $pnpm_global_bin (run: pnpm setup)"
+        else
+            print_success "pnpm global bin is on PATH: $pnpm_global_bin"
+        fi
+    fi
+}
+
+check_preferred_cli_installers() {
+    local id brew_kind brew_name command owner install_hint
+
+    while IFS='|' read -r id brew_kind brew_name command owner install_hint; do
+        case "$id" in
+            '' | \#*) continue ;;
+        esac
+        [ "$owner" = "vendor" ] || continue
+        command -v brew >/dev/null 2>&1 || continue
+
+        if brew list --"$brew_kind" "$brew_name" >/dev/null 2>&1; then
+            record_warning "$id is installed with Homebrew; $install_hint"
+        elif command -v "$command" >/dev/null 2>&1; then
+            print_success "$id is available without Homebrew: $(command -v "$command")"
+        fi
+    done < <(package_policy_records)
 }
 
 parse_args() {
@@ -278,6 +348,14 @@ run_tool_checks() {
     check_command mise
     check_command atuin
     check_command direnv
+    echo ""
+
+    print_section "Checking package-manager policy"
+    echo ""
+    check_mise_runtime node
+    check_mise_runtime python
+    check_global_package_paths
+    check_preferred_cli_installers
     echo ""
 }
 

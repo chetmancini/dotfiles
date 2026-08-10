@@ -69,10 +69,24 @@ update-everything --verbose # Detailed output
 
 **Updates:**
 - Homebrew (update, upgrade, cleanup)
+- Global npm and pnpm packages
 - macOS software (check only)
 - Git repositories in `~/code` and `~/norm`
 - Docker (system prune)
 - Neovim plugins
+
+#### package-sync
+
+Check the configured npm and pnpm global stores, or update only those stores.
+
+```bash
+package-sync
+package-sync --update
+package-sync --update --pnpm
+```
+
+See [package-manager policy](package-managers.md) for the preferred installer
+for runtimes, JavaScript CLIs, and vendor-managed tools.
 
 ---
 

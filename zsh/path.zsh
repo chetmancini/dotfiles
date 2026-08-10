@@ -9,6 +9,7 @@ export CODE_DIR="$HOME/code"
 export DEV_DIR="$HOME/Development"
 export NPM_GLOBAL_BIN="$HOME/.npm-global/bin"
 export PNPM_HOME="$HOME/Library/pnpm"
+export PNPM_GLOBAL_BIN="$PNPM_HOME/bin"
 export UV_PATH="$HOME/.local/bin"
 export BUN_INSTALL="$HOME/.bun"
 export USR_LOCAL_HOME=/usr/local/bin
@@ -36,7 +37,7 @@ path_add \
     "$USR_LOCAL_HOME" \
     "$NPM_GLOBAL_BIN" \
     "$UV_PATH" \
-    "$PNPM_HOME" \
+    "$PNPM_GLOBAL_BIN" \
     "$BUN_INSTALL/bin" \
     "$JAVA_HOME/bin" \
     "$GROK_PATH" \

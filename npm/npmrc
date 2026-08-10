@@ -1,0 +1,5 @@
+# User-level npm configuration. Installed as ~/.npmrc; do not copy this file
+# to a project root because npm rejects global prefix settings in project config.
+min-release-age=1
+allow-scripts=@google/genai,bufferutil,protobufjs,esbuild,@anthropic/claude-code
+prefix=${HOME}/.npm-global

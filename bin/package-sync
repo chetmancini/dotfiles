@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# package-sync: Inspect or update globally installed npm and pnpm packages.
+
+ACTION="check"
+RUN_NPM=true
+RUN_PNPM=true
+
+print_help() {
+    cat <<'EOF'
+Usage: package-sync [options]
+
+Inspect or update the global npm and pnpm package stores. Runtime versions are
+owned by Mise; Homebrew owns native/system packages. This command only manages
+JavaScript CLIs that are intentionally installed globally.
+
+Options:
+  --check       Verify global store locations (default)
+  --update      Run npm update --global and pnpm update --global
+  --npm         Limit the selected action to npm
+  --pnpm        Limit the selected action to pnpm
+  -h, --help    Show this help
+
+Examples:
+  package-sync
+  package-sync --update
+  package-sync --update --pnpm
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check)
+            ACTION="check"
+            shift
+            ;;
+        --update)
+            ACTION="update"
+            shift
+            ;;
+        --npm)
+            RUN_PNPM=false
+            shift
+            ;;
+        --pnpm)
+            RUN_NPM=false
+            shift
+            ;;
+        -h | --help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            print_help >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$RUN_NPM" = false ] && [ "$RUN_PNPM" = false ]; then
+    echo "Select at least one package manager." >&2
+    exit 1
+fi
+
+check_npm() {
+    local prefix
+
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "npm: not installed (install Node with mise)"
+        return 0
+    fi
+
+    prefix="$(npm prefix --global 2>/dev/null || true)"
+    if [ -z "$prefix" ]; then
+        echo "npm: unable to determine the global prefix"
+        return 1
+    fi
+    if [ ! -d "$prefix" ]; then
+        echo "npm: global prefix is missing: $prefix"
+        echo "  Re-run install.sh, or create it with: mkdir -p $prefix"
+        return 1
+    fi
+
+    echo "npm: global prefix $prefix"
+}
+
+check_pnpm() {
+    local global_bin
+
+    if ! command -v pnpm >/dev/null 2>&1; then
+        echo "pnpm: not installed (install it with Homebrew)"
+        return 0
+    fi
+
+    global_bin="$(pnpm bin --global 2>/dev/null || true)"
+    if [ -z "$global_bin" ]; then
+        echo "pnpm: unable to determine the global bin directory"
+        echo "  Run: pnpm setup"
+        return 1
+    fi
+    if [[ ":$PATH:" != *":$global_bin:"* ]]; then
+        echo "pnpm: global bin is not on PATH: $global_bin"
+        echo "  Run: pnpm setup, then restart the shell"
+        return 1
+    fi
+
+    echo "pnpm: global bin $global_bin"
+}
+
+update_npm() {
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "npm: not installed, skipping"
+        return 0
+    fi
+
+    echo "npm: updating global packages"
+    npm update --global
+}
+
+update_pnpm() {
+    if ! command -v pnpm >/dev/null 2>&1; then
+        echo "pnpm: not installed, skipping"
+        return 0
+    fi
+
+    echo "pnpm: updating global packages"
+    pnpm update --global
+}
+
+status=0
+case "$ACTION" in
+    check)
+        if [ "$RUN_NPM" = true ] && ! check_npm; then
+            status=1
+        fi
+        if [ "$RUN_PNPM" = true ] && ! check_pnpm; then
+            status=1
+        fi
+        ;;
+    update)
+        if [ "$RUN_NPM" = true ] && ! update_npm; then
+            status=1
+        fi
+        if [ "$RUN_PNPM" = true ] && ! update_pnpm; then
+            status=1
+        fi
+        ;;
+esac
+
+exit "$status"

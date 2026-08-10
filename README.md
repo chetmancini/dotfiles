@@ -61,7 +61,7 @@ brew-sync
 - **CLI Tools**: eza, bat, fzf, zoxide, atuin, direnv, jq, htop, yazi, shellcheck, shfmt
 - **Development**: neovim, gh, git-delta, awscli, mise
 - **Kubernetes**: kubectl, kubectx, k9s, helm
-- **Languages**: mise (node/python), openjdk, bun, uv, pnpm
+- **Languages**: Mise (Node/Python runtimes), OpenJDK, Bun, uv, pnpm
 - **Databases**: postgresql, redis, sqlite
 - **Apps**: Ghostty, 1Password CLI
 - **Fonts**: Monaspace, Hack (+ Nerd Font variants)
@@ -85,6 +85,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
 - `dot` dispatches `bin/` tools (`dot help`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
+- [`docs/package-managers.md`](docs/package-managers.md) defines the preferred owner for runtimes, native apps, and global JavaScript CLIs; use `package-sync --update` to refresh npm and pnpm globals
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, zsh checks, and bats tests (`tests/`)
 
@@ -116,6 +117,8 @@ fzfp        # fzf with bat preview
 2. Run `brew bundle --file=…` for the right profile
 3. If config needed, add symlink to `bin/lib/symlinks.sh` (+ install/doctor)
 4. Add any shell integration under `zsh/` (and one line in `.zshrc` if a new module)
+
+See [`docs/package-managers.md`](docs/package-managers.md) before choosing an installer. One executable should have one preferred owner.
 
 ## Structure
 

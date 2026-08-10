@@ -102,3 +102,30 @@ EOS
     [[ "$(cat "$TMP_BREWFILE")" == 'brew "ripgrep"'* ]]
     rm -rf "$fake_bin"
 }
+
+@test "brew-sync accepts a policy-managed cask outside Homebrew" {
+    cat >"$TMP_BREWFILE" <<'EOF'
+cask "claude-code"
+EOF
+    fake_bin="$(mktemp -d "${TMPDIR:-/tmp}/fakebin.XXXXXX")"
+    cat >"$fake_bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "list" ] || [ "$1" = "outdated" ] || [ "$1" = "autoremove" ]; then
+    exit 0
+fi
+exit 1
+EOF
+    cat >"$fake_bin/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$fake_bin/brew" "$fake_bin/claude"
+
+    run env \
+        BREWFILE="$TMP_BREWFILE" \
+        PATH="$fake_bin:$PATH" \
+        "$DOTFILES_DIR/bin/brew-sync" --check
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claude-code: vendor via claude"* ]]
+    rm -rf "$fake_bin"
+}
