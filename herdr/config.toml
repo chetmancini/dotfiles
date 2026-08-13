@@ -1,0 +1,59 @@
+# Durable Herdr workstation defaults. Runtime state stays in ~/.config/herdr.
+onboarding = false
+
+[theme]
+name = "dracula"
+auto_switch = true
+light_name = "dracula"
+dark_name = "dracula"
+
+[terminal]
+shell_mode = "login"
+new_cwd = "follow"
+
+[update]
+channel = "stable"
+version_check = true
+manifest_check = true
+
+[ui]
+show_agent_labels_on_pane_borders = true
+agent_panel_sort = "priority"
+hide_tab_bar_when_single_tab = true
+prompt_new_tab_name = false
+pane_gaps = true
+
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["terminal_title_stripped"], ["agent"]]
+
+[ui.sidebar.spaces]
+rows = [["state_icon", "workspace"], ["branch", "git_status"]]
+
+[ui.toast]
+# Keep attention cues in Herdr without adding OS-notification noise.
+delivery = "herdr"
+delay_seconds = 2
+
+[session]
+resume_agents_on_restore = true
+
+[experimental]
+# Retain recent pane context through a complete server restart.
+pane_history = true
+
+[advanced]
+# Enough agent and build output without unbounded memory growth.
+scrollback_limit_bytes = 25000000
+
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer"
+description = "open file viewer in split"
+
+[[keys.command]]
+key = "prefix+shift+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer-tab"
+description = "open file viewer in tab"
+

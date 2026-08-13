@@ -12,6 +12,7 @@ nvim|.config/nvim|Neovim|Neovim config|Neovim config (vim.pack + modular plugin/
 mise|.config/mise|Mise|Mise config|Dev tool version manager with trusted config paths for ~/norm, ~/projects, ~/code
 uv|.config/uv|uv|uv config|Python package manager config with exclude-newer for supply chain safety
 atuin|.config/atuin|Atuin|Atuin config|Shell history search defaults (no secrets; sync is operator opt-in)
+herdr/config.toml|.config/herdr/config.toml|Herdr|Herdr config|Herdr workspace manager durable config (runtime state stays in ~/.config/herdr)
 EOF
             ;;
         home)
