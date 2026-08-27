@@ -11,6 +11,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"doctor"* ]]
     [[ "$output" == *"brew-sync"* ]]
+    [[ "$output" == *"cache-clean"* ]]
     [[ "$output" == *"install"* ]]
 }
 

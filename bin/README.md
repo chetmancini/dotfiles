@@ -11,6 +11,7 @@ dot install --plan --yes --skip-brew   # → ../install.sh
 dot doctor --skip-tools
 dot brew-sync
 dot package-sync --update
+dot cache-clean
 dot update          # → update-everything
 ```
 
@@ -21,6 +22,7 @@ dot update          # → update-everything
 | [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`package-sync`](#package-sync) | Bash | Inspect or update global npm and pnpm packages |
+| [`cache-clean`](#cache-clean) | Bash | Preview or run supported package-cache cleanup |
 | [`extract`](#extract) | Bash | Archive extraction utility |
 | [`imgcat`](#imgcat) | Bash | Display images in terminal |
 | [`removeexif`](#removeexif) | Bash | Remove EXIF metadata from images |
@@ -45,6 +47,7 @@ dot install --plan --yes --skip-brew
 dot doctor --skip-tools
 dot brew-sync --check
 dot package-sync --update
+dot cache-clean
 dot update
 ```
 
@@ -89,6 +92,25 @@ package-sync --update --npm
 
 See [`../docs/package-managers.md`](../docs/package-managers.md) for the
 installer policy and the rule for moving a tool away from Homebrew.
+
+---
+
+### `cache-clean`
+
+Preview or run package- and tool-managed cache cleanup. It is preview-only by
+default and requires `--apply` plus confirmation before changing anything.
+
+```bash
+cache-clean
+cache-clean --only uv --only pnpm
+cache-clean --apply
+cache-clean --apply --aggressive --yes
+```
+
+Conservative mode prunes or verifies caches where the tool supports it.
+Aggressive mode clears complete caches, which can require future downloads.
+Project build output, installed Mise runtimes, containers, application data,
+session history, and personal files are intentionally excluded.
 
 ---
 

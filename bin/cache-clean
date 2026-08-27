@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -uo pipefail
+
+# cache-clean: Preview or run supported package-cache cleanup commands
+#
+# Preview is the default. Mutating cleanup requires --apply and either an
+# interactive confirmation or --yes. Project build output, application data,
+# container images, and session history are deliberately out of scope.
+
+APPLY=false
+ASSUME_YES=false
+AGGRESSIVE=false
+SHOW_SIZES=true
+FAILURES=0
+RAN=0
+SKIPPED=0
+SELECTED=()
+
+readonly -a CLEANERS=(uv pnpm npm bun brew mise pip go pre-commit)
+
+print_help() {
+    cat <<'EOF'
+Usage: cache-clean [options]
+
+Preview or run supported cache-maintenance commands. Preview is the default;
+nothing is removed unless --apply is supplied.
+
+Options:
+  --apply          Run the planned cleanup commands
+  --yes            Skip the interactive confirmation (requires --apply)
+  --aggressive     Clear complete caches where supported instead of pruning
+  --only NAME      Limit cleanup to one cleaner; may be repeated
+  --no-size        Skip potentially slow cache-size measurements
+  -h, --help       Show this help
+
+Cleaners:
+  uv               prune unreachable objects; aggressive mode clears all
+  pnpm             prune unreferenced packages from the active store
+  npm              verify/garbage-collect; aggressive mode clears all
+  bun              clear the Bun package cache (always a complete clear)
+  brew             remove stale downloads/versions; aggressive prunes all cache
+  mise             prune stale cache; aggressive mode clears all cache
+  pip              clear pip's download and wheel cache
+  go               clear build/test cache; aggressive also clears module cache
+  pre-commit       remove cached hook environments
+
+Examples:
+  cache-clean
+  cache-clean --only uv --only pnpm
+  cache-clean --apply
+  cache-clean --apply --aggressive --yes
+
+Not touched: project node_modules/.venv/.next directories, Mise-installed tool
+versions, Docker/OrbStack data, app caches, Codex sessions, or personal files.
+EOF
+}
+
+is_known_cleaner() {
+    local candidate="$1"
+    local cleaner
+
+    for cleaner in "${CLEANERS[@]}"; do
+        if [ "$candidate" = "$cleaner" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+is_selected() {
+    local candidate="$1"
+    local selected
+
+    if [ "${#SELECTED[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    for selected in "${SELECTED[@]}"; do
+        if [ "$candidate" = "$selected" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --apply)
+                APPLY=true
+                ;;
+            --yes)
+                ASSUME_YES=true
+                ;;
+            --aggressive)
+                AGGRESSIVE=true
+                ;;
+            --only)
+                shift
+                if [ $# -eq 0 ]; then
+                    echo "cache-clean: --only requires a cleaner name" >&2
+                    exit 2
+                fi
+                if ! is_known_cleaner "$1"; then
+                    echo "cache-clean: unknown cleaner: $1" >&2
+                    echo "Known cleaners: ${CLEANERS[*]}" >&2
+                    exit 2
+                fi
+                SELECTED+=("$1")
+                ;;
+            --no-size)
+                SHOW_SIZES=false
+                ;;
+            -h | --help)
+                print_help
+                exit 0
+                ;;
+            *)
+                echo "cache-clean: unknown option: $1" >&2
+                echo "Run 'cache-clean --help' for usage." >&2
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ "$ASSUME_YES" = true ] && [ "$APPLY" != true ]; then
+        echo "cache-clean: --yes requires --apply" >&2
+        exit 2
+    fi
+}
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+pip_command_exists() {
+    if command_exists python3 && python3 -m pip --version >/dev/null 2>&1; then
+        return 0
+    fi
+    command_exists pip
+}
+
+cache_path() {
+    local cleaner="$1"
+
+    case "$cleaner" in
+        uv) uv cache dir 2>/dev/null ;;
+        pnpm) pnpm store path 2>/dev/null ;;
+        npm) npm config get cache 2>/dev/null ;;
+        bun) printf '%s\n' "${BUN_INSTALL_CACHE_DIR:-$HOME/.bun/install/cache}" ;;
+        brew) brew --cache 2>/dev/null ;;
+        mise) mise cache path 2>/dev/null ;;
+        pip)
+            if command_exists python3 && python3 -m pip --version >/dev/null 2>&1; then
+                python3 -m pip cache dir 2>/dev/null
+            else
+                pip cache dir 2>/dev/null
+            fi
+            ;;
+        go) go env GOCACHE 2>/dev/null ;;
+        pre-commit) printf '%s\n' "${PRE_COMMIT_HOME:-$HOME/.cache/pre-commit}" ;;
+    esac
+}
+
+cleaner_available() {
+    case "$1" in
+        pip) pip_command_exists ;;
+        pre-commit) command_exists pre-commit ;;
+        *) command_exists "$1" ;;
+    esac
+}
+
+print_cache_size() {
+    local path="$1"
+    local size
+
+    if [ "$SHOW_SIZES" != true ] || [ -z "$path" ] || [ ! -e "$path" ]; then
+        return 0
+    fi
+
+    size="$(du -sh "$path" 2>/dev/null | awk '{print $1}' || true)"
+    if [ -n "$size" ]; then
+        echo "  cache: $path ($size)"
+    else
+        echo "  cache: $path"
+    fi
+}
+
+print_command() {
+    local arg
+    printf '  command:'
+    for arg in "$@"; do
+        printf ' %q' "$arg"
+    done
+    printf '\n'
+}
+
+planned_command() {
+    local cleaner="$1"
+
+    case "$cleaner" in
+        uv)
+            if [ "$AGGRESSIVE" = true ]; then
+                print_command uv cache clean
+            else
+                print_command uv cache prune
+            fi
+            ;;
+        pnpm) print_command pnpm store prune ;;
+        npm)
+            if [ "$AGGRESSIVE" = true ]; then
+                print_command npm cache clean --force
+            else
+                print_command npm cache verify
+            fi
+            ;;
+        bun) print_command bun pm cache rm ;;
+        brew)
+            if [ "$AGGRESSIVE" = true ]; then
+                print_command brew cleanup --prune=all
+            else
+                print_command brew cleanup
+            fi
+            ;;
+        mise)
+            if [ "$AGGRESSIVE" = true ]; then
+                print_command mise cache clear --yes
+            else
+                print_command mise cache prune --yes
+            fi
+            ;;
+        pip)
+            if command_exists python3 && python3 -m pip --version >/dev/null 2>&1; then
+                print_command python3 -m pip cache purge
+            else
+                print_command pip cache purge
+            fi
+            ;;
+        go)
+            if [ "$AGGRESSIVE" = true ]; then
+                print_command go clean -cache -testcache -modcache
+            else
+                print_command go clean -cache -testcache
+            fi
+            ;;
+        pre-commit) print_command pre-commit clean ;;
+    esac
+}
+
+print_follow_up_notes() {
+    local cleaner="$1"
+    local active_store store_root candidate temp_root
+
+    case "$cleaner" in
+        pnpm)
+            active_store="$(pnpm store path 2>/dev/null || true)"
+            [ -n "$active_store" ] || return 0
+            store_root="$(dirname "$active_store")"
+            for candidate in "$store_root"/v*; do
+                [ -d "$candidate" ] || continue
+                [ "$candidate" = "$active_store" ] && continue
+                echo "  note: inactive store generation left untouched: $candidate"
+            done
+            ;;
+        brew)
+            temp_root="$(brew --prefix 2>/dev/null || true)/var/homebrew/tmp"
+            if [ -d "$temp_root" ]; then
+                echo "  note: interrupted cask staging is left untouched: $temp_root"
+            fi
+            ;;
+        mise)
+            echo "  note: installed tool versions are left untouched; review with 'mise prune --dry-run --tools'"
+            ;;
+    esac
+}
+
+run_bun_cleanup() {
+    local temp_dir result
+
+    temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cache-clean-bun.XXXXXX")" || return 1
+    printf '{}\n' >"$temp_dir/package.json"
+    (
+        cd "$temp_dir" || exit 1
+        bun pm cache rm
+    )
+    result=$?
+    rm -rf "$temp_dir"
+    return "$result"
+}
+
+execute_cleaner() {
+    local cleaner="$1"
+
+    case "$cleaner" in
+        uv)
+            if [ "$AGGRESSIVE" = true ]; then
+                uv cache clean
+            else
+                uv cache prune
+            fi
+            ;;
+        pnpm) pnpm store prune ;;
+        npm)
+            if [ "$AGGRESSIVE" = true ]; then
+                npm cache clean --force
+            else
+                npm cache verify
+            fi
+            ;;
+        bun) run_bun_cleanup ;;
+        brew)
+            if [ "$AGGRESSIVE" = true ]; then
+                brew cleanup --prune=all
+            else
+                brew cleanup
+            fi
+            ;;
+        mise)
+            if [ "$AGGRESSIVE" = true ]; then
+                mise cache clear --yes
+            else
+                mise cache prune --yes
+            fi
+            ;;
+        pip)
+            if command_exists python3 && python3 -m pip --version >/dev/null 2>&1; then
+                python3 -m pip cache purge
+            else
+                pip cache purge
+            fi
+            ;;
+        go)
+            if [ "$AGGRESSIVE" = true ]; then
+                go clean -cache -testcache -modcache
+            else
+                go clean -cache -testcache
+            fi
+            ;;
+        pre-commit) pre-commit clean ;;
+    esac
+}
+
+describe_cleaner() {
+    case "$1" in
+        uv) echo "UV package cache" ;;
+        pnpm) echo "active pnpm content-addressable store" ;;
+        npm) echo "npm content-addressable and npx cache" ;;
+        bun) echo "Bun package cache (complete clear)" ;;
+        brew) echo "Homebrew stale downloads and old versions" ;;
+        mise) echo "Mise download/cache data (not installed runtimes)" ;;
+        pip) echo "pip download and wheel cache (complete clear)" ;;
+        go) echo "Go build and test caches" ;;
+        pre-commit) echo "pre-commit hook environments" ;;
+    esac
+}
+
+confirm_apply() {
+    local answer
+
+    if [ "$ASSUME_YES" = true ]; then
+        return 0
+    fi
+    if [ ! -t 0 ]; then
+        echo "cache-clean: refusing non-interactive cleanup without --yes" >&2
+        return 1
+    fi
+
+    echo ""
+    echo "This will remove regenerate-able cache data."
+    if [ "$AGGRESSIVE" = true ]; then
+        echo "Aggressive mode will clear complete caches and Go's module cache."
+    fi
+    printf "Type 'clean' to continue: "
+    read -r answer
+    [ "$answer" = "clean" ]
+}
+
+process_cleaner() {
+    local cleaner="$1"
+    local path description
+
+    is_selected "$cleaner" || return 0
+    description="$(describe_cleaner "$cleaner")"
+
+    if ! cleaner_available "$cleaner"; then
+        echo "[skip] $cleaner: command not available"
+        ((SKIPPED++))
+        return 0
+    fi
+
+    path="$(cache_path "$cleaner" || true)"
+    if [ "$APPLY" = true ]; then
+        echo "[run]  $cleaner: $description"
+    else
+        echo "[plan] $cleaner: $description"
+    fi
+    print_cache_size "$path"
+    planned_command "$cleaner"
+    print_follow_up_notes "$cleaner"
+
+    if [ "$APPLY" != true ]; then
+        return 0
+    fi
+
+    if execute_cleaner "$cleaner"; then
+        echo "[done] $cleaner"
+        ((RAN++))
+    else
+        echo "[fail] $cleaner: cleanup command failed; continuing" >&2
+        ((FAILURES++))
+    fi
+}
+
+main() {
+    local cleaner mode
+
+    parse_args "$@"
+
+    mode="preview"
+    if [ "$APPLY" = true ]; then
+        mode="apply"
+    fi
+    if [ "$AGGRESSIVE" = true ]; then
+        mode="$mode, aggressive"
+    fi
+
+    echo "Cache cleanup ($mode)"
+    echo "Only package/tool-managed caches are in scope."
+
+    if [ "$APPLY" = true ] && ! confirm_apply; then
+        echo "cache-clean: cancelled" >&2
+        exit 1
+    fi
+
+    echo ""
+    for cleaner in "${CLEANERS[@]}"; do
+        process_cleaner "$cleaner"
+    done
+
+    echo ""
+    if [ "$APPLY" = true ]; then
+        echo "Completed: $RAN succeeded, $SKIPPED skipped, $FAILURES failed."
+    else
+        echo "Preview only. Re-run with --apply to execute this plan."
+    fi
+    echo "Project artifacts, app data, containers, sessions, and personal files were not touched."
+
+    if [ "$FAILURES" -gt 0 ]; then
+        exit 1
+    fi
+}
+
+main "$@"

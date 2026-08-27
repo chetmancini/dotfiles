@@ -30,6 +30,7 @@ primary_description() {
         doctor) echo "Verify dotfiles installation health" ;;
         brew-sync) echo "Check and sync Brewfile with installed packages" ;;
         package-sync) echo "Check or update globally installed npm and pnpm packages" ;;
+        cache-clean) echo "Preview or run package-cache cleanup" ;;
         update | update-everything) echo "Run system/package update routine" ;;
         good-morning) echo "Run a configurable set of tasks to start the day" ;;
         cheatsheet) echo "Quick reference for aliases, keybindings, and functions" ;;
@@ -50,7 +51,7 @@ Primary commands:
 EOF
 
     local name desc
-    for name in install doctor brew-sync package-sync update good-morning cheatsheet dashboard; do
+    for name in install doctor brew-sync package-sync cache-clean update good-morning cheatsheet dashboard; do
         desc="$(primary_description "$name")"
         printf "  %-18s %s\n" "$name" "$desc"
     done
@@ -75,6 +76,7 @@ Examples:
   dot doctor --skip-tools
   dot brew-sync --check
   dot package-sync --update
+  dot cache-clean
   dot update
 
 EOF
@@ -186,7 +188,7 @@ list_secondary_commands() {
         base="$(basename "$f")"
         case "$base" in
             dot | README.md | *.py | .* | lib) continue ;;
-            doctor | brew-sync | package-sync | update-everything | good-morning | cheatsheet | dashboard)
+            doctor | brew-sync | package-sync | cache-clean | update-everything | good-morning | cheatsheet | dashboard)
                 continue
                 ;;
         esac
