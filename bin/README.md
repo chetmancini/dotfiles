@@ -7,6 +7,7 @@ available directly on PATH (`doctor`, `brew-sync`, …).
 
 ```bash
 dot help
+dot status
 dot install --plan --yes --skip-brew   # → ../install.sh
 dot doctor --skip-tools
 dot brew-sync
@@ -20,6 +21,7 @@ dot update          # → update-everything
 | Script | Language | Purpose |
 |--------|----------|---------|
 | [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
+| [`status`](#status) | Bash | Unified machine and dotfiles health status |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`package-sync`](#package-sync) | Bash | Inspect or update global npm and pnpm packages |
 | [`cache-clean`](#cache-clean) | Bash | Preview or run supported package-cache cleanup |
@@ -57,6 +59,25 @@ dot update
 - Auto-lists other executables in `bin/`
 - Rejects path traversal (`dot ../.zshrc` fails)
 - Passes through arguments and exit codes
+
+---
+
+### `status`
+
+Unified machine and dotfiles health status aggregator. Fast, read-only, and local by default.
+
+**Usage:**
+```bash
+status
+status --deep
+status --json
+```
+
+**Features:**
+- Fast default mode: runs `doctor --skip-tools` and `repo-report --check --dirty --quiet`
+- Deep mode (`--deep`): strict tool readiness and Homebrew drift checks
+- JSON output (`--json`): emits structured `dotfiles.status/v1` data
+- Exit codes: `0` (healthy), `1` (warning/drift), `2` (hard failure), `64` (usage error)
 
 ---
 

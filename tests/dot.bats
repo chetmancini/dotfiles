@@ -9,6 +9,7 @@ setup() {
 @test "dot help lists primary commands" {
     run "$DOTFILES_DIR/bin/dot" help
     [ "$status" -eq 0 ]
+    [[ "$output" == *"status"* ]]
     [[ "$output" == *"doctor"* ]]
     [[ "$output" == *"brew-sync"* ]]
     [[ "$output" == *"cache-clean"* ]]
@@ -30,4 +31,10 @@ setup() {
     run "$DOTFILES_DIR/bin/dot" doctor --help
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage: doctor"* ]]
+}
+
+@test "dot status --help works" {
+    run "$DOTFILES_DIR/bin/dot" status --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage: status"* ]]
 }
