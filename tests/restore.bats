@@ -444,3 +444,106 @@ EOF
     # No completed transaction created
     [ ! -f "$TMP_BACKUP/latest" ]
 }
+
+@test "15. Preflight rejects payload kind mismatch before modifying any target" {
+    local tx_id="20260101T000000-111-802"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    # prior_kind says file, but payload is corrupted to be a directory
+    mkdir -p "$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan detects conflict
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before removing symlink
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # Target remains the untouched managed symlink
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "$DOTFILES_DIR/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "16. Preflight rejects target kind mismatch in no-op state" {
+    local tx_id="20260101T000000-111-803"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=failed
+EOF
+    # Journal says prior target was a file, and payload was never moved
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    # But current target is unexpectedly a directory instead of a regular file
+    mkdir -p "$HOME/.gitconfig"
+
+    # Plan reports conflict
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts and preserves directory
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ -d "$HOME/.gitconfig" ]
+    [ ! -L "$HOME/.gitconfig" ]
+    grep -q '^state=failed$' "$tx_dir/metadata"
+}
+
+@test "17. Preflight rejects absent parent directory when restoring an absent target" {
+    local tx_id="20260101T000000-111-804"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=failed
+EOF
+    # Journal says target file payload exists, target is currently absent
+    echo "test content" >"$tx_dir/payload/0001"
+    echo "0001|.config/yazi/yazi.toml|file|payload/0001|.config/yazi/yazi.toml" >"$tx_dir/entries"
+
+    # Destination parent directory does NOT exist
+    rm -rf "$HOME/.config/yazi"
+
+    # Plan reports conflict
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before modifying anything
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ ! -e "$HOME/.config/yazi/yazi.toml" ]
+    grep -q '^state=failed$' "$tx_dir/metadata"
+
+    # If parent directory is created, restore succeeds
+    mkdir -p "$HOME/.config/yazi"
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$HOME/.config/yazi/yazi.toml" ]
+    [ "$(cat "$HOME/.config/yazi/yazi.toml")" = "test content" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}

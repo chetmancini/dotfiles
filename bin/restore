@@ -155,37 +155,65 @@ cmd_plan() {
         local target="$HOME/$target_rel"
         local expected_source="$DOTFILES_DIR/$installed_rel"
         local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
 
         # Determine state
         if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
             # State 1: target is the expected managed symlink
+            local state1_valid=false
             case "$prior_kind" in
                 absent)
+                    state1_valid=true
                     echo "  [restore] $target_rel: remove managed symlink (target was originally absent)"
                     ;;
                 symlink)
-                    echo "  [restore] $target_rel: replace managed symlink with prior symlink -> $prior_val"
+                    if [ -d "$target_parent" ]; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with prior symlink -> $prior_val"
+                    fi
                     ;;
-                file | directory)
-                    echo "  [restore] $target_rel: replace managed symlink with original $prior_kind from payload/$seq"
+                file)
+                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target_parent" ]; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with original file from payload/$seq"
+                    fi
+                    ;;
+                directory)
+                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target_parent" ]; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with original directory from payload/$seq"
+                    fi
                     ;;
             esac
-            has_actions=$((has_actions + 1))
-        elif { [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; } && [ ! -e "$payload_path" ] && [ -e "$target" ] && [ ! -L "$target" ]; then
-            # State 2a: prior file/directory untouched, payload absent
-            echo "  [no-op]   $target_rel: already in original $prior_kind state (payload was not moved)"
+            if [ "$state1_valid" = true ]; then
+                has_actions=$((has_actions + 1))
+            else
+                echo "  [conflict] $target_rel: target payload missing or invalid, or parent directory missing" >&2
+                conflicts=$((conflicts + 1))
+            fi
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
+            # State 2a: prior file untouched, payload absent
+            echo "  [no-op]   $target_rel: already in original file state (payload was not moved)"
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
+            # State 2b: prior directory untouched, payload absent
+            echo "  [no-op]   $target_rel: already in original directory state (payload was not moved)"
         elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ] && [ "$(readlink "$target")" = "$prior_val" ]; then
-            # State 2b: prior symlink untouched
+            # State 2c: prior symlink untouched
             echo "  [no-op]   $target_rel: already in original symlink state -> $prior_val"
         elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 2c: absent target remains absent
+            # State 2d: absent target remains absent
             echo "  [no-op]   $target_rel: already absent"
-        elif { [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; } && [ -e "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 3: interrupted install before link creation (payload exists, target absent)
-            echo "  [restore] $target_rel: restore $prior_kind from payload/$seq (target currently absent)"
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 3a: interrupted install before link creation (file payload exists, target absent, parent exists)
+            echo "  [restore] $target_rel: restore file from payload/$seq (target currently absent)"
             has_actions=$((has_actions + 1))
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 4: interrupted install before link creation (prior symlink removed, target absent)
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 3b: interrupted install before link creation (directory payload exists, target absent, parent exists)
+            echo "  [restore] $target_rel: restore directory from payload/$seq (target currently absent)"
+            has_actions=$((has_actions + 1))
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 4: interrupted install before link creation (prior symlink removed, target absent, parent exists)
             echo "  [restore] $target_rel: recreate prior symlink -> $prior_val (target currently absent)"
             has_actions=$((has_actions + 1))
         else
@@ -280,30 +308,42 @@ cmd_apply() {
         local target="$HOME/$target_rel"
         local expected_source="$DOTFILES_DIR/$installed_rel"
         local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
 
         local is_valid_precondition=false
 
         if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
             # State 1: target is the expected managed symlink
-            if [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; then
-                [ -e "$payload_path" ] && is_valid_precondition=true
-            else
+            if [ "$prior_kind" = "file" ]; then
+                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target_parent" ] && is_valid_precondition=true
+            elif [ "$prior_kind" = "directory" ]; then
+                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target_parent" ] && is_valid_precondition=true
+            elif [ "$prior_kind" = "symlink" ]; then
+                [ -d "$target_parent" ] && is_valid_precondition=true
+            elif [ "$prior_kind" = "absent" ]; then
                 is_valid_precondition=true
             fi
-        elif { [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; } && [ ! -e "$payload_path" ] && [ -e "$target" ] && [ ! -L "$target" ]; then
-            # State 2a: prior file/directory untouched, payload absent
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
+            # State 2a: prior file untouched, payload absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
+            # State 2b: prior directory untouched, payload absent
             is_valid_precondition=true
         elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ] && [ "$(readlink "$target")" = "$prior_val" ]; then
-            # State 2b: prior symlink untouched
+            # State 2c: prior symlink untouched
             is_valid_precondition=true
         elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 2c: absent target remains absent
+            # State 2d: absent target remains absent
             is_valid_precondition=true
-        elif { [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; } && [ -e "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 3: interrupted install before link creation (payload exists, target absent)
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 3a: interrupted install before link creation (file payload exists, target absent, parent exists)
             is_valid_precondition=true
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 4: interrupted install before link creation (prior symlink removed, target absent)
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 3b: interrupted install before link creation (directory payload exists, target absent, parent exists)
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && [ -d "$target_parent" ]; then
+            # State 4: interrupted install before link creation (prior symlink removed, target absent, parent exists)
             is_valid_precondition=true
         fi
 
@@ -344,6 +384,8 @@ cmd_apply() {
         local target="$HOME/$target_rel"
         local expected_source="$DOTFILES_DIR/$installed_rel"
         local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
 
         if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
             # Remove managed symlink first
@@ -354,18 +396,26 @@ cmd_apply() {
                     echo "Removed managed symlink: $target_rel"
                     ;;
                 symlink)
+                    mkdir -p "$target_parent"
                     ln -s "$prior_val" "$target"
                     echo "Restored symlink: $target_rel -> $prior_val"
                     ;;
                 file | directory)
+                    mkdir -p "$target_parent"
                     mv "$payload_path" "$target"
                     echo "Restored original $prior_kind: $target_rel"
                     ;;
             esac
-        elif { [ "$prior_kind" = "file" ] || [ "$prior_kind" = "directory" ]; } && [ -e "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
             mv "$payload_path" "$target"
-            echo "Restored original $prior_kind from payload: $target_rel"
+            echo "Restored original file from payload: $target_rel"
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
+            mv "$payload_path" "$target"
+            echo "Restored original directory from payload: $target_rel"
         elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
             ln -s "$prior_val" "$target"
             echo "Restored prior symlink: $target_rel -> $prior_val"
         else
