@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# status: Unified machine and dotfiles health status aggregator
+#
+# Usage:
+#   status [--deep] [--json]
+#   status -h | --help
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+# shellcheck disable=SC2034
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# shellcheck source=bin/lib/helpers.sh
+source "$SCRIPT_DIR/lib/helpers.sh"
+
+print_help() {
+    cat <<EOF
+Usage: status [options]
+
+Aggregated machine and dotfiles health status.
+
+Options:
+  --deep          Run comprehensive checks (tools readiness, Homebrew drift)
+  --json          Emit machine-readable JSON (dotfiles.status/v1)
+  -h, --help      Show this help message
+
+Exit codes:
+  0  All executed components are healthy; optional checks may be skipped
+  1  Drift or another actionable warning exists
+  2  A required check could not run or reported a hard failure
+  64 Command-line usage error
+EOF
+}
+
+DEEP=false
+JSON_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h | --help)
+            print_help
+            exit 0
+            ;;
+        --deep)
+            DEEP=true
+            shift
+            ;;
+        --json)
+            JSON_MODE=true
+            shift
+            ;;
+        *)
+            echo "status: unknown option '$1'" >&2
+            echo "Run 'dot status --help' for usage." >&2
+            exit 64
+            ;;
+    esac
+done
+
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-status.XXXXXX")"
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+COMPONENTS=()
+PY_ARGS=()
+
+add_component() {
+    local id="$1"
+    local status="$2"
+    local exit_code="$3"
+    local summary="$4"
+    local remediation="$5"
+
+    COMPONENTS+=("${id}|${status}|${exit_code}|${summary}|${remediation}")
+    PY_ARGS+=("$id" "$status" "$exit_code" "$summary" "$remediation")
+}
+
+DOCTOR_CMD="${STATUS_DOCTOR_BIN:-$SCRIPT_DIR/doctor}"
+REPO_REPORT_CMD="${STATUS_REPO_REPORT_BIN:-$SCRIPT_DIR/repo-report}"
+BREW_SYNC_CMD="${STATUS_BREW_SYNC_BIN:-$SCRIPT_DIR/brew-sync}"
+
+# 1. doctor component
+doctor_rc=0
+if [[ "$DEEP" == true ]]; then
+    doctor_remediation="dot doctor --strict"
+    "$DOCTOR_CMD" --strict >"$TMP_DIR/doctor.out" 2>"$TMP_DIR/doctor.err" || doctor_rc=$?
+    if [[ "$doctor_rc" -eq 0 ]]; then
+        add_component "doctor" "ok" "$doctor_rc" "Installed dotfiles and tools are healthy" "$doctor_remediation"
+    else
+        add_component "doctor" "error" "$doctor_rc" "Strict dotfiles health check reported failures" "$doctor_remediation"
+    fi
+else
+    doctor_remediation="dot doctor --skip-tools"
+    "$DOCTOR_CMD" --skip-tools >"$TMP_DIR/doctor.out" 2>"$TMP_DIR/doctor.err" || doctor_rc=$?
+    if [[ "$doctor_rc" -eq 0 ]]; then
+        add_component "doctor" "ok" "$doctor_rc" "Installed dotfiles are healthy" "$doctor_remediation"
+    else
+        add_component "doctor" "error" "$doctor_rc" "Dotfiles installation health check reported failures" "$doctor_remediation"
+    fi
+fi
+
+# 2. repositories component
+if [[ ! -d "$HOME/code" && ! -d "$HOME/norm" ]]; then
+    add_component "repositories" "skipped" 0 "No default repository roots found (~/code, ~/norm)" "dot repo-report"
+else
+    repo_rc=0
+    "$REPO_REPORT_CMD" --check --dirty --quiet >"$TMP_DIR/repo.out" 2>"$TMP_DIR/repo.err" || repo_rc=$?
+    if [[ "$repo_rc" -eq 0 ]]; then
+        add_component "repositories" "ok" "$repo_rc" "All scanned repositories are clean" "dot repo-report"
+    elif [[ "$repo_rc" -eq 1 ]]; then
+        add_component "repositories" "warning" "$repo_rc" "One or more repositories have uncommitted changes or unpushed commits" "dot repo-report -d"
+    else
+        add_component "repositories" "error" "$repo_rc" "Repository health check encountered an error" "dot repo-report"
+    fi
+fi
+
+# 3. homebrew component (deep mode only)
+if [[ "$DEEP" == true ]]; then
+    if ! command -v brew >/dev/null 2>&1; then
+        add_component "homebrew" "skipped" 0 "Homebrew is not installed or not on PATH" "dot brew-sync"
+    else
+        brew_rc=0
+        "$BREW_SYNC_CMD" --check >"$TMP_DIR/brew.out" 2>"$TMP_DIR/brew.err" || brew_rc=$?
+        if [[ "$brew_rc" -eq 0 ]]; then
+            add_component "homebrew" "ok" "$brew_rc" "Homebrew packages and Brewfile are synchronized" "dot brew-sync"
+        elif [[ "$brew_rc" -eq 1 ]]; then
+            add_component "homebrew" "warning" "$brew_rc" "Homebrew drift detected between Brewfile and installed packages" "dot brew-sync"
+        else
+            add_component "homebrew" "error" "$brew_rc" "Homebrew sync check encountered an error" "dot brew-sync"
+        fi
+    fi
+fi
+
+# Determine overall status and exit code
+has_error=false
+has_warning=false
+for item in "${COMPONENTS[@]}"; do
+    IFS='|' read -r _ c_status _ _ _ <<<"$item"
+    if [[ "$c_status" == "error" ]]; then
+        has_error=true
+    elif [[ "$c_status" == "warning" ]]; then
+        has_warning=true
+    fi
+done
+
+if [[ "$has_error" == true ]]; then
+    overall_status="error"
+    final_exit=2
+elif [[ "$has_warning" == true ]]; then
+    overall_status="warning"
+    final_exit=1
+else
+    overall_status="ok"
+    final_exit=0
+fi
+
+if [[ "$JSON_MODE" == true ]]; then
+    python3 - "$overall_status" "$DEEP" "${PY_ARGS[@]}" <<'PYEOF'
+import json
+import sys
+
+overall_status = sys.argv[1]
+deep = (sys.argv[2] == "true")
+args = sys.argv[3:]
+
+components = []
+for i in range(0, len(args), 5):
+    components.append({
+        "id": args[i],
+        "status": args[i + 1],
+        "exit_code": int(args[i + 2]),
+        "summary": args[i + 3],
+        "remediation": args[i + 4]
+    })
+
+data = {
+    "schema": "dotfiles.status/v1",
+    "overall_status": overall_status,
+    "deep": deep,
+    "components": components
+}
+
+print(json.dumps(data, indent=2))
+PYEOF
+else
+    for item in "${COMPONENTS[@]}"; do
+        IFS='|' read -r id status _ summary _ <<<"$item"
+        case "$status" in
+            ok)
+                echo -e "  ${GREEN}✓${NC} ${id}: ${summary}"
+                ;;
+            warning)
+                echo -e "  ${YELLOW}⚠${NC} ${id}: ${summary}"
+                ;;
+            error)
+                echo -e "  ${RED}✗${NC} ${id}: ${summary}"
+                ;;
+            skipped)
+                echo -e "  ${BLUE}○${NC} ${id}: ${summary} (skipped)"
+                ;;
+        esac
+    done
+
+    echo ""
+    case "$overall_status" in
+        ok)
+            echo -e "${GREEN}Overall status: ok${NC}"
+            ;;
+        warning)
+            echo -e "${YELLOW}Overall status: warning${NC}"
+            echo ""
+            echo "Remediation:"
+            for item in "${COMPONENTS[@]}"; do
+                IFS='|' read -r _ status _ _ remediation <<<"$item"
+                if [[ "$status" == "warning" || "$status" == "error" ]]; then
+                    echo "  $remediation"
+                fi
+            done
+            ;;
+        error)
+            echo -e "${RED}Overall status: error${NC}"
+            echo ""
+            echo "Remediation:"
+            for item in "${COMPONENTS[@]}"; do
+                IFS='|' read -r _ status _ _ remediation <<<"$item"
+                if [[ "$status" == "error" || "$status" == "warning" ]]; then
+                    echo "  $remediation"
+                fi
+            done
+            ;;
+    esac
+fi
+
+exit "$final_exit"

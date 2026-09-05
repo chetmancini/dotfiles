@@ -22,17 +22,25 @@ print_help() {
     echo "  directories     Directories to scan (default: ~/code ~/norm)"
     echo ""
     echo "Options:"
+    echo "  -c, --check     Exit 0 if clean, 1 if issues found, 2 on scan error"
     echo "  -d, --dirty     Only show repos with issues"
     echo "  -q, --quiet     One-line-per-repo summary"
     echo "  -h, --help      Show this help message"
+    echo ""
+    echo "Exit codes (with --check):"
+    echo "  0               All scanned repositories are clean"
+    echo "  1               One or more repositories have issues"
+    echo "  2               No directories to scan or directory not found"
     echo ""
     echo "Examples:"
     echo "  repo-report                  # Scan ~/code and ~/norm"
     echo "  repo-report ~/projects       # Scan specific directory"
     echo "  repo-report -d               # Only show dirty repos"
+    echo "  repo-report --check          # Check health and set exit code"
     exit 0
 }
 
+CHECK_MODE=false
 DIRTY_ONLY=false
 QUIET=false
 DIRS=()
@@ -41,6 +49,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h | --help)
             print_help
+            ;;
+        -c | --check)
+            CHECK_MODE=true
+            shift
             ;;
         -d | --dirty)
             DIRTY_ONLY=true
@@ -65,6 +77,9 @@ fi
 
 if [[ ${#DIRS[@]} -eq 0 ]]; then
     echo "No directories to scan. Pass directories as arguments."
+    if [[ "$CHECK_MODE" == true ]]; then
+        exit 2
+    fi
     exit 1
 fi
 
@@ -157,9 +172,12 @@ echo -e "${BLUE}  Repo Report${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
+scan_error=false
+
 for dir in "${DIRS[@]}"; do
     if [[ ! -d "$dir" ]]; then
         print_error "Directory not found: $dir"
+        scan_error=true
         continue
     fi
 
@@ -188,3 +206,12 @@ done
 # Summary
 echo -e "${BLUE}━━━ Summary ━━━${NC}"
 echo -e "  Total: $total_repos  ${GREEN}Clean: $clean_repos${NC}  ${RED}Dirty: $dirty_repos${NC}"
+
+if [[ "$CHECK_MODE" == true ]]; then
+    if [[ "$scan_error" == true ]]; then
+        exit 2
+    elif [[ "$dirty_repos" -gt 0 ]]; then
+        exit 1
+    fi
+    exit 0
+fi

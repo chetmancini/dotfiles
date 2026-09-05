@@ -18,6 +18,29 @@ Scripts use a shared helper library at `bin/lib/helpers.sh` for consistent outpu
 
 ### Daily Workflow
 
+#### status
+
+Unified machine and dotfiles health status aggregator. Fast, read-only, and local by default.
+
+```bash
+status                    # Fast check (doctor symlinks + local git repos)
+status --deep             # Deep check (strict tools + Homebrew drift)
+status --json             # Emit structured JSON (dotfiles.status/v1)
+```
+
+**Features:**
+- **Fast default mode**: Runs `doctor --skip-tools` and `repo-report --check --dirty --quiet`. Read-only, no network or credential checks. If default repo roots (`~/code`, `~/norm`) are not present, repositories are skipped.
+- **Deep mode (`--deep`)**: Runs `doctor --strict` (asserting required development tools) and `brew-sync --check` (if Homebrew is available; skipped if absent).
+- **Machine-readable JSON (`--json`)**: Emits versioned schema `dotfiles.status/v1` to stdout for automation.
+
+**Exit codes:**
+- `0`: All executed components are healthy (optional checks may be skipped)
+- `1`: Drift or another actionable warning exists (e.g., dirty repos or Homebrew drift)
+- `2`: A required check could not run or reported a hard failure (e.g., broken symlinks or missing tools in deep mode)
+- `64`: Command-line usage error
+
+---
+
 #### good-morning
 
 Master orchestration script for daily startup tasks.

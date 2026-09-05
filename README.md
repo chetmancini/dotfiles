@@ -84,7 +84,8 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
-- `dot` dispatches `bin/` tools (`dot help`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
+- `status` provides fast, unified health checks across symlinks, repos, and Homebrew drift (`dot status` / `dot status --deep`)
+- `dot` dispatches `bin/` tools (`dot help`, `dot status`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
 - [`docs/package-managers.md`](docs/package-managers.md) defines the preferred owner for runtimes, native apps, and global JavaScript CLIs; use `package-sync --update` to refresh npm and pnpm globals
 - GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, zsh checks, and bats tests (`tests/`)
