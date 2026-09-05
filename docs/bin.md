@@ -41,6 +41,36 @@ status --json             # Emit structured JSON (dotfiles.status/v1)
 
 ---
 
+#### restore
+
+Transactional rollback for dotfiles symlink installations.
+
+```bash
+dot restore --list            # List available install transactions
+dot restore --plan [latest|ID] # Preview rollback actions without changes
+dot restore --apply [latest|ID] # Roll back changes with preflight verification
+dot restore --apply latest --yes # Apply rollback non-interactively
+```
+
+**Backup layout:**
+Installations that mutate targets create a transaction directory under `~/.dotfiles-backup/<id>/`:
+- `metadata`: key=value metadata (`version=1`, `id`, `created_at`, `repo_revision`, `state`)
+- `entries`: journal records (`sequence|target_rel|prior_kind|prior_value|installed_rel`)
+- `payload/`: preserved prior files and directories
+- `latest`: pointer to the latest completed transaction ID
+
+**Safety policy:**
+- **Conflict detection**: Verifies before any mutation that targets match expected states (managed symlink, original untouched state, or interrupted install). Drift or modifications cause full abort without partial work.
+- **Fail closed**: Refuses conflicts; no `--force` option is available.
+- **Legacy backups**: Historical timestamped folders without versioned `metadata` remain manual backups and are never inferred by `restore`.
+
+**Exit codes:**
+- `0`: Success (for plan or apply)
+- `1`: Conflict detected, invalid metadata/journal, or aborted apply
+- `64`: Command-line usage error
+
+---
+
 #### good-morning
 
 Master orchestration script for daily startup tasks.

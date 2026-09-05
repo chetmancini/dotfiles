@@ -28,6 +28,7 @@ primary_description() {
     case "$1" in
         status) echo "Unified machine and dotfiles health status" ;;
         install) echo "Run install.sh (bootstrap / re-link; pass flags through)" ;;
+        restore) echo "Preview or apply rollback of an install transaction" ;;
         doctor) echo "Verify dotfiles installation health" ;;
         brew-sync) echo "Check and sync Brewfile with installed packages" ;;
         package-sync) echo "Check or update globally installed npm and pnpm packages" ;;
@@ -52,7 +53,7 @@ Primary commands:
 EOF
 
     local name desc
-    for name in status install doctor brew-sync package-sync cache-clean update good-morning cheatsheet dashboard; do
+    for name in status install restore doctor brew-sync package-sync cache-clean update good-morning cheatsheet dashboard; do
         desc="$(primary_description "$name")"
         printf "  %-18s %s\n" "$name" "$desc"
     done
@@ -74,6 +75,7 @@ EOF
 Examples:
   dot help
   dot install --plan --yes --skip-brew
+  dot restore --plan
   dot doctor --skip-tools
   dot brew-sync --check
   dot package-sync --update
@@ -189,7 +191,7 @@ list_secondary_commands() {
         base="$(basename "$f")"
         case "$base" in
             dot | README.md | *.py | .* | lib) continue ;;
-            status | doctor | brew-sync | package-sync | cache-clean | update-everything | good-morning | cheatsheet | dashboard)
+            status | restore | doctor | brew-sync | package-sync | cache-clean | update-everything | good-morning | cheatsheet | dashboard)
                 continue
                 ;;
         esac

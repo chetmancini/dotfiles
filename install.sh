@@ -7,10 +7,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
-BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 # shellcheck source=bin/lib/symlinks.sh
 source "$SCRIPT_DIR/bin/lib/symlinks.sh"
+# shellcheck source=bin/lib/transactions.sh
+source "$SCRIPT_DIR/bin/lib/transactions.sh"
 
 AUTO_YES=false
 SKIP_TPM=false
@@ -26,6 +27,29 @@ PLAN_MODE=false
 # redirect stdin, and prompts must never consume manifest records.
 exec 9<&0
 
+CURRENT_TRANSACTION_ID=""
+CURRENT_TRANSACTION_DIR=""
+TRANSACTION_SEQUENCE=0
+INSTALL_SUCCESS=false
+
+# Isolate installer git operations from any caller/hook git environment
+unset GIT_INDEX_FILE
+
+cleanup_install_trap() {
+    local exit_code=$?
+    if [ "$INSTALL_SUCCESS" != true ] && [ -n "${CURRENT_TRANSACTION_DIR:-}" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
+        local meta_file="$CURRENT_TRANSACTION_DIR/metadata"
+        if [ -f "$meta_file" ]; then
+            local state
+            state="$(grep '^state=' "$meta_file" 2>/dev/null | cut -d'=' -f2 || true)"
+            if [ "$state" = "in_progress" ]; then
+                update_transaction_state "$CURRENT_TRANSACTION_DIR" "failed" 2>/dev/null || true
+            fi
+        fi
+    fi
+    exit "$exit_code"
+}
+trap cleanup_install_trap EXIT
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -193,41 +217,31 @@ validate_managed_sources() {
     fi
 }
 
-# Back up a file or directory if it exists and is not a symlink
-backup_if_exists() {
-    local target="$1"
-    local name="$2"
-
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
-        local backup_path="$BACKUP_DIR/$name"
-        if [ "$PLAN_MODE" = true ]; then
-            print_plan "Would back up existing $name to $backup_path"
-            BACKUPS_PLANNED=$((BACKUPS_PLANNED + 1))
-        else
-            mkdir -p "$BACKUP_DIR"
-            mv "$target" "$backup_path"
-            print_warning "Backed up existing $name to $backup_path"
-        fi
-        return 0
-    elif [ -L "$target" ]; then
-        if [ "$PLAN_MODE" = true ]; then
-            print_plan "Existing symlink found, would replace it"
-        else
-            print_info "Existing symlink found, will be replaced"
-            rm -f "$target"
-        fi
-        return 0
-    fi
-
-    return 0
-}
-
-# Create a symlink with explanation
+# Create a symlink with explanation and transactional safety
 create_symlink() {
     local source="$1"
     local target="$2"
     local name="$3"
     local description="$4"
+    local source_rel="${5:-}"
+    local target_rel="${6:-}"
+
+    # Fallback to deriving relative paths if not supplied
+    if [ -z "$target_rel" ]; then
+        target_rel="${target#"$HOME/"}"
+    fi
+    if [ -z "$source_rel" ]; then
+        source_rel="${source#"$DOTFILES_DIR/"}"
+    fi
+
+    validate_relative_path "$target_rel" || {
+        echo "Error: invalid relative target path: $target_rel" >&2
+        exit 1
+    }
+    validate_relative_path "$source_rel" || {
+        echo "Error: invalid relative source path: $source_rel" >&2
+        exit 1
+    }
 
     echo ""
     print_step "${BOLD}$name${NC}"
@@ -245,20 +259,103 @@ create_symlink() {
         return 0
     fi
 
+    # Inspect exact prior kind before any action
+    local prior_kind prior_val=""
+    if [ -L "$target" ]; then
+        prior_kind="symlink"
+        prior_val="$(readlink "$target")"
+    elif [ -f "$target" ]; then
+        prior_kind="file"
+    elif [ -d "$target" ]; then
+        prior_kind="directory"
+    elif [ ! -e "$target" ]; then
+        prior_kind="absent"
+    else
+        # FIFO, socket, device node, or other unsupported filesystem kind:
+        # Stop before journaling or mutation and report the exact target path.
+        echo "Error: unsupported filesystem object at $target" >&2
+        exit 1
+    fi
+
     if ask_yes_no "  Create this symlink?"; then
-        backup_if_exists "$target" "$(basename "$target")"
         if [ "$PLAN_MODE" = true ]; then
+            case "$prior_kind" in
+                file | directory)
+                    print_plan "Would back up existing $name to transaction payload"
+                    BACKUPS_PLANNED=$((BACKUPS_PLANNED + 1))
+                    ;;
+                symlink)
+                    print_plan "Existing symlink found, would replace it"
+                    ;;
+                absent) ;;
+            esac
             if [ ! -d "$(dirname "$target")" ]; then
                 print_plan "Would create parent directory $(dirname "$target")"
             fi
             print_success "Symlink would be created"
             SYMLINKS_PLANNED=$((SYMLINKS_PLANNED + 1))
-        else
-            mkdir -p "$(dirname "$target")"
-            ln -sf "$source" "$target"
-            print_success "Symlink created"
-            SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
+            return 0
         fi
+
+        # Lazily create transaction on the first target that actually needs a change
+        if [ -z "$CURRENT_TRANSACTION_ID" ]; then
+            CURRENT_TRANSACTION_ID="$(generate_transaction_id)" || {
+                echo "Error: failed to generate transaction ID" >&2
+                exit 1
+            }
+            local root
+            root="$(transaction_backup_root)"
+            CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
+            mkdir -p "$CURRENT_TRANSACTION_DIR/payload"
+            local repo_rev
+            repo_rev="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
+            local created_at
+            created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" || {
+                echo "Error: failed to write transaction metadata" >&2
+                exit 1
+            }
+        fi
+
+        TRANSACTION_SEQUENCE=$((TRANSACTION_SEQUENCE + 1))
+        local seq
+        seq="$(printf "%04d" "$TRANSACTION_SEQUENCE")"
+
+        case "$prior_kind" in
+            file | directory)
+                prior_val="payload/$seq"
+                ;;
+            symlink)
+                # prior_val already has readlink output
+                ;;
+            absent)
+                prior_val=""
+                ;;
+        esac
+
+        # Append and flush journal record before any move, removal, or link creation
+        append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$prior_kind" "$prior_val" "$source_rel" || {
+            echo "Error: failed to append journal entry for $target_rel" >&2
+            exit 1
+        }
+
+        # After the record is durable, move prior file/directory or remove prior symlink
+        case "$prior_kind" in
+            file | directory)
+                mv "$target" "$CURRENT_TRANSACTION_DIR/payload/$seq"
+                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
+                ;;
+            symlink)
+                rm -f "$target"
+                print_info "Existing symlink found, replaced"
+                ;;
+            absent) ;;
+        esac
+
+        mkdir -p "$(dirname "$target")"
+        ln -sf "$source" "$target"
+        print_success "Symlink created"
+        SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
     else
         print_warning "Skipped"
         SYMLINKS_SKIPPED=$((SYMLINKS_SKIPPED + 1))
@@ -288,7 +385,7 @@ install_tpm() {
             print_success "TPM install planned"
         else
             print_step "Cloning TPM..."
-            git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+            env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
             print_success "TPM installed"
         fi
         print_info "After setup, press prefix + I in tmux to install plugins"
@@ -378,7 +475,9 @@ install_config_symlinks() {
             "$DOTFILES_DIR/$source_rel" \
             "$HOME/$target_rel" \
             "$install_name" \
-            "$description"
+            "$description" \
+            "$source_rel" \
+            "$target_rel"
     done < <(managed_symlinks_for_group config)
 }
 
@@ -394,7 +493,9 @@ install_home_symlinks() {
             "$DOTFILES_DIR/$source_rel" \
             "$HOME/$target_rel" \
             "$install_name" \
-            "$description"
+            "$description" \
+            "$source_rel" \
+            "$target_rel"
     done < <(managed_symlinks_for_group home)
 
     # npm's portable user-level prefix is managed by npm/npmrc. Create it here
@@ -424,7 +525,9 @@ install_home_symlinks() {
                 "$DOTFILES_DIR/$source_rel" \
                 "$HOME/$target_rel" \
                 "$install_name" \
-                "$description"
+                "$description" \
+                "$source_rel" \
+                "$target_rel"
         done < <(managed_symlinks_for_group legacy)
     fi
 }
@@ -564,12 +667,15 @@ print_summary() {
 
     if [ "$PLAN_MODE" = true ] && [ "$BACKUPS_PLANNED" -gt 0 ]; then
         echo ""
-        echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
+        echo -e "  ${YELLOW}Backup directory:${NC} $(transaction_backup_root)"
         echo -e "  Existing files would be moved there before applying changes."
-    elif [ -d "$BACKUP_DIR" ]; then
+    elif [ -n "$CURRENT_TRANSACTION_ID" ]; then
         echo ""
-        echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
+        echo -e "  ${YELLOW}Backup directory:${NC} $CURRENT_TRANSACTION_DIR"
         echo -e "  Files that were replaced have been backed up there."
+        echo ""
+        echo -e "  ${YELLOW}Transaction:${NC} $CURRENT_TRANSACTION_ID"
+        echo -e "  ${YELLOW}Restore preview:${NC} dot restore --plan $CURRENT_TRANSACTION_ID"
     fi
 
     echo ""
@@ -616,7 +722,7 @@ echo "Each step will be explained and you'll be asked for confirmation."
 echo ""
 echo -e "  ${BOLD}Dotfiles directory:${NC} $DOTFILES_DIR"
 echo -e "  ${BOLD}Home directory:${NC}     $HOME"
-echo -e "  ${BOLD}Backup directory:${NC}   $BACKUP_DIR (if needed)"
+echo -e "  ${BOLD}Backup root:${NC}        $(transaction_backup_root) (if needed)"
 if [ "$PLAN_MODE" = true ]; then
     echo -e "  ${BOLD}Mode:${NC}               Preview only (--plan)"
 fi
@@ -635,4 +741,17 @@ install_config_symlinks
 install_home_symlinks
 install_api_keys_template
 install_git_hooks
+
+if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
+    update_transaction_state "$CURRENT_TRANSACTION_DIR" "complete" || {
+        echo "Error: failed to mark transaction complete" >&2
+        exit 1
+    }
+    tx_root="$(transaction_backup_root)"
+    tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")"
+    printf "%s\n" "$CURRENT_TRANSACTION_ID" >"$tx_tmp_latest"
+    mv -f "$tx_tmp_latest" "$tx_root/latest"
+fi
+INSTALL_SUCCESS=true
+
 print_summary

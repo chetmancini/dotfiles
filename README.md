@@ -83,11 +83,12 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
+- `restore` provides safe, transactional rollbacks of install changes (`dot restore --plan`, `dot restore --apply`). Each install journals replaced targets under `~/.dotfiles-backup/<id>`; conflict detection halts before modifying any files. Historical timestamped folders without `metadata` remain manual backups and are never inferred.
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
 - `status` provides fast, unified health checks across symlinks, repos, and Homebrew drift (`dot status` / `dot status --deep`)
-- `dot` dispatches `bin/` tools (`dot help`, `dot status`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
+- `dot` dispatches `bin/` tools (`dot help`, `dot status`, `dot restore`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
 - [`docs/package-managers.md`](docs/package-managers.md) defines the preferred owner for runtimes, native apps, and global JavaScript CLIs; use `package-sync --update` to refresh npm and pnpm globals
-- GitHub Actions smoke-tests the installer and doctor in a temporary `HOME`
+- GitHub Actions smoke-tests the installer, doctor, and transactional restore in a temporary `HOME`
 - `make format` formats shell scripts with `shfmt`; `make check` runs formatting, syntax, ShellCheck, TOML, zsh checks, and bats tests (`tests/`)
 
 ### Secrets (1Password preferred)
