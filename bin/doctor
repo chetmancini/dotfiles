@@ -56,6 +56,11 @@ check_symlink() {
         return
     fi
 
+    if [ ! -e "$expected" ]; then
+        record_failure "$label managed source is missing: $expected"
+        return
+    fi
+
     raw="$(readlink "$target")"
     resolved_target="$(resolve_path "$target")"
     resolved_expected="$(resolve_path "$expected")"

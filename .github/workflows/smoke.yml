@@ -58,14 +58,14 @@ jobs:
           HOME: ${{ runner.temp }}/home-plan
         run: |
           echo "existing git config" > "$HOME/.gitconfig"
-          ./install.sh --plan --yes --skip-brew --skip-api-keys --no-clear
+          ./install.sh --plan --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
           test -f "$HOME/.gitconfig"
           test ! -L "$HOME/.gitconfig"
 
       - name: Run installer
         env:
           HOME: ${{ runner.temp }}/home
-        run: ./install.sh --yes --skip-brew --skip-api-keys --no-clear
+        run: ./install.sh --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
 
       - name: Run doctor
         env:

@@ -132,6 +132,7 @@ print_live_section() {
 # Homebrew tasks (must run sequentially: update -> upgrade -> cleanup)
 run_brew_tasks() {
     local output_file="$TEMP_DIR/brew.out"
+    local task_failed=false
 
     {
         if [ "$RUN_BREW_UPDATE" = true ]; then
@@ -141,6 +142,7 @@ run_brew_tasks() {
                 echo "success:Homebrew updated"
             else
                 echo "error:Failed to update Homebrew"
+                task_failed=true
             fi
         fi
 
@@ -164,6 +166,7 @@ run_brew_tasks() {
                 emit_brew_upgrade_report "Apps" "$cask_before" "$cask_after"
             else
                 echo "error:Failed to upgrade packages"
+                task_failed=true
             fi
         fi
 
@@ -174,24 +177,28 @@ run_brew_tasks() {
                 echo "success:Homebrew cleaned up"
             else
                 echo "error:Failed to cleanup Homebrew"
+                task_failed=true
             fi
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 run_npm_global_update() {
     local output_file="$TEMP_DIR/npm.out"
+    local task_failed=false
 
     {
         if [ "$RUN_NPM_GLOBAL_UPDATE" != true ]; then
-            exit 0
+            return 0
         fi
 
         print_live_section "Updating global npm packages..."
 
         if ! command -v npm &>/dev/null; then
             echo "info:npm is not installed, skipping"
-            exit 0
+            return 0
         fi
 
         echo "info:[$(timestamp)] Running npm update -g"
@@ -200,23 +207,27 @@ run_npm_global_update() {
             echo "success:Global npm packages updated"
         else
             echo "error:Failed to update global npm packages"
+            task_failed=true
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 run_pnpm_global_update() {
     local output_file="$TEMP_DIR/pnpm.out"
+    local task_failed=false
 
     {
         if [ "$RUN_PNPM_GLOBAL_UPDATE" != true ]; then
-            exit 0
+            return 0
         fi
 
         print_live_section "Updating global pnpm packages..."
 
         if ! command -v pnpm &>/dev/null; then
             echo "info:pnpm is not installed, skipping"
-            exit 0
+            return 0
         fi
 
         echo "info:[$(timestamp)] Running pnpm update --global"
@@ -225,8 +236,11 @@ run_pnpm_global_update() {
             echo "success:Global pnpm packages updated"
         else
             echo "error:Failed to update global pnpm packages"
+            task_failed=true
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 # Print output from a task file
@@ -250,21 +264,26 @@ print_task_output() {
 # Check for macOS updates (just report, don't install)
 check_macos_updates() {
     local output_file="$TEMP_DIR/macos.out"
+    local task_failed=false
 
     {
         if [ "$CHECK_MACOS_UPDATES" != true ]; then
-            exit 0
+            return 0
         fi
 
         # Only run on macOS
         if [ "$(uname)" != "Darwin" ]; then
-            exit 0
+            return 0
         fi
 
         echo "section:Checking for macOS updates..."
 
         # softwareupdate -l lists available updates
-        updates=$(softwareupdate -l 2>&1)
+        if ! updates=$(softwareupdate -l 2>&1); then
+            echo "error:Failed to check for macOS updates"
+            task_failed=true
+            return 1
+        fi
 
         if echo "$updates" | grep -q "No new software available"; then
             echo "success:macOS is up to date"
@@ -282,26 +301,29 @@ check_macos_updates() {
             fi
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 # Docker cleanup
 run_docker_prune() {
     local output_file="$TEMP_DIR/docker.out"
+    local task_failed=false
 
     {
         if [ "$DOCKER_PRUNE" != true ]; then
-            exit 0
+            return 0
         fi
 
         # Check if Docker is installed and running
         if ! command -v docker &>/dev/null; then
-            exit 0
+            return 0
         fi
 
         if ! docker info &>/dev/null; then
             print_live_section "Docker cleanup..."
             echo "info:Docker is not running, skipping"
-            exit 0
+            return 0
         fi
 
         print_live_section "Cleaning up Docker..."
@@ -313,22 +335,26 @@ run_docker_prune() {
             echo "success:Docker cleaned up (was reclaimable: $space_before)"
         else
             echo "error:Failed to clean up Docker"
+            task_failed=true
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 # Update Neovim plugins via vim.pack (not LazyVim)
 update_nvim_plugins() {
     local output_file="$TEMP_DIR/nvim.out"
+    local task_failed=false
 
     {
         if [ "$UPDATE_NVIM_PLUGINS" != true ]; then
-            exit 0
+            return 0
         fi
 
         # Check if nvim is installed
         if ! command -v nvim &>/dev/null; then
-            exit 0
+            return 0
         fi
 
         print_live_section "Updating Neovim plugins (vim.pack)..."
@@ -337,8 +363,11 @@ update_nvim_plugins() {
             echo "success:Neovim plugins updated"
         else
             echo "error:Failed to update Neovim plugins"
+            task_failed=true
         fi
     } >"$output_file"
+
+    [ "$task_failed" = false ]
 }
 
 # Fetch a single repo (safe to run in parallel)
@@ -442,7 +471,7 @@ update_single_repo() {
 # Pull latest from main on all git repos in configured directories
 pull_repos() {
     if [ "$PULL_REPOS" != true ]; then
-        return
+        return 0
     fi
 
     local output_file="$TEMP_DIR/repos.out"
@@ -496,6 +525,8 @@ pull_repos() {
         fi
         update_single_repo "$repo" "$output_file"
     done
+
+    ! grep -q '^error:' "$output_file"
 }
 
 print_help() {
@@ -603,25 +634,27 @@ FORCE_SEQUENTIAL_FETCH=false
 
 # Run all tasks sequentially (original behavior)
 run_sequential() {
-    check_macos_updates
+    local failures=0
+
+    check_macos_updates || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/macos.out"
 
-    run_brew_tasks
+    run_brew_tasks || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/brew.out"
 
-    run_npm_global_update
+    run_npm_global_update || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/npm.out"
 
-    run_pnpm_global_update
+    run_pnpm_global_update || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/pnpm.out"
 
-    run_docker_prune
+    run_docker_prune || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/docker.out"
 
-    update_nvim_plugins
+    update_nvim_plugins || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/nvim.out"
 
-    pull_repos
+    pull_repos || failures=$((failures + 1))
     if [ -f "$TEMP_DIR/repos.out" ] && [ -s "$TEMP_DIR/repos.out" ]; then
         print_section "Pulling latest in repos..."
         echo ""
@@ -634,11 +667,14 @@ run_sequential() {
         done <"$TEMP_DIR/repos.out"
         echo ""
     fi
+
+    [ "$failures" -eq 0 ]
 }
 
 # Main
 main() {
     local dry_run_mode=false
+    local update_status=0
 
     # Parse arguments
     while [ $# -gt 0 ]; do
@@ -692,13 +728,21 @@ main() {
         echo ""
     fi
 
-    run_sequential
+    run_sequential || update_status=$?
 
     if [ "$SHOW_HEADER" = true ]; then
-        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${GREEN}  All updates complete!${NC}"
-        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        if [ "$update_status" -eq 0 ]; then
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${GREEN}  All updates complete!${NC}"
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        else
+            echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${RED}  Updates completed with errors${NC}"
+            echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        fi
     fi
+
+    return "$update_status"
 }
 
 main "$@"

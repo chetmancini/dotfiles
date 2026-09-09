@@ -13,6 +13,7 @@ print_help() {
     echo "Options:"
     echo "  -n, --no-browser    Don't open browser automatically"
     echo "  -d, --dir DIR       Serve from DIR instead of current directory"
+    echo "  -b, --bind ADDRESS  Bind address (default: 127.0.0.1)"
     echo "  -h, --help          Show this help message"
     echo ""
     echo "Arguments:"
@@ -23,6 +24,7 @@ print_help() {
     echo "  server 3000         # Serve current dir on port 3000"
     echo "  server -n 8080      # Serve on 8080 without opening browser"
     echo "  server -d ./dist    # Serve ./dist directory"
+    echo "  server -b 0.0.0.0   # Explicitly share on all IPv4 interfaces"
     exit 0
 }
 
@@ -30,6 +32,7 @@ print_help() {
 PORT=8000
 OPEN_BROWSER=1
 SERVE_DIR="."
+BIND_ADDRESS="127.0.0.1"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -42,7 +45,19 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -d | --dir)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: $1 requires a directory"
+                exit 1
+            fi
             SERVE_DIR="$2"
+            shift 2
+            ;;
+        -b | --bind)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: $1 requires an address"
+                exit 1
+            fi
+            BIND_ADDRESS="$2"
             shift 2
             ;;
         *)
@@ -102,6 +117,7 @@ cd "$SERVE_DIR" || exit 1
 
 echo "Starting HTTP server..."
 echo "  Directory: $(pwd)"
+echo "  Bind: $BIND_ADDRESS"
 echo "  URL: http://localhost:$PORT/"
 echo "  Press Ctrl+C to stop"
 echo ""
@@ -119,4 +135,4 @@ if [[ "$OPEN_BROWSER" -eq 1 ]]; then
 fi
 
 # Start the server (this blocks until Ctrl+C)
-$PYTHON_CMD -m http.server "$PORT"
+"$PYTHON_CMD" -m http.server --bind "$BIND_ADDRESS" "$PORT"

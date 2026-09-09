@@ -40,6 +40,7 @@ pass "dot rejects path traversal"
 
 # --- integration: plan mode in temp HOME ---
 TMP_HOME="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-install-smoke.XXXXXX")"
+PLAN_LOG="$TMP_HOME/install-plan.out"
 cleanup() { rm -rf "$TMP_HOME"; }
 trap cleanup EXIT
 
@@ -49,13 +50,13 @@ export HOME="$TMP_HOME"
 echo "existing git config" >"$HOME/.gitconfig"
 
 # Run from a different cwd to ensure DOTFILES_DIR resolution works
-cd /tmp
-"$DOT" install --plan --yes --skip-brew --skip-api-keys --no-clear >/tmp/dot-install-plan.out 2>&1 || {
-    cat /tmp/dot-install-plan.out >&2
+cd "${TMPDIR:-/tmp}"
+"$DOT" install --plan --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear >"$PLAN_LOG" 2>&1 || {
+    cat "$PLAN_LOG" >&2
     fail "dot install --plan failed"
 }
 
-grep -qi 'plan' /tmp/dot-install-plan.out || grep -qi 'Would' /tmp/dot-install-plan.out ||
+grep -qi 'plan' "$PLAN_LOG" || grep -qi 'Would' "$PLAN_LOG" ||
     fail "plan output should mention plan/Would actions"
 [[ -f "$HOME/.gitconfig" ]] || fail ".gitconfig should still exist after plan"
 [[ ! -L "$HOME/.gitconfig" ]] || fail "plan mode must not symlink .gitconfig"
@@ -63,28 +64,30 @@ pass "dot install --plan in temp HOME"
 
 # --- optional apply smoke (still skip brew) ---
 HOME_APPLY="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-install-apply.XXXXXX")"
+APPLY_LOG="$HOME_APPLY/install-apply.out"
+DOCTOR_LOG="$HOME_APPLY/doctor.out"
 trap 'rm -rf "$TMP_HOME" "$HOME_APPLY"' EXIT
 export HOME="$HOME_APPLY"
 
-"$DOT" install --yes --skip-brew --skip-api-keys --no-clear >/tmp/dot-install-apply.out 2>&1 || {
-    cat /tmp/dot-install-apply.out >&2
+"$DOT" install --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear >"$APPLY_LOG" 2>&1 || {
+    cat "$APPLY_LOG" >&2
     fail "dot install --yes --skip-brew failed"
 }
 
 [[ -L "$HOME/.zshrc" ]] || fail "expected ~/.zshrc symlink after install"
 # doctor in the same fake HOME
-if ! "$DOTFILES_DIR/bin/doctor" --skip-tools >/tmp/dot-doctor.out 2>&1; then
+if ! "$DOTFILES_DIR/bin/doctor" --skip-tools >"$DOCTOR_LOG" 2>&1; then
     # Allow non-zero if strict failures remain (e.g. TPM warning is soft; missing
     # optional tools OK). Fail only if zshrc check itself failed.
-    if ! grep -q 'Zsh config' /tmp/dot-doctor.out; then
-        cat /tmp/dot-doctor.out >&2
+    if ! grep -q 'Zsh config' "$DOCTOR_LOG"; then
+        cat "$DOCTOR_LOG" >&2
         fail "doctor did not report zsh config"
     fi
 fi
-if grep -q 'Zsh config ->' /tmp/dot-doctor.out || grep -q 'Zsh config' /tmp/dot-doctor.out; then
+if grep -q 'Zsh config ->' "$DOCTOR_LOG" || grep -q 'Zsh config' "$DOCTOR_LOG"; then
     pass "doctor sees zsh after install"
 else
-    cat /tmp/dot-doctor.out >&2
+    cat "$DOCTOR_LOG" >&2
     fail "doctor missing zsh success line"
 fi
 

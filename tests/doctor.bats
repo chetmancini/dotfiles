@@ -15,7 +15,7 @@ setup() {
 @test "doctor --skip-tools succeeds in temp HOME after install" {
     tmp_home="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor.XXXXXX")"
     # Run install without brew into temp HOME
-    HOME="$tmp_home" "$DOTFILES_DIR/install.sh" --yes --skip-brew --skip-api-keys --no-clear >/dev/null 2>&1
+    HOME="$tmp_home" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear >/dev/null 2>&1
     run env HOME="$tmp_home" "$DOTFILES_DIR/bin/doctor" --skip-tools
     [ "$status" -eq 0 ]
     [[ "$output" == *"Zsh config"* ]] || [[ "$output" == *"Git config"* ]]
@@ -35,7 +35,7 @@ setup() {
 @test "doctor --strict fails when tools missing (isolated PATH)" {
     # With a minimal PATH, at least one tool check should fail under --strict
     tmp_home="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-strict.XXXXXX")"
-    HOME="$tmp_home" "$DOTFILES_DIR/install.sh" --yes --skip-brew --skip-api-keys --no-clear >/dev/null 2>&1
+    HOME="$tmp_home" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear >/dev/null 2>&1
     run env HOME="$tmp_home" PATH="/usr/bin:/bin" "$DOTFILES_DIR/bin/doctor" --strict --skip-tools
     # --skip-tools should still pass even with isolated PATH
     [ "$status" -eq 0 ]

@@ -22,6 +22,10 @@ SKIP_HOOKS=false
 CLEAR_SCREEN=true
 PLAN_MODE=false
 
+# Keep confirmations on the original input stream. Manifest loops temporarily
+# redirect stdin, and prompts must never consume manifest records.
+exec 9<&0
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -156,7 +160,10 @@ ask_yes_no() {
     fi
 
     while true; do
-        read -r -p "$prompt" answer
+        if ! read -r -u 9 -p "$prompt" answer; then
+            print_warning "No confirmation input available; refusing this action"
+            return 1
+        fi
         answer="${answer:-$default}"
         case "$answer" in
             [Yy]*) return 0 ;;
@@ -164,6 +171,26 @@ ask_yes_no() {
             *) echo "Please answer yes or no." ;;
         esac
     done
+}
+
+# Validate tracked sources before any managed target can be replaced.
+validate_managed_sources() {
+    local group source_rel _target_rel _install_name _doctor_label _description
+    local missing=0
+
+    for group in config home legacy; do
+        while IFS='|' read -r source_rel _target_rel _install_name _doctor_label _description; do
+            if [ ! -e "$DOTFILES_DIR/$source_rel" ]; then
+                print_error "Managed source is missing: $DOTFILES_DIR/$source_rel"
+                missing=$((missing + 1))
+            fi
+        done < <(managed_symlinks_for_group "$group")
+    done
+
+    if [ "$missing" -gt 0 ]; then
+        print_error "Refusing to install with $missing missing managed source(s)"
+        return 1
+    fi
 }
 
 # Back up a file or directory if it exists and is not a symlink
@@ -207,6 +234,11 @@ create_symlink() {
     print_info "$description"
     print_info "Source: $source"
     print_info "Target: $target"
+
+    if [ ! -e "$source" ]; then
+        print_error "Managed source is missing; target left unchanged"
+        return 1
+    fi
 
     if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
         print_success "Already correctly symlinked"
@@ -510,11 +542,13 @@ install_git_hooks() {
         return 0
     fi
 
-    if bash "$DOTFILES_DIR/scripts/install-hooks.sh"; then
-        print_success "Git pre-commit hook installed"
-    else
-        print_warning "Git hook install failed (see output above)"
-    fi
+    local hook_status=0
+    bash "$DOTFILES_DIR/scripts/install-hooks.sh" || hook_status=$?
+    case "$hook_status" in
+        0) print_success "Git pre-commit hook installed" ;;
+        2) print_warning "Git hook installation skipped (see output above)" ;;
+        *) print_warning "Git hook install failed (see output above)" ;;
+    esac
 }
 
 print_summary() {
@@ -592,6 +626,8 @@ if ! ask_yes_no "Ready to begin?"; then
     echo "Installation cancelled."
     exit 0
 fi
+
+validate_managed_sources
 
 install_tpm
 install_homebrew
