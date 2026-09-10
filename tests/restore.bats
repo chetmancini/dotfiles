@@ -755,3 +755,79 @@ EOF
     [ "$status" -eq 64 ]
     [[ "$output" == *"multiple transaction selectors"* ]]
 }
+
+@test "25. Preflight rejects symlinked transaction directory during resolution" {
+    local tx_id="20260101T000000-111-811"
+    local external_tx="$TMP_HOME/external_tx"
+    mkdir -p "$external_tx"
+    cat <<EOF >"$external_tx/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "0001|.gitconfig|absent|-|.gitconfig" >"$external_tx/entries"
+
+    # Symlink tx_dir into backup root
+    ln -s "$external_tx" "$TMP_BACKUP/$tx_id"
+
+    # Managed symlink exists in HOME
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan refuses symlinked transaction directory
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+
+    # Apply refuses symlinked transaction directory
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+
+    # Symlink in HOME is untouched
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$external_tx/metadata"
+
+    # If latest points to symlinked transaction, latest also refuses
+    echo "$tx_id" >"$TMP_BACKUP/latest"
+    run "$DOTFILES_DIR/bin/restore" --plan latest
+    [ "$status" -ne 0 ]
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    [ -L "$HOME/.gitconfig" ]
+}
+
+@test "26. Preflight rejects duplicate target paths in transaction journal" {
+    local tx_id="20260101T000000-111-812"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "payload 1" >"$tx_dir/payload/0001"
+    echo "payload 2" >"$tx_dir/payload/0002"
+    # Distinct sequences (0001 and 0002) but duplicate target path (.gitconfig and ./.gitconfig)
+    cat <<EOF >"$tx_dir/entries"
+0001|.gitconfig|file|payload/0001|.gitconfig
+0002|./.gitconfig|file|payload/0002|.gitconfig
+EOF
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan reports duplicate target path error
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"duplicate target path"* ]]
+
+    # Apply aborts before modifying any symlinks
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"duplicate target path"* ]]
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+    [ -f "$tx_dir/payload/0001" ]
+    [ -f "$tx_dir/payload/0002" ]
+}

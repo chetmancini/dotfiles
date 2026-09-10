@@ -65,6 +65,25 @@ validate_relative_path() {
     return 0
 }
 
+# Normalize a relative path by removing leading/trailing slashes, redundant slashes, and '.' segments.
+normalize_relative_path() {
+    local path="$1"
+    local part
+    local -a parts=()
+    local -a clean_parts=()
+    IFS="/" read -r -a parts <<<"$path"
+    for part in "${parts[@]}"; do
+        if [ -z "$part" ] || [ "$part" = "." ]; then
+            continue
+        fi
+        clean_parts+=("$part")
+    done
+    (
+        IFS="/"
+        echo "${clean_parts[*]}"
+    )
+}
+
 # Validate prior kind
 validate_prior_kind() {
     case "$1" in
@@ -192,7 +211,10 @@ is_managed_symlink() {
 # Never sources or evals metadata. Outputs key=value on stdout on success.
 read_transaction_metadata() {
     local meta_file="$1"
-    [ -f "$meta_file" ] || return 1
+    local tx_dir
+    tx_dir="$(dirname "$meta_file")"
+    [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
+    [ -f "$meta_file" ] && [ ! -L "$meta_file" ] || return 1
 
     local key val
     local m_version="" m_id="" m_created_at="" m_repo_revision="" m_state=""
@@ -293,13 +315,15 @@ update_transaction_state() {
     local tx_dir="$1"
     local new_state="$2"
 
+    [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
+
     case "$new_state" in
         in_progress | complete | failed | restored) ;;
         *) return 1 ;;
     esac
 
     local meta_file="$tx_dir/metadata"
-    [ -f "$meta_file" ] || return 1
+    [ -f "$meta_file" ] && [ ! -L "$meta_file" ] || return 1
 
     # Verify current metadata validity first
     read_transaction_metadata "$meta_file" >/dev/null || return 1
@@ -340,14 +364,16 @@ resolve_transaction() {
     local root
     root="$(transaction_backup_root)"
 
+    [ -d "$root" ] && [ ! -L "$root" ] || return 1
+
     local resolved_id=""
     if [ "$input" = "latest" ] || [ -z "$input" ]; then
         local latest_file="$root/latest"
-        [ -f "$latest_file" ] || return 1
+        [ -f "$latest_file" ] && [ ! -L "$latest_file" ] || return 1
         resolved_id="$(head -n 1 "$latest_file" | tr -d '[:space:]')"
         validate_transaction_id "$resolved_id" || return 1
         local tx_dir="$root/$resolved_id"
-        [ -d "$tx_dir" ] || return 1
+        [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
         local meta
         meta="$(read_transaction_metadata "$tx_dir/metadata")" || return 1
         local state
@@ -360,7 +386,7 @@ resolve_transaction() {
         resolved_id="$input"
         validate_transaction_id "$resolved_id" || return 1
         local tx_dir="$root/$resolved_id"
-        [ -d "$tx_dir" ] || return 1
+        [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
         read_transaction_metadata "$tx_dir/metadata" >/dev/null || return 1
     fi
 
@@ -373,15 +399,15 @@ resolve_transaction() {
 list_transaction_dirs() {
     local root
     root="$(transaction_backup_root)"
-    [ -d "$root" ] || return 0
+    [ -d "$root" ] && [ ! -L "$root" ] || return 0
 
     local entry
     for entry in "$root"/*; do
-        [ -d "$entry" ] || continue
+        [ -d "$entry" ] && [ ! -L "$entry" ] || continue
         local id
         id="$(basename "$entry")"
         validate_transaction_id "$id" || continue
-        [ -f "$entry/metadata" ] || continue
+        [ -f "$entry/metadata" ] && [ ! -L "$entry/metadata" ] || continue
         echo "$entry"
     done
 }

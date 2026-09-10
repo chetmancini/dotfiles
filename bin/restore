@@ -90,6 +90,11 @@ cmd_plan() {
     fi
 
     local tx_dir="$root/$tx_id"
+    if [ ! -d "$tx_dir" ] || [ -L "$tx_dir" ]; then
+        echo "Error: transaction '${tx_id}' is invalid or symlinked" >&2
+        exit 1
+    fi
+
     local meta
     if ! meta="$(read_transaction_metadata "$tx_dir/metadata")"; then
         echo "Error: transaction '${tx_id}' has invalid metadata" >&2
@@ -121,6 +126,7 @@ cmd_plan() {
     done <"$entries_file"
 
     local seen_seqs="|"
+    local seen_targets="|"
     local line
     for line in "${raw_lines[@]}"; do
         local -a fields
@@ -130,7 +136,8 @@ cmd_plan() {
             exit 1
         fi
         local seq="${fields[0]}"
-        if ! validate_journal_entry "$seq" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+        local target_rel="${fields[1]}"
+        if ! validate_journal_entry "$seq" "$target_rel" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
             echo "Error: entry validation failed in transaction ${tx_id}: $line" >&2
             exit 1
         fi
@@ -141,6 +148,16 @@ cmd_plan() {
                 ;;
         esac
         seen_seqs="${seen_seqs}${seq}|"
+
+        local norm_target
+        norm_target="$(normalize_relative_path "$target_rel")"
+        case "$seen_targets" in
+            *"|$norm_target|"*)
+                echo "Error: duplicate target path '${target_rel}' in transaction ${tx_id}" >&2
+                exit 1
+                ;;
+        esac
+        seen_targets="${seen_targets}${norm_target}|"
     done
 
     echo "Plan restore for transaction ${tx_id} (state: ${state}):"
@@ -344,6 +361,11 @@ cmd_apply() {
     fi
 
     local tx_dir="$root/$tx_id"
+    if [ ! -d "$tx_dir" ] || [ -L "$tx_dir" ]; then
+        echo "Error: transaction '${tx_id}' is invalid or symlinked" >&2
+        exit 1
+    fi
+
     local meta
     if ! meta="$(read_transaction_metadata "$tx_dir/metadata")"; then
         echo "Error: transaction '${tx_id}' has invalid metadata" >&2
@@ -375,6 +397,7 @@ cmd_apply() {
     done <"$entries_file"
 
     local seen_seqs="|"
+    local seen_targets="|"
     local line
     for line in "${raw_lines[@]}"; do
         local -a fields
@@ -384,7 +407,8 @@ cmd_apply() {
             exit 1
         fi
         local seq="${fields[0]}"
-        if ! validate_journal_entry "$seq" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+        local target_rel="${fields[1]}"
+        if ! validate_journal_entry "$seq" "$target_rel" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
             echo "Error: entry validation failed in transaction ${tx_id}: $line" >&2
             exit 1
         fi
@@ -395,6 +419,16 @@ cmd_apply() {
                 ;;
         esac
         seen_seqs="${seen_seqs}${seq}|"
+
+        local norm_target
+        norm_target="$(normalize_relative_path "$target_rel")"
+        case "$seen_targets" in
+            *"|$norm_target|"*)
+                echo "Error: duplicate target path '${target_rel}' in transaction ${tx_id}" >&2
+                exit 1
+                ;;
+        esac
+        seen_targets="${seen_targets}${norm_target}|"
     done
 
     # Preflight ALL entries before making ANY change
