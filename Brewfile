@@ -42,6 +42,7 @@ brew "ripgrep"                  # Fast grep (rg)
 brew "sd"                       # Better sed
 brew "shellcheck"               # Shell script linter
 brew "shfmt"                    # Shell script formatter
+brew "stylua"                   # Lua formatter (for nvim/ and yazi/ configs)
 brew "tmux"                     # Terminal multiplexer
 brew "tokei"                    # Code statistics
 brew "wget"                     # File downloader
