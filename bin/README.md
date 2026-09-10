@@ -9,6 +9,7 @@ available directly on PATH (`doctor`, `brew-sync`, …).
 dot help
 dot status
 dot install --plan --yes --skip-brew   # → ../install.sh
+dot restore --plan                    # preview transaction rollback
 dot doctor --skip-tools
 dot brew-sync
 dot package-sync --update
@@ -22,6 +23,7 @@ dot update          # → update-everything
 |--------|----------|---------|
 | [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
 | [`status`](#status) | Bash | Unified machine and dotfiles health status |
+| [`restore`](#restore) | Bash | Preview or apply rollback of an install transaction |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`package-sync`](#package-sync) | Bash | Inspect or update global npm and pnpm packages |
 | [`cache-clean`](#cache-clean) | Bash | Preview or run supported package-cache cleanup |
@@ -78,6 +80,33 @@ status --json
 - Deep mode (`--deep`): strict tool readiness and Homebrew drift checks
 - JSON output (`--json`): emits structured `dotfiles.status/v1` data
 - Exit codes: `0` (healthy), `1` (warning/drift), `2` (hard failure), `64` (usage error)
+
+---
+
+### `restore`
+
+Transactional rollback for dotfiles symlink installations.
+
+**Usage:**
+```bash
+dot restore --list
+dot restore --plan [latest|ID]
+dot restore --apply [latest|ID] [--yes]
+dot restore --help
+```
+
+**Backup layout:**
+Installations that mutate targets create a versioned transaction directory under `~/.dotfiles-backup/<id>/` containing:
+- `metadata`: key=value metadata (`version=1`, `id`, `created_at`, `repo_revision`, `state`)
+- `entries`: journal records (`sequence|target_rel|prior_kind|prior_value|installed_rel`)
+- `payload/`: preserved prior files and directory trees
+- `latest`: pointer file containing the ID of the most recent complete install transaction
+
+**Safety and Conflict Policy:**
+- **Conflict detection**: Before any target is modified, `--apply` verifies that every target is either the expected managed symlink, untouched in its original state, or an interrupted-install state. Any drift or post-install modification halts the entire restore without partial changes.
+- **Fail closed**: Conflicts abort immediately; no `--force` option is provided.
+- **Legacy backups**: Historical timestamped folders without versioned `metadata` remain manual backups and are never inferred by `restore`.
+- `--plan` previews all actions without touching files or metadata.
 
 ---
 

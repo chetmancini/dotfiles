@@ -91,4 +91,22 @@ else
     fail "doctor missing zsh success line"
 fi
 
+# --- transaction and restore smoke in fake HOME ---
+[[ -f "$HOME/.dotfiles-backup/latest" ]] || fail "$HOME/.dotfiles-backup/latest missing"
+latest_tx="$(tr -d '[:space:]' <"$HOME/.dotfiles-backup/latest")"
+[[ -n "$latest_tx" ]] || fail "latest transaction pointer is empty"
+[[ -d "$HOME/.dotfiles-backup/$latest_tx" ]] || fail "latest transaction dir does not exist"
+meta_file="$HOME/.dotfiles-backup/$latest_tx/metadata"
+[[ -f "$meta_file" ]] || fail "metadata file missing in latest transaction"
+grep -q '^version=1$' "$meta_file" || fail "metadata version != 1"
+grep -q '^state=complete$' "$meta_file" || fail "metadata state != complete"
+pass "install created complete transaction in latest"
+
+"$DOT" restore --plan latest >/tmp/dot-restore-plan.out 2>&1 || {
+    cat /tmp/dot-restore-plan.out >&2
+    fail "dot restore --plan latest failed"
+}
+[[ -L "$HOME/.zshrc" ]] || fail "installed link ~/.zshrc was modified during restore plan"
+pass "dot restore --plan latest succeeded without modifying links"
+
 pass "all install smoke checks passed"

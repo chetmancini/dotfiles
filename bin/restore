@@ -1,0 +1,530 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# restore: Transactional rollback for dotfiles symlink installation
+#
+# Usage:
+#   dot restore --list
+#   dot restore --plan [latest|ID]
+#   dot restore --apply [latest|ID] [--yes]
+#   dot restore --help
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+BIN_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd -P "$BIN_DIR/.." && pwd)"
+
+# shellcheck source=bin/lib/transactions.sh
+source "$BIN_DIR/lib/transactions.sh"
+
+EX_USAGE=64
+
+print_help() {
+    cat <<EOF
+Usage:
+  dot restore --list
+  dot restore --plan [latest|ID]
+  dot restore --apply [latest|ID] [--yes]
+  dot restore --help
+
+Safely inspect and roll back dotfiles install transactions.
+
+Options:
+  --list                List available install transactions
+  --plan [latest|ID]    Preview rollback actions without modifying files
+  --apply [latest|ID]   Apply rollback after verifying preflight preconditions
+  --yes, -y             Apply without interactive confirmation prompt
+  -h, --help            Show this help message
+EOF
+}
+
+cmd_list() {
+    local count=0
+    local header_printed=false
+
+    while IFS= read -r tx_dir; do
+        [ -z "$tx_dir" ] && continue
+        local meta
+        if ! meta="$(read_transaction_metadata "$tx_dir/metadata" 2>/dev/null)"; then
+            continue
+        fi
+
+        local id state created_at repo_rev entry_count=0
+        id="$(echo "$meta" | grep '^id=' | cut -d'=' -f2-)"
+        state="$(echo "$meta" | grep '^state=' | cut -d'=' -f2-)"
+        created_at="$(echo "$meta" | grep '^created_at=' | cut -d'=' -f2-)"
+        repo_rev="$(echo "$meta" | grep '^repo_revision=' | cut -d'=' -f2-)"
+
+        if [ -f "$tx_dir/entries" ]; then
+            entry_count="$(wc -l <"$tx_dir/entries" | tr -d '[:space:]')"
+        fi
+
+        if [ "$header_printed" = false ]; then
+            printf "%-32s %-12s %-22s %-12s %s\n" "ID" "STATE" "CREATED" "REVISION" "ENTRIES"
+            header_printed=true
+        fi
+
+        printf "%-32s %-12s %-22s %-12s %s\n" "$id" "$state" "$created_at" "$repo_rev" "$entry_count"
+        count=$((count + 1))
+    done < <(list_transaction_dirs)
+
+    if [ "$count" -eq 0 ]; then
+        echo "No transactions found in $(transaction_backup_root)"
+    fi
+}
+
+cmd_plan() {
+    local target_spec="${1:-latest}"
+    local root
+    root="$(transaction_backup_root)"
+
+    local tx_id
+    if ! tx_id="$(resolve_transaction "$target_spec")"; then
+        echo "Error: could not resolve transaction '${target_spec}'" >&2
+        exit 1
+    fi
+
+    local tx_dir="$root/$tx_id"
+    local meta
+    if ! meta="$(read_transaction_metadata "$tx_dir/metadata")"; then
+        echo "Error: transaction '${tx_id}' has invalid metadata" >&2
+        exit 1
+    fi
+
+    local state
+    state="$(echo "$meta" | grep '^state=' | cut -d'=' -f2-)"
+
+    if [ "$state" = "restored" ]; then
+        echo "Transaction ${tx_id} is already restored."
+        exit 0
+    elif [ "$state" = "in_progress" ]; then
+        echo "Error: transaction ${tx_id} is in progress (not complete or failed)" >&2
+        exit 1
+    fi
+
+    local entries_file="$tx_dir/entries"
+    if [ ! -f "$entries_file" ]; then
+        echo "No entries journaled for transaction ${tx_id}."
+        exit 0
+    fi
+
+    # Read all lines into array and validate every line first
+    local -a raw_lines=()
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -z "$line" ] && continue
+        raw_lines+=("$line")
+    done <"$entries_file"
+
+    local seen_seqs="|"
+    local line
+    for line in "${raw_lines[@]}"; do
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        if [ "${#fields[@]}" -ne 5 ]; then
+            echo "Error: malformed entry in transaction ${tx_id}: $line" >&2
+            exit 1
+        fi
+        local seq="${fields[0]}"
+        if ! validate_journal_entry "$seq" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+            echo "Error: entry validation failed in transaction ${tx_id}: $line" >&2
+            exit 1
+        fi
+        case "$seen_seqs" in
+            *"|$seq|"*)
+                echo "Error: duplicate sequence number '${seq}' in transaction ${tx_id}" >&2
+                exit 1
+                ;;
+        esac
+        seen_seqs="${seen_seqs}${seq}|"
+    done
+
+    echo "Plan restore for transaction ${tx_id} (state: ${state}):"
+    echo ""
+
+    local conflicts=0
+    local has_actions=0
+
+    # Print plan in reverse sequence (same as apply order)
+    local i
+    for ((i = ${#raw_lines[@]} - 1; i >= 0; i--)); do
+        line="${raw_lines[i]}"
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        local seq="${fields[0]}"
+        local target_rel="${fields[1]}"
+        local prior_kind="${fields[2]}"
+        local prior_val="${fields[3]}"
+        local installed_rel="${fields[4]}"
+
+        local target="$HOME/$target_rel"
+        local expected_source="$DOTFILES_DIR/$installed_rel"
+        local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
+
+        # Determine state
+        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+            # State 1: target is the expected managed symlink
+            local state1_valid=false
+            case "$prior_kind" in
+                absent)
+                    if validate_target_ancestors "$target_rel"; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: remove managed symlink (target was originally absent)"
+                    fi
+                    ;;
+                symlink)
+                    if validate_target_ancestors "$target_rel"; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with prior symlink -> $prior_val"
+                    fi
+                    ;;
+                file)
+                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel"; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with original file from payload/$seq"
+                    fi
+                    ;;
+                directory)
+                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel"; then
+                        state1_valid=true
+                        echo "  [restore] $target_rel: replace managed symlink with original directory from payload/$seq"
+                    fi
+                    ;;
+            esac
+            if [ "$state1_valid" = true ]; then
+                has_actions=$((has_actions + 1))
+            else
+                echo "  [conflict] $target_rel: target payload missing or invalid, or ancestor directory missing or redirected" >&2
+                conflicts=$((conflicts + 1))
+            fi
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2a: prior file untouched, payload absent
+            echo "  [no-op]   $target_rel: already in original file state (payload was not moved)"
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2b: prior directory untouched, payload absent
+            echo "  [no-op]   $target_rel: already in original directory state (payload was not moved)"
+        elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
+            local current_link raw_current_link
+            raw_current_link="$(
+                readlink -n "$target"
+                printf 'x'
+            )"
+            current_link="${raw_current_link%x}"
+            if [ "$current_link" = "$prior_val" ] && validate_target_ancestors "$target_rel"; then
+                # State 2c: prior symlink untouched
+                echo "  [no-op]   $target_rel: already in original symlink state -> $prior_val"
+            else
+                echo "  [conflict] $target_rel: target has changed since installation or does not match preconditions" >&2
+                conflicts=$((conflicts + 1))
+            fi
+        elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            # State 2d: absent target remains absent
+            echo "  [no-op]   $target_rel: already absent"
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
+            echo "  [restore] $target_rel: restore file from payload/$seq (target currently absent)"
+            has_actions=$((has_actions + 1))
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
+            echo "  [restore] $target_rel: restore directory from payload/$seq (target currently absent)"
+            has_actions=$((has_actions + 1))
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
+            echo "  [restore] $target_rel: recreate prior symlink -> $prior_val (target currently absent)"
+            has_actions=$((has_actions + 1))
+        else
+            # Conflict!
+            echo "  [conflict] $target_rel: target has changed since installation or does not match preconditions" >&2
+            conflicts=$((conflicts + 1))
+        fi
+    done
+
+    echo ""
+    if [ "$conflicts" -gt 0 ]; then
+        echo "Preflight check failed: $conflicts conflict(s) detected. Restore cannot proceed safely." >&2
+        exit 1
+    fi
+
+    if [ "$has_actions" -eq 0 ]; then
+        echo "No actions required: all targets are already in their pre-install state."
+    else
+        echo "Preview only. No files were modified."
+    fi
+}
+
+cmd_apply() {
+    local target_spec="$1"
+    local auto_yes="$2"
+    local root
+    root="$(transaction_backup_root)"
+
+    local tx_id
+    if ! tx_id="$(resolve_transaction "$target_spec")"; then
+        echo "Error: could not resolve transaction '${target_spec}'" >&2
+        exit 1
+    fi
+
+    local tx_dir="$root/$tx_id"
+    local meta
+    if ! meta="$(read_transaction_metadata "$tx_dir/metadata")"; then
+        echo "Error: transaction '${tx_id}' has invalid metadata" >&2
+        exit 1
+    fi
+
+    local state
+    state="$(echo "$meta" | grep '^state=' | cut -d'=' -f2-)"
+
+    if [ "$state" = "restored" ]; then
+        echo "Error: transaction ${tx_id} is already restored." >&2
+        exit 1
+    elif [ "$state" = "in_progress" ]; then
+        echo "Error: transaction ${tx_id} is in progress (not complete or failed)" >&2
+        exit 1
+    fi
+
+    local entries_file="$tx_dir/entries"
+    if [ ! -f "$entries_file" ]; then
+        echo "No entries journaled for transaction ${tx_id}."
+        exit 0
+    fi
+
+    # Read all lines into array and validate every line first
+    local -a raw_lines=()
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -z "$line" ] && continue
+        raw_lines+=("$line")
+    done <"$entries_file"
+
+    local seen_seqs="|"
+    local line
+    for line in "${raw_lines[@]}"; do
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        if [ "${#fields[@]}" -ne 5 ]; then
+            echo "Error: malformed entry in transaction ${tx_id}: $line" >&2
+            exit 1
+        fi
+        local seq="${fields[0]}"
+        if ! validate_journal_entry "$seq" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+            echo "Error: entry validation failed in transaction ${tx_id}: $line" >&2
+            exit 1
+        fi
+        case "$seen_seqs" in
+            *"|$seq|"*)
+                echo "Error: duplicate sequence number '${seq}' in transaction ${tx_id}" >&2
+                exit 1
+                ;;
+        esac
+        seen_seqs="${seen_seqs}${seq}|"
+    done
+
+    # Preflight ALL entries before making ANY change
+    local i
+    for ((i = 0; i < ${#raw_lines[@]}; i++)); do
+        line="${raw_lines[i]}"
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        local seq="${fields[0]}"
+        local target_rel="${fields[1]}"
+        local prior_kind="${fields[2]}"
+        local prior_val="${fields[3]}"
+        local installed_rel="${fields[4]}"
+
+        local target="$HOME/$target_rel"
+        local expected_source="$DOTFILES_DIR/$installed_rel"
+        local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
+
+        local is_valid_precondition=false
+
+        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+            # State 1: target is the expected managed symlink
+            if [ "$prior_kind" = "file" ]; then
+                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "directory" ]; then
+                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "symlink" ]; then
+                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "absent" ]; then
+                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            fi
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2a: prior file untouched, payload absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2b: prior directory untouched, payload absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
+            local current_link raw_current_link
+            raw_current_link="$(
+                readlink -n "$target"
+                printf 'x'
+            )"
+            current_link="${raw_current_link%x}"
+            if [ "$current_link" = "$prior_val" ] && validate_target_ancestors "$target_rel"; then
+                # State 2c: prior symlink untouched
+                is_valid_precondition=true
+            fi
+        elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            # State 2d: absent target remains absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
+            is_valid_precondition=true
+        fi
+
+        if [ "$is_valid_precondition" = false ]; then
+            echo "Conflict detected on ${target_rel}: current state does not match pre-restore preconditions." >&2
+            echo "Restore aborted: no files were modified." >&2
+            exit 1
+        fi
+    done
+
+    # Confirmation prompt unless --yes
+    if [ "$auto_yes" != true ]; then
+        if [ ! -t 0 ]; then
+            echo "Error: restore requires confirmation; run interactively or pass --yes" >&2
+            exit 1
+        fi
+        read -r -p "Restore transaction ${tx_id}? [y/N] " confirm
+        case "$confirm" in
+            [yY] | [yY][eE][sS]) ;;
+            *)
+                echo "Restore cancelled."
+                exit 0
+                ;;
+        esac
+    fi
+
+    # Apply entries in reverse sequence
+    for ((i = ${#raw_lines[@]} - 1; i >= 0; i--)); do
+        line="${raw_lines[i]}"
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        local seq="${fields[0]}"
+        local target_rel="${fields[1]}"
+        local prior_kind="${fields[2]}"
+        local prior_val="${fields[3]}"
+        local installed_rel="${fields[4]}"
+
+        local target="$HOME/$target_rel"
+        local expected_source="$DOTFILES_DIR/$installed_rel"
+        local payload_path="$tx_dir/$prior_val"
+        local target_parent
+        target_parent="$(dirname "$target")"
+
+        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+            # Remove managed symlink first
+            rm -f "$target"
+
+            case "$prior_kind" in
+                absent)
+                    echo "Removed managed symlink: $target_rel"
+                    ;;
+                symlink)
+                    mkdir -p "$target_parent"
+                    ln -s -- "$prior_val" "$target"
+                    echo "Restored symlink: $target_rel -> $prior_val"
+                    ;;
+                file | directory)
+                    mkdir -p "$target_parent"
+                    mv "$payload_path" "$target"
+                    echo "Restored original $prior_kind: $target_rel"
+                    ;;
+            esac
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
+            mv "$payload_path" "$target"
+            echo "Restored original file from payload: $target_rel"
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
+            mv "$payload_path" "$target"
+            echo "Restored original directory from payload: $target_rel"
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            mkdir -p "$target_parent"
+            ln -s -- "$prior_val" "$target"
+            echo "Restored prior symlink: $target_rel -> $prior_val"
+        else
+            # Already in original state (State 2)
+            echo "Already in original state: $target_rel"
+        fi
+    done
+
+    # Atomically mark metadata state=restored
+    update_transaction_state "$tx_dir" "restored" || {
+        echo "Error: failed to mark transaction state as restored" >&2
+        exit 1
+    }
+
+    echo "Transaction ${tx_id} successfully restored."
+}
+
+# Parse CLI arguments
+if [ $# -eq 0 ]; then
+    print_help
+    exit 0
+fi
+
+case "$1" in
+    -h | --help)
+        if [ $# -gt 1 ]; then
+            exit "$EX_USAGE"
+        fi
+        print_help
+        exit 0
+        ;;
+    --list)
+        if [ $# -gt 1 ]; then
+            exit "$EX_USAGE"
+        fi
+        cmd_list
+        ;;
+    --plan)
+        if [ $# -gt 2 ]; then
+            exit "$EX_USAGE"
+        fi
+        cmd_plan "${2:-latest}"
+        ;;
+    --apply)
+        shift
+        apply_target="latest"
+        apply_yes=false
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --yes | -y)
+                    apply_yes=true
+                    ;;
+                latest)
+                    apply_target="latest"
+                    ;;
+                -*)
+                    exit "$EX_USAGE"
+                    ;;
+                *)
+                    if [ "$apply_target" != "latest" ]; then
+                        exit "$EX_USAGE"
+                    fi
+                    apply_target="$1"
+                    ;;
+            esac
+            shift
+        done
+        cmd_apply "$apply_target" "$apply_yes"
+        ;;
+    *)
+        exit "$EX_USAGE"
+        ;;
+esac

@@ -57,3 +57,23 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"managed source is missing"* ]]
 }
+
+@test "installer refuses a symlink whose target contains trailing newlines before mutation" {
+    mkdir -p "$TEST_HOME/.config"
+    python3 -c "import os; os.symlink('bad_target\n', '$TEST_HOME/.config/yazi')"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsupported characters in symlink target"* ]]
+
+    # Existing symlink remains untouched
+    [ -L "$TEST_HOME/.config/yazi" ]
+    raw="$(
+        readlink -n "$TEST_HOME/.config/yazi"
+        printf x
+    )"
+    [ "${raw%x}" = $'bad_target\n' ]
+
+    # No completed transaction created
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}
