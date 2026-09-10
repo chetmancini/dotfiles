@@ -972,3 +972,76 @@ EOF
     [ -L "$HOME/.zshrc" ]
     grep -q '^state=complete$' "$tx_dir/metadata"
 }
+
+@test "31. Truncated journal with missing final entries is rejected before restore" {
+    local tx_id="20260101T000000-111-817"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=2
+EOF
+    echo "content 1" >"$tx_dir/payload/0001"
+    # Entry 0002 is omitted/truncated, leaving only 0001
+    cat <<EOF >"$tx_dir/entries"
+0001|.gitconfig|file|payload/0001|.gitconfig
+EOF
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan reports entry count mismatch
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"entry count mismatch"* ]]
+
+    # Apply aborts without touching symlinks
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"entry count mismatch"* ]]
+
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "32. Non-writable payload directory causes preflight rejection and preserves target" {
+    local tx_id="20260101T000000-111-818"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Make payload directory read-only
+    chmod a-w "$tx_dir/payload"
+
+    # Plan reports conflict due to non-writable payload directory
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before removing managed link
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # Managed symlink in HOME remains intact
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "$DOTFILES_DIR/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+
+    # Clean up permissions so teardown succeeds
+    chmod u+w "$tx_dir/payload"
+}

@@ -129,6 +129,15 @@ cmd_plan() {
         raw_lines+=("$line")
     done <"$entries_file"
 
+    local expected_count
+    expected_count="$(echo "$meta" | (grep '^entry_count=' || true) | cut -d'=' -f2-)"
+    if [ -n "$expected_count" ]; then
+        if [ "${#raw_lines[@]}" -ne "$expected_count" ]; then
+            echo "Error: journal entry count mismatch in transaction ${tx_id}: expected ${expected_count}, got ${#raw_lines[@]}" >&2
+            exit 1
+        fi
+    fi
+
     local expected_seq=1
     local seen_seqs="|"
     local seen_targets="|"
@@ -414,6 +423,15 @@ cmd_apply() {
         raw_lines+=("$line")
     done <"$entries_file"
 
+    local expected_count
+    expected_count="$(echo "$meta" | (grep '^entry_count=' || true) | cut -d'=' -f2-)"
+    if [ -n "$expected_count" ]; then
+        if [ "${#raw_lines[@]}" -ne "$expected_count" ]; then
+            echo "Error: journal entry count mismatch in transaction ${tx_id}: expected ${expected_count}, got ${#raw_lines[@]}" >&2
+            exit 1
+        fi
+    fi
+
     local expected_seq=1
     local seen_seqs="|"
     local seen_targets="|"
@@ -520,21 +538,36 @@ cmd_apply() {
                     ;;
             esac
 
-            # Remove managed symlink first
-            rm -f "$target"
-
             case "$prior_kind" in
                 absent)
+                    rm -f "$target"
                     echo "Removed managed symlink: $target_rel"
                     ;;
                 symlink)
                     mkdir -p "$target_parent"
-                    ln -s -- "$prior_val" "$target"
+                    local stage_link="${target}.restore.tmp.$$"
+                    rm -rf "$stage_link"
+                    ln -s -- "$prior_val" "$stage_link" || {
+                        echo "Error: failed to create symlink for $target_rel" >&2
+                        exit 1
+                    }
+                    rm -f "$target"
+                    mv -f "$stage_link" "$target"
                     echo "Restored symlink: $target_rel -> $prior_val"
                     ;;
                 file | directory)
                     mkdir -p "$target_parent"
-                    mv "$payload_path" "$target"
+                    local stage_target="${target}.restore.tmp.$$"
+                    rm -rf "$stage_target"
+                    if ! mv "$payload_path" "$stage_target"; then
+                        echo "Error: failed to stage payload for $target_rel" >&2
+                        exit 1
+                    fi
+                    rm -f "$target"
+                    if ! mv "$stage_target" "$target"; then
+                        echo "Error: failed to restore payload to $target_rel" >&2
+                        exit 1
+                    fi
                     echo "Restored original $prior_kind: $target_rel"
                     ;;
             esac

@@ -189,15 +189,32 @@ validate_target_ancestors_install() {
 }
 
 # Validate that the backup root, transaction directory, and all payload ancestor
-# directories exist as real directories and have not been redirected via symlinks.
+# directories exist as real, writable directories and have not been redirected via symlinks.
 validate_payload_ancestors() {
     local tx_dir="$1"
     local prior_val="$2"
     local root="${3:-$(transaction_backup_root)}"
 
     [ -n "$root" ] && [ -d "$root" ] && [ ! -L "$root" ] || return 1
-    [ -n "$tx_dir" ] && [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
-    validate_target_ancestors "$prior_val" "$tx_dir"
+    [ -n "$tx_dir" ] && [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] && [ -w "$tx_dir" ] || return 1
+
+    local curr="$tx_dir"
+    local part
+    local -a parts=()
+    local parent_rel
+    parent_rel="$(dirname "$prior_val")"
+    if [ "$parent_rel" != "." ] && [ -n "$parent_rel" ]; then
+        IFS="/" read -r -a parts <<<"$parent_rel"
+        for part in "${parts[@]}"; do
+            [ -z "$part" ] && continue
+            curr="$curr/$part"
+            if [ -L "$curr" ] || [ ! -d "$curr" ] || [ ! -w "$curr" ]; then
+                return 1
+            fi
+        done
+    fi
+
+    return 0
 }
 
 # Check whether target is a symlink pointing to expected_source, either literally
@@ -255,7 +272,7 @@ read_transaction_metadata() {
     [ -f "$meta_file" ] && [ ! -L "$meta_file" ] || return 1
 
     local key val
-    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_state=""
+    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_state="" m_entry_count=""
 
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
@@ -287,6 +304,13 @@ read_transaction_metadata() {
                 [ -z "$m_state" ] || return 1
                 m_state="$val"
                 ;;
+            entry_count)
+                [ -z "$m_entry_count" ] || return 1
+                case "$val" in
+                    *[!0-9]* | "") return 1 ;;
+                    *) m_entry_count="$val" ;;
+                esac
+                ;;
             *)
                 # Reject any non-allowlisted key
                 return 1
@@ -306,6 +330,9 @@ read_transaction_metadata() {
 
     printf "version=%s\nid=%s\ncreated_at=%s\nrepo_revision=%s\nstate=%s\n" \
         "$m_version" "$m_id" "$m_created_at" "$m_repo_revision" "$m_state"
+    if [ -n "$m_entry_count" ]; then
+        printf "entry_count=%s\n" "$m_entry_count"
+    fi
     return 0
 }
 
@@ -325,6 +352,7 @@ write_transaction_metadata() {
     local created_at="$3"
     local repo_rev="$4"
     local state="$5"
+    local entry_count="${6:-}"
 
     validate_transaction_id "$id" || return 1
     case "$state" in
@@ -345,6 +373,9 @@ created_at=$created_at
 repo_revision=$repo_rev
 state=$state
 EOF
+    if [ -n "$entry_count" ]; then
+        printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+    fi
     mv -f "$tmp_file" "$meta_file"
 }
 
@@ -352,6 +383,7 @@ EOF
 update_transaction_state() {
     local tx_dir="$1"
     local new_state="$2"
+    local entry_count="${3:-}"
 
     [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
 
@@ -369,14 +401,25 @@ update_transaction_state() {
     local tmp_file
     tmp_file="$(mktemp "$tx_dir/metadata.tmp.XXXXXX")"
     local key val
+    local wrote_entry_count=false
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
         if [ "$key" = "state" ]; then
             printf "state=%s\n" "$new_state" >>"$tmp_file"
+        elif [ "$key" = "entry_count" ]; then
+            if [ -n "$entry_count" ]; then
+                printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+            else
+                printf "entry_count=%s\n" "$val" >>"$tmp_file"
+            fi
+            wrote_entry_count=true
         else
             printf "%s=%s\n" "$key" "$val" >>"$tmp_file"
         fi
     done <"$meta_file"
+    if [ "$wrote_entry_count" = false ] && [ -n "$entry_count" ]; then
+        printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+    fi
 
     mv -f "$tmp_file" "$meta_file"
 }

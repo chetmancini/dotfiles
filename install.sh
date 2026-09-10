@@ -766,7 +766,7 @@ install_api_keys_template
 install_git_hooks
 
 if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
-    update_transaction_state "$CURRENT_TRANSACTION_DIR" "complete" || {
+    update_transaction_state "$CURRENT_TRANSACTION_DIR" "complete" "$TRANSACTION_SEQUENCE" || {
         echo "Error: failed to mark transaction complete" >&2
         exit 1
     }
