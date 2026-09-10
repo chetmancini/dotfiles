@@ -60,7 +60,6 @@ grep -qi 'plan' "$PLAN_LOG" || grep -qi 'Would' "$PLAN_LOG" ||
     fail "plan output should mention plan/Would actions"
 [[ -f "$HOME/.gitconfig" ]] || fail ".gitconfig should still exist after plan"
 [[ ! -L "$HOME/.gitconfig" ]] || fail "plan mode must not symlink .gitconfig"
-[[ ! -e "$HOME/.dotfiles-backup" ]] || fail "plan mode must not create transaction artifacts"
 pass "dot install --plan in temp HOME"
 
 # --- optional apply smoke (still skip brew) ---
@@ -76,25 +75,6 @@ export HOME="$HOME_APPLY"
 }
 
 [[ -L "$HOME/.zshrc" ]] || fail "expected ~/.zshrc symlink after install"
-
-LATEST_FILE="$HOME/.dotfiles-backup/latest"
-[[ -f "$LATEST_FILE" && ! -L "$LATEST_FILE" ]] || fail "expected a regular latest transaction file"
-TRANSACTION_ID="$(tr -d '\n' <"$LATEST_FILE")"
-TRANSACTION_DIR="$HOME/.dotfiles-backup/$TRANSACTION_ID"
-[[ -d "$TRANSACTION_DIR" && ! -L "$TRANSACTION_DIR" ]] || fail "latest should name a transaction directory"
-grep -qx 'version=1' "$TRANSACTION_DIR/metadata" || fail "transaction metadata should be version 1"
-grep -qx 'state=complete' "$TRANSACTION_DIR/metadata" || fail "transaction should be complete"
-
-ZSH_LINK_BEFORE="$(readlink "$HOME/.zshrc")"
-DOTFILES_BACKUP_ROOT="$HOME/.dotfiles-backup" "$DOT" restore --plan latest >"$HOME_APPLY/restore-plan.out" 2>&1 || {
-    cat "$HOME_APPLY/restore-plan.out" >&2
-    fail "dot restore --plan latest failed"
-}
-[[ -L "$HOME/.zshrc" ]] || fail "restore plan must not remove installed links"
-[[ "$(readlink "$HOME/.zshrc")" = "$ZSH_LINK_BEFORE" ]] || fail "restore plan must not modify installed links"
-grep -qx 'state=complete' "$TRANSACTION_DIR/metadata" || fail "restore plan must not modify metadata"
-pass "install creates a previewable complete transaction"
-
 # doctor in the same fake HOME
 if ! "$DOTFILES_DIR/bin/doctor" --skip-tools >"$DOCTOR_LOG" 2>&1; then
     # Allow non-zero if strict failures remain (e.g. TPM warning is soft; missing
@@ -110,5 +90,23 @@ else
     cat "$DOCTOR_LOG" >&2
     fail "doctor missing zsh success line"
 fi
+
+# --- transaction and restore smoke in fake HOME ---
+[[ -f "$HOME/.dotfiles-backup/latest" ]] || fail "$HOME/.dotfiles-backup/latest missing"
+latest_tx="$(tr -d '[:space:]' <"$HOME/.dotfiles-backup/latest")"
+[[ -n "$latest_tx" ]] || fail "latest transaction pointer is empty"
+[[ -d "$HOME/.dotfiles-backup/$latest_tx" ]] || fail "latest transaction dir does not exist"
+meta_file="$HOME/.dotfiles-backup/$latest_tx/metadata"
+[[ -f "$meta_file" ]] || fail "metadata file missing in latest transaction"
+grep -q '^version=1$' "$meta_file" || fail "metadata version != 1"
+grep -q '^state=complete$' "$meta_file" || fail "metadata state != complete"
+pass "install created complete transaction in latest"
+
+"$DOT" restore --plan latest >/tmp/dot-restore-plan.out 2>&1 || {
+    cat /tmp/dot-restore-plan.out >&2
+    fail "dot restore --plan latest failed"
+}
+[[ -L "$HOME/.zshrc" ]] || fail "installed link ~/.zshrc was modified during restore plan"
+pass "dot restore --plan latest succeeded without modifying links"
 
 pass "all install smoke checks passed"

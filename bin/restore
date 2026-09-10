@@ -2,7 +2,7 @@
 # shellcheck shell=bash
 set -euo pipefail
 
-# restore: Preview or reverse versioned dotfiles install transactions.
+# restore: Transactional rollback for dotfiles symlink installation.
 
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 while [ -L "$SCRIPT_PATH" ]; do
@@ -10,19 +10,23 @@ while [ -L "$SCRIPT_PATH" ]; do
     SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
     [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
 done
-DOTFILES_BIN="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
-DOTFILES_DIR="$(cd -P "$DOTFILES_BIN/.." && pwd)"
+BIN_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd -P "$BIN_DIR/.." && pwd)"
 
 # shellcheck source=bin/lib/transactions.sh
-source "$DOTFILES_BIN/lib/transactions.sh"
+source "$BIN_DIR/lib/transactions.sh"
 
 EX_USAGE=64
+TX_ID=
+TX_DIR=
+TX_STATE=
+TX_ENTRY_COUNT=
+SEQUENCES=()
 TARGETS=()
-PRIOR_KINDS=()
+KINDS=()
 PRIOR_VALUES=()
-INSTALLED_SOURCES=()
-ENTRY_STATES=()
-ENTRY_COUNT=0
+SOURCES=()
+ACTIONS=()
 
 print_help() {
     cat <<'EOF'
@@ -32,311 +36,433 @@ Usage:
   dot restore --apply [latest|ID] [--yes]
   dot restore --help
 
-Restore only managed symlink targets recorded by a versioned install
-transaction. Apply preflights every target and refuses the entire restore if
-any target conflicts; there is no force mode.
+Safely inspect and roll back dotfiles install transactions.
 EOF
 }
 
 usage_error() {
-    echo "restore: $*" >&2
-    print_help >&2
+    echo "Error: $*" >&2
     exit "$EX_USAGE"
 }
 
-load_entries() {
-    local directory="$1"
-    local line sequence target_relative prior_kind prior_value installed_source_relative
-    local index=0 prior_target existing
-
-    transaction_validate_entries "$directory"
-    [ -d "$directory/payload" ] && [ ! -L "$directory/payload" ] || {
-        echo "restore: transaction payload is not a regular directory" >&2
-        return 1
-    }
-    while IFS= read -r line; do
-        IFS='|' read -r sequence target_relative prior_kind prior_value installed_source_relative <<<"$line"
-        prior_target="$HOME/$target_relative"
-        for ((existing = 0; existing < index; existing++)); do
-            [ "${TARGETS[$existing]}" != "$prior_target" ] || {
-                echo "restore: duplicate target in transaction: $target_relative" >&2
-                return 1
-            }
-        done
-        TARGETS[$index]="$prior_target"
-        PRIOR_KINDS[$index]="$prior_kind"
-        PRIOR_VALUES[$index]="$prior_value"
-        INSTALLED_SOURCES[$index]="$DOTFILES_DIR/$installed_source_relative"
-        index=$((index + 1))
-    done <"$directory/entries"
-    ENTRY_COUNT="$index"
+read_raw_link() {
+    local raw
+    raw="$(
+        readlink -n "$1"
+        printf x
+    )" || return 1
+    printf '%s' "${raw%x}"
 }
 
 load_transaction() {
-    local reference="$1"
-    local allowed_states="$2"
+    local selector="$1"
+    local metadata key value metadata_id=
 
-    transaction_resolve_reference "$reference"
-    transaction_load_metadata "$TRANSACTION_DIR"
-    case ",$allowed_states," in
-        *,"$TX_STATE",*) ;;
-        *)
-            echo "restore: transaction $TRANSACTION_ID has state '$TX_STATE'; expected $allowed_states" >&2
+    if ! TX_ID="$(resolve_transaction "$selector")"; then
+        echo "Error: could not resolve transaction '${selector}'" >&2
+        return 1
+    fi
+    TX_DIR="$(transaction_backup_root)/$TX_ID"
+    if ! metadata="$(read_transaction_metadata "$TX_DIR/metadata")"; then
+        echo "Error: transaction '${TX_ID}' has invalid metadata" >&2
+        return 1
+    fi
+
+    TX_STATE=
+    TX_ENTRY_COUNT=
+    while IFS='=' read -r key value; do
+        case "$key" in
+            id) metadata_id="$value" ;;
+            state) TX_STATE="$value" ;;
+            entry_count) TX_ENTRY_COUNT="$value" ;;
+        esac
+    done <<<"$metadata"
+    [ "$metadata_id" = "$TX_ID" ] || {
+        echo "Error: transaction directory and metadata IDs do not match" >&2
+        return 1
+    }
+}
+
+load_entries() {
+    local journal="$TX_DIR/entries"
+    local line expected=1 seen_sequences='|' seen_targets='|'
+    local expected_sequence normalized_target
+    local -a fields
+
+    if [ -L "$journal" ] || { [ -e "$journal" ] && [ ! -f "$journal" ]; }; then
+        echo "Error: entries journal in transaction ${TX_ID} is invalid or symlinked" >&2
+        return 1
+    fi
+    [ -f "$journal" ] || {
+        echo "Error: transaction ${TX_ID} has no entries journal" >&2
+        return 1
+    }
+
+    SEQUENCES=()
+    TARGETS=()
+    KINDS=()
+    PRIOR_VALUES=()
+    SOURCES=()
+    ACTIONS=()
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        fields=()
+        IFS='|' read -r -a fields <<<"$line"
+        if [ "${#fields[@]}" -ne 5 ]; then
+            echo "Error: malformed entry in transaction ${TX_ID}: $line" >&2
             return 1
-            ;;
-    esac
-    load_entries "$TRANSACTION_DIR"
+        fi
+        if ! validate_journal_entry "${fields[0]}" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+            echo "Error: entry validation failed in transaction ${TX_ID}: $line" >&2
+            return 1
+        fi
+
+        case "$seen_sequences" in
+            *"|${fields[0]}|"*)
+                echo "Error: duplicate sequence number '${fields[0]}' in transaction ${TX_ID}" >&2
+                return 1
+                ;;
+        esac
+        seen_sequences="${seen_sequences}${fields[0]}|"
+        printf -v expected_sequence '%04d' "$expected"
+        if [ "${fields[0]}" != "$expected_sequence" ]; then
+            echo "Error: non-contiguous sequence number '${fields[0]}' in transaction ${TX_ID} (expected '${expected_sequence}')" >&2
+            return 1
+        fi
+        expected=$((expected + 1))
+
+        normalized_target="$(normalize_relative_path "${fields[1]}")"
+        case "$seen_targets" in
+            *"|${normalized_target}|"*)
+                echo "Error: duplicate target path '${fields[1]}' in transaction ${TX_ID}" >&2
+                return 1
+                ;;
+        esac
+        seen_targets="${seen_targets}${normalized_target}|"
+
+        SEQUENCES+=("${fields[0]}")
+        TARGETS+=("${fields[1]}")
+        KINDS+=("${fields[2]}")
+        PRIOR_VALUES+=("${fields[3]}")
+        SOURCES+=("${fields[4]}")
+    done <"$journal"
+
+    if [ "$TX_STATE" = complete ] || [ "$TX_STATE" = restored ]; then
+        [ -n "$TX_ENTRY_COUNT" ] || {
+            echo "Error: transaction ${TX_ID} is ${TX_STATE} but missing entry_count in metadata" >&2
+            return 1
+        }
+    fi
+    if [ -n "$TX_ENTRY_COUNT" ] && [ "${#TARGETS[@]}" -ne "$TX_ENTRY_COUNT" ]; then
+        echo "Error: journal entry count mismatch in transaction ${TX_ID}: expected ${TX_ENTRY_COUNT}, got ${#TARGETS[@]}" >&2
+        return 1
+    fi
 }
 
-is_missing() {
-    [ ! -e "$1" ] && [ ! -L "$1" ]
-}
-
-is_regular_file() {
-    [ -f "$1" ] && [ ! -L "$1" ]
-}
-
-is_regular_directory() {
-    [ -d "$1" ] && [ ! -L "$1" ]
+payload_matches_kind() {
+    local index="$1"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    case "${KINDS[$index]}" in
+        file) [ -f "$payload" ] && [ ! -L "$payload" ] ;;
+        directory) [ -d "$payload" ] && [ ! -L "$payload" ] ;;
+        *) return 1 ;;
+    esac && validate_payload_ancestors "$TX_DIR" "${PRIOR_VALUES[$index]}"
 }
 
 classify_entry() {
     local index="$1"
-    local target="${TARGETS[$index]}"
-    local prior_kind="${PRIOR_KINDS[$index]}"
-    local prior_value="${PRIOR_VALUES[$index]}"
-    local expected_source="${INSTALLED_SOURCES[$index]}"
-    local payload="$TRANSACTION_DIR/$prior_value"
+    local target="$HOME/${TARGETS[$index]}"
+    local expected="$DOTFILES_DIR/${SOURCES[$index]}"
+    local kind="${KINDS[$index]}"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local current_link
 
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
-        case "$prior_kind" in
-            file)
-                is_regular_file "$payload" || return 1
-                ;;
-            directory)
-                is_regular_directory "$payload" || return 1
-                ;;
+    validate_target_ancestors "${TARGETS[$index]}" || return 1
+
+    if is_managed_symlink "$target" "$expected"; then
+        case "$kind" in
+            file | directory) payload_matches_kind "$index" || return 1 ;;
         esac
-        ENTRY_STATES[$index]=restore
+        ACTIONS[$index]=managed
         return 0
     fi
 
-    case "$prior_kind" in
-        absent)
-            if is_missing "$target"; then
-                ENTRY_STATES[$index]=original
-                return 0
-            fi
-            ;;
-        symlink)
-            if [ -L "$target" ] && [ "$(readlink "$target")" = "$prior_value" ]; then
-                ENTRY_STATES[$index]=original
-                return 0
-            fi
-            if is_missing "$target" && [ -d "$(dirname "$target")" ]; then
-                ENTRY_STATES[$index]=restore
-                return 0
-            fi
-            ;;
+    case "$kind" in
         file)
-            if is_regular_file "$target" && is_missing "$payload"; then
-                ENTRY_STATES[$index]=original
-                return 0
-            fi
-            if is_missing "$target" && is_regular_file "$payload" && [ -d "$(dirname "$target")" ]; then
-                ENTRY_STATES[$index]=restore
+            if [ "$TX_STATE" = failed ] && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
                 return 0
             fi
             ;;
         directory)
-            if is_regular_directory "$target" && is_missing "$payload"; then
-                ENTRY_STATES[$index]=original
+            if [ "$TX_STATE" = failed ] && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
                 return 0
             fi
-            if is_missing "$target" && is_regular_directory "$payload" && [ -d "$(dirname "$target")" ]; then
-                ENTRY_STATES[$index]=restore
+            ;;
+        symlink)
+            if [ -L "$target" ]; then
+                current_link="$(read_raw_link "$target")" || return 1
+                if [ "$current_link" = "${PRIOR_VALUES[$index]}" ]; then
+                    ACTIONS[$index]=original
+                    return 0
+                fi
+            fi
+            ;;
+        absent)
+            if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
                 return 0
             fi
             ;;
     esac
+
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        case "$kind" in
+            file | directory) payload_matches_kind "$index" || return 1 ;;
+            symlink) ;;
+            *) return 1 ;;
+        esac
+        ACTIONS[$index]=missing
+        return 0
+    fi
     return 1
 }
 
-preflight() {
-    local index conflicts=0 relative
-    for ((index = 0; index < ENTRY_COUNT; index++)); do
+validate_actions() {
+    local mode="$1"
+    local index conflicts=0
+
+    if ! validate_transaction_metadata_writable "$TX_DIR"; then
+        if [ "$mode" = apply ]; then
+            echo "Conflict detected: transaction directory or metadata is not writable." >&2
+        else
+            echo "  [conflict] transaction directory or metadata is not writable" >&2
+        fi
+        return 1
+    fi
+
+    for ((index = 0; index < ${#TARGETS[@]}; index++)); do
         if ! classify_entry "$index"; then
-            relative="${TARGETS[$index]#"$HOME/"}"
-            echo "restore: conflict at $relative" >&2
+            ACTIONS[$index]=conflict
             conflicts=$((conflicts + 1))
+            if [ "$mode" = apply ]; then
+                echo "Conflict detected on ${TARGETS[$index]}: current state does not match restore preconditions." >&2
+            fi
         fi
     done
-    if [ "$conflicts" -gt 0 ]; then
-        echo "restore: refusing transaction; $conflicts conflict(s), no targets changed" >&2
+    [ "$conflicts" -eq 0 ] || {
+        [ "$mode" != apply ] || echo "Restore aborted: no files were modified." >&2
         return 1
-    fi
+    }
 }
 
-print_plan() {
-    local index relative prior_kind state
-    echo "Transaction: $TRANSACTION_ID"
-    echo "State: $TX_STATE"
-    if [ "$TX_STATE" = restored ]; then
-        echo "This transaction has already been restored."
-    fi
-    for ((index = 0; index < ENTRY_COUNT; index++)); do
-        relative="${TARGETS[$index]#"$HOME/"}"
-        prior_kind="${PRIOR_KINDS[$index]}"
-        state="${ENTRY_STATES[$index]}"
-        if [ "$state" = original ]; then
-            printf 'NO-OP   %s (already original)\n' "$relative"
-        elif [ "$prior_kind" = absent ]; then
-            printf 'REMOVE  %s (installed managed symlink)\n' "$relative"
-        else
-            printf 'RESTORE %s (%s)\n' "$relative" "$prior_kind"
-        fi
-    done
+print_entry_plan() {
+    local index="$1"
+    local target="${TARGETS[$index]}"
+    local kind="${KINDS[$index]}"
+    local sequence="${SEQUENCES[$index]}"
+
+    case "${ACTIONS[$index]}:$kind" in
+        conflict:*) echo "  [conflict] $target: target has changed or restore prerequisites are unavailable" >&2 ;;
+        original:file | original:directory) echo "  [no-op]   $target: already in original $kind state" ;;
+        original:symlink) echo "  [no-op]   $target: already in original symlink state" ;;
+        original:absent) echo "  [no-op]   $target: already absent" ;;
+        managed:absent) echo "  [restore] $target: remove managed symlink (target was originally absent)" ;;
+        managed:symlink) echo "  [restore] $target: replace managed symlink with prior symlink -> ${PRIOR_VALUES[$index]}" ;;
+        managed:file | managed:directory) echo "  [restore] $target: replace managed symlink with original $kind from payload/$sequence" ;;
+        missing:symlink) echo "  [restore] $target: recreate prior symlink -> ${PRIOR_VALUES[$index]} (target currently absent)" ;;
+        missing:file | missing:directory) echo "  [restore] $target: restore $kind from payload/$sequence (target currently absent)" ;;
+    esac
 }
 
-apply_entries() {
-    local index target prior_kind prior_value payload
-    for ((index = ENTRY_COUNT - 1; index >= 0; index--)); do
-        [ "${ENTRY_STATES[$index]}" = restore ] || continue
-        target="${TARGETS[$index]}"
-        prior_kind="${PRIOR_KINDS[$index]}"
-        prior_value="${PRIOR_VALUES[$index]}"
-        payload="$TRANSACTION_DIR/$prior_value"
-
-        case "$prior_kind" in
-            absent)
-                rm -f "$target"
-                ;;
-            symlink)
-                if [ -L "$target" ]; then
-                    rm -f "$target"
-                fi
-                ln -s "$prior_value" "$target"
-                ;;
-            file | directory)
-                if [ -L "$target" ]; then
-                    rm -f "$target"
-                fi
-                mv "$payload" "$target"
-                ;;
-        esac
-        printf 'Restored %s\n' "${target#"$HOME/"}"
-    done
-    transaction_update_state "$TRANSACTION_DIR" restored
-    echo "Transaction $TRANSACTION_ID restored."
+cmd_list() {
+    local tx_dir metadata key value id state created revision entries count=0
+    while IFS= read -r tx_dir; do
+        [ -n "$tx_dir" ] || continue
+        metadata="$(read_transaction_metadata "$tx_dir/metadata" 2>/dev/null)" || continue
+        id=
+        state=
+        created=
+        revision=
+        while IFS='=' read -r key value; do
+            case "$key" in
+                id) id="$value" ;;
+                state) state="$value" ;;
+                created_at) created="$value" ;;
+                repo_revision) revision="$value" ;;
+            esac
+        done <<<"$metadata"
+        entries=0
+        [ ! -L "$tx_dir/entries" ] && [ -f "$tx_dir/entries" ] && entries="$(wc -l <"$tx_dir/entries" | tr -d '[:space:]')"
+        [ "$count" -gt 0 ] || printf '%-32s %-12s %-22s %-12s %s\n' ID STATE CREATED REVISION ENTRIES
+        printf '%-32s %-12s %-22s %-12s %s\n' "$id" "$state" "$created" "$revision" "$entries"
+        count=$((count + 1))
+    done < <(list_transaction_dirs)
+    [ "$count" -gt 0 ] || echo "No transactions found in $(transaction_backup_root)"
 }
 
-list_transactions() {
-    local directory status=0
-    transaction_validate_backup_root || return 1
-    printf '%-32s %-12s %-20s %-40s %s\n' ID STATE CREATED_AT REPO_REVISION ENTRIES
-    while IFS= read -r directory; do
-        if transaction_load_metadata "$directory" && transaction_validate_entries "$directory"; then
-            printf '%-32s %-12s %-20s %-40s %s\n' \
-                "$TX_ID" "$TX_STATE" "$TX_CREATED_AT" "$TX_REPO_REVISION" "$TRANSACTION_ENTRY_COUNT"
-        else
-            echo "restore: invalid transaction directory: $(basename "$directory")" >&2
-            status=1
-        fi
-    done < <(transaction_list_directories)
-    return "$status"
-}
-
-run_plan() {
-    local reference="$1"
-    load_transaction "$reference" "complete,failed,restored"
-    preflight
-    print_plan
-}
-
-run_apply() {
-    local reference="$1"
-    local assume_yes="$2"
-    local answer
-
-    if ! transaction_resolve_reference "$reference" || ! transaction_load_metadata "$TRANSACTION_DIR"; then
-        return 1
-    fi
-    if [ "$TX_STATE" = restored ]; then
-        echo "restore: transaction $TRANSACTION_ID has already been restored" >&2
-        return 1
-    fi
+cmd_plan() {
+    local selector="$1" index conflicts=0 actions=0
+    load_transaction "$selector" || return 1
     case "$TX_STATE" in
-        complete | failed) ;;
-        *)
-            echo "restore: transaction $TRANSACTION_ID has state '$TX_STATE'; apply requires complete or failed" >&2
+        restored)
+            echo "Transaction ${TX_ID} is already restored."
+            return 0
+            ;;
+        in_progress)
+            echo "Error: transaction ${TX_ID} is in progress (not complete or failed)" >&2
             return 1
             ;;
     esac
-    load_entries "$TRANSACTION_DIR"
-    preflight
-    print_plan
+    load_entries || return 1
 
-    if [ "$assume_yes" != true ]; then
-        if ! read -r -p "Apply this restore? [y/N] " answer; then
-            echo "restore: no confirmation input; refusing restore" >&2
+    validate_actions plan || conflicts=1
+    echo "Plan restore for transaction ${TX_ID} (state: ${TX_STATE}):"
+    echo
+    for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do
+        print_entry_plan "$index"
+        [ "${ACTIONS[$index]}" = original ] || actions=$((actions + 1))
+    done
+    echo
+    if [ "$conflicts" -ne 0 ]; then
+        echo "Preflight check failed: conflict(s) detected. Restore cannot proceed safely." >&2
+        return 1
+    fi
+    [ "$actions" -gt 0 ] && echo "Preview only. No files were modified." || echo "No actions required: all targets are already in their pre-install state."
+}
+
+stage_restore() {
+    local index="$1"
+    local target="$HOME/${TARGETS[$index]}"
+    local parent stage_dir stage_item
+    parent="$(dirname "$target")"
+    stage_dir="$(mktemp -d "$parent/.restore.stage.XXXXXX")" || return 1
+    stage_item="$stage_dir/item"
+
+    case "${KINDS[$index]}" in
+        symlink) ln -s -- "${PRIOR_VALUES[$index]}" "$stage_item" ;;
+        file | directory) mv "$TX_DIR/${PRIOR_VALUES[$index]}" "$stage_item" ;;
+    esac || {
+        rmdir "$stage_dir" 2>/dev/null || true
+        return 1
+    }
+
+    if [ "${ACTIONS[$index]}" = managed ]; then
+        rm -f "$target" || return 1
+    fi
+    mv -f "$stage_item" "$target" || return 1
+    rmdir "$stage_dir" 2>/dev/null || true
+}
+
+apply_entry() {
+    local index="$1"
+    local expected_action="${ACTIONS[$index]}"
+    local target="$HOME/${TARGETS[$index]}"
+
+    if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
+        echo "Error: target state changed at apply time: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+    case "${ACTIONS[$index]}:${KINDS[$index]}" in
+        original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
+        managed:absent)
+            rm -f "$target"
+            echo "Removed managed symlink: ${TARGETS[$index]}"
+            ;;
+        managed:symlink | missing:symlink)
+            stage_restore "$index" || return 1
+            echo "Restored symlink: ${TARGETS[$index]} -> ${PRIOR_VALUES[$index]}"
+            ;;
+        managed:file | managed:directory | missing:file | missing:directory)
+            stage_restore "$index" || return 1
+            echo "Restored original ${KINDS[$index]}: ${TARGETS[$index]}"
+            ;;
+    esac
+}
+
+cmd_apply() {
+    local selector="$1" auto_yes="$2" index answer
+    load_transaction "$selector" || return 1
+    case "$TX_STATE" in
+        restored)
+            echo "Error: transaction ${TX_ID} is already restored." >&2
             return 1
-        fi
+            ;;
+        in_progress)
+            echo "Error: transaction ${TX_ID} is in progress (not complete or failed)" >&2
+            return 1
+            ;;
+    esac
+    load_entries || return 1
+    validate_actions apply || return 1
+
+    if [ "$auto_yes" != true ]; then
+        [ -t 0 ] || {
+            echo "Error: restore requires confirmation; run interactively or pass --yes" >&2
+            return 1
+        }
+        read -r -p "Restore transaction ${TX_ID}? [y/N] " answer
         case "$answer" in
-            [Yy]*) ;;
+            [Yy] | [Yy][Ee][Ss]) ;;
             *)
                 echo "Restore cancelled."
                 return 0
                 ;;
         esac
+        validate_actions apply || return 1
     fi
-    apply_entries
+
+    for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do
+        apply_entry "$index" || return 1
+    done
+    update_transaction_state "$TX_DIR" restored || {
+        echo "Error: failed to mark transaction state as restored" >&2
+        return 1
+    }
+    echo "Transaction ${TX_ID} successfully restored."
 }
 
 main() {
-    local action reference=latest assume_yes=false reference_seen=false
+    local action selector=latest assume_yes=false selector_seen=false
     [ $# -gt 0 ] || {
         print_help
         return 0
     }
     action="$1"
     shift
-
     case "$action" in
-        --help | -h)
-            [ $# -eq 0 ] || usage_error "--help accepts no arguments"
+        -h | --help)
+            [ $# -eq 0 ] || usage_error '--help accepts no arguments'
             print_help
             ;;
         --list)
-            [ $# -eq 0 ] || usage_error "--list accepts no arguments"
-            list_transactions
+            [ $# -eq 0 ] || usage_error '--list accepts no arguments'
+            cmd_list
             ;;
         --plan)
-            [ $# -le 1 ] || usage_error "--plan accepts at most one transaction reference"
+            [ $# -le 1 ] || usage_error '--plan accepts at most one transaction selector'
             if [ $# -eq 1 ]; then
-                case "$1" in
-                    -*) usage_error "unknown option: $1" ;;
-                    *) reference="$1" ;;
-                esac
+                [[ "$1" != -* ]] || usage_error "unknown option: $1"
+                selector="$1"
             fi
-            run_plan "$reference"
+            cmd_plan "$selector"
             ;;
         --apply)
             while [ $# -gt 0 ]; do
                 case "$1" in
-                    --yes)
-                        [ "$assume_yes" = false ] || usage_error "--yes may be specified only once"
-                        assume_yes=true
-                        ;;
+                    --yes | -y) assume_yes=true ;;
                     -*) usage_error "unknown option: $1" ;;
                     *)
-                        [ "$reference_seen" = false ] || usage_error "only one transaction reference is allowed"
-                        reference="$1"
-                        reference_seen=true
+                        [ "$selector_seen" = false ] || usage_error "multiple transaction selectors provided ('$selector' and '$1')"
+                        selector="$1"
+                        selector_seen=true
                         ;;
                 esac
                 shift
             done
-            run_apply "$reference" "$assume_yes"
+            cmd_apply "$selector" "$assume_yes"
             ;;
         *) usage_error "unknown action: $action" ;;
     esac

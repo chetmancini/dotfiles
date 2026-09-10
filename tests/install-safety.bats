@@ -57,3 +57,88 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"managed source is missing"* ]]
 }
+
+@test "installer refuses a symlink whose target contains trailing newlines before mutation" {
+    mkdir -p "$TEST_HOME/.config"
+    python3 -c "import os; os.symlink('bad_target\n', '$TEST_HOME/.config/yazi')"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsupported characters in symlink target"* ]]
+
+    # Existing symlink remains untouched
+    [ -L "$TEST_HOME/.config/yazi" ]
+    raw="$(
+        readlink -n "$TEST_HOME/.config/yazi"
+        printf x
+    )"
+    [ "${raw%x}" = $'bad_target\n' ]
+
+    # No completed transaction created
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}
+
+@test "installer invoked through a symlinked repo directory creates links that restore cleanly" {
+    local symlinked_repo="$TEST_ROOT/symlinked-repo"
+    ln -s "$DOTFILES_DIR" "$symlinked_repo"
+
+    run env HOME="$TEST_HOME" "$symlinked_repo/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    [ -L "$TEST_HOME/.zshrc" ]
+
+    # Plan restore using the symlinked repo path
+    run env HOME="$TEST_HOME" "$symlinked_repo/bin/restore" --plan latest
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"conflict"* ]]
+
+    # Apply restore using the symlinked repo path
+    run env HOME="$TEST_HOME" "$symlinked_repo/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ ! -L "$TEST_HOME/.zshrc" ]
+}
+
+@test "installer refuses to install when a target ancestor directory is a symlink" {
+    local external_dir="$TEST_ROOT/external_config"
+    mkdir -p "$external_dir"
+    ln -s "$external_dir" "$TEST_HOME/.config"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Target ancestor for"* && "$output" == *"is a symlink"* ]]
+
+    # No files created in the external directory or transaction recorded
+    [ ! -e "$external_dir/yazi" ]
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}
+
+@test "installer rejects existing symlink pointing to source with trailing newline" {
+    mkdir -p "$TEST_HOME/.config"
+    python3 -c "import os; os.symlink('$DOTFILES_DIR/yazi\n', '$TEST_HOME/.config/yazi')"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsupported characters in symlink target"* ]]
+
+    # Existing symlink remains untouched and no transaction is created
+    [ -L "$TEST_HOME/.config/yazi" ]
+    raw="$(
+        readlink -n "$TEST_HOME/.config/yazi"
+        printf x
+    )"
+    [ "${raw%x}" = "$DOTFILES_DIR/yazi"$'\n' ]
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}
+
+@test "installer refuses to install when backup root is a symlink" {
+    local external_backup="$TEST_ROOT/external_backup"
+    mkdir -p "$external_backup"
+    ln -s "$external_backup" "$TEST_HOME/.dotfiles-backup"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"backup root at"* && "$output" == *"is invalid or symlinked"* ]]
+
+    # No files created in external backup directory or home
+    [ ! -e "$external_backup/latest" ]
+    [ ! -L "$TEST_HOME/.zshrc" ]
+}
