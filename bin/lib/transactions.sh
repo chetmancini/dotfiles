@@ -217,6 +217,20 @@ validate_payload_ancestors() {
     return 0
 }
 
+# Validate that the backup root, transaction directory, and metadata file exist,
+# are not symlinks, and are writable so metadata state updates can succeed.
+validate_transaction_metadata_writable() {
+    local tx_dir="$1"
+    local root="${2:-$(transaction_backup_root)}"
+
+    [ -n "$root" ] && [ -d "$root" ] && [ ! -L "$root" ] || return 1
+    [ -n "$tx_dir" ] && [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] && [ -w "$tx_dir" ] || return 1
+
+    local meta_file="$tx_dir/metadata"
+    [ -f "$meta_file" ] && [ ! -L "$meta_file" ] && [ -w "$meta_file" ] || return 1
+    return 0
+}
+
 # Check whether target is a symlink pointing to expected_source, either literally
 # or via canonical physical paths.
 is_managed_symlink() {

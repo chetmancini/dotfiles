@@ -212,25 +212,25 @@ cmd_plan() {
             local state1_valid=false
             case "$prior_kind" in
                 absent)
-                    if validate_target_ancestors "$target_rel"; then
+                    if validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: remove managed symlink (target was originally absent)"
                     fi
                     ;;
                 symlink)
-                    if validate_target_ancestors "$target_rel"; then
+                    if validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: replace managed symlink with prior symlink -> $prior_val"
                     fi
                     ;;
                 file)
-                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel"; then
+                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: replace managed symlink with original file from payload/$seq"
                     fi
                     ;;
                 directory)
-                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel"; then
+                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: replace managed symlink with original directory from payload/$seq"
                     fi
@@ -239,7 +239,7 @@ cmd_plan() {
             if [ "$state1_valid" = true ]; then
                 has_actions=$((has_actions + 1))
             else
-                echo "  [conflict] $target_rel: target payload missing or invalid, or ancestor directory missing or redirected" >&2
+                echo "  [conflict] $target_rel: target payload missing or invalid, ancestor directory missing or redirected, or transaction metadata not writable" >&2
                 conflicts=$((conflicts + 1))
             fi
         elif [ "$state" = "failed" ] && [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
@@ -265,15 +265,15 @@ cmd_plan() {
         elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
             # State 2d: absent target remains absent
             echo "  [no-op]   $target_rel: already absent"
-        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
             echo "  [restore] $target_rel: restore file from payload/$seq (target currently absent)"
             has_actions=$((has_actions + 1))
-        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
             echo "  [restore] $target_rel: restore directory from payload/$seq (target currently absent)"
             has_actions=$((has_actions + 1))
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
             echo "  [restore] $target_rel: recreate prior symlink -> $prior_val (target currently absent)"
             has_actions=$((has_actions + 1))
@@ -303,6 +303,12 @@ verify_apply_preflight() {
     shift 2
     local -a lines=("$@")
 
+    if ! validate_transaction_metadata_writable "$tx_dir"; then
+        echo "Conflict detected: transaction directory or metadata is not writable." >&2
+        echo "Restore aborted: no files were modified." >&2
+        return 1
+    fi
+
     local i
     for ((i = 0; i < ${#lines[@]}; i++)); do
         local line="${lines[i]}"
@@ -323,13 +329,13 @@ verify_apply_preflight() {
         if [ -L "$target" ] && is_managed_symlink "$target" "$expected_source"; then
             # State 1: target is the expected managed symlink
             if [ "$prior_kind" = "file" ]; then
-                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir" && is_valid_precondition=true
             elif [ "$prior_kind" = "directory" ]; then
-                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir" && is_valid_precondition=true
             elif [ "$prior_kind" = "symlink" ]; then
-                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+                validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir" && is_valid_precondition=true
             elif [ "$prior_kind" = "absent" ]; then
-                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+                validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir" && is_valid_precondition=true
             fi
         elif [ "$state" = "failed" ] && [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             # State 2a: prior file untouched, payload absent in failed transaction
@@ -351,13 +357,13 @@ verify_apply_preflight() {
         elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
             # State 2d: absent target remains absent
             is_valid_precondition=true
-        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
             is_valid_precondition=true
-        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
             is_valid_precondition=true
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel" && validate_transaction_metadata_writable "$tx_dir"; then
             # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
             is_valid_precondition=true
         fi
@@ -499,6 +505,11 @@ cmd_apply() {
     fi
 
     # Apply entries in reverse sequence
+    if ! validate_transaction_metadata_writable "$tx_dir"; then
+        echo "Error: transaction metadata in ${tx_id} is not writable" >&2
+        exit 1
+    fi
+
     for ((i = ${#raw_lines[@]} - 1; i >= 0; i--)); do
         line="${raw_lines[i]}"
         local -a fields
@@ -516,7 +527,11 @@ cmd_apply() {
         target_parent="$(dirname "$target")"
 
         if [ -L "$target" ] && is_managed_symlink "$target" "$expected_source"; then
-            # Verify payload and ancestors before mutating
+            # Verify payload, ancestors, and metadata writability before mutating
+            if ! validate_transaction_metadata_writable "$tx_dir"; then
+                echo "Error: target state changed at apply time: transaction metadata is not writable" >&2
+                exit 1
+            fi
             case "$prior_kind" in
                 file)
                     if [ ! -f "$payload_path" ] || [ -L "$payload_path" ] || ! validate_payload_ancestors "$tx_dir" "$prior_val" || ! validate_target_ancestors "$target_rel"; then
@@ -572,14 +587,26 @@ cmd_apply() {
                     ;;
             esac
         elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            if ! validate_transaction_metadata_writable "$tx_dir"; then
+                echo "Error: target state changed at apply time: transaction metadata is not writable" >&2
+                exit 1
+            fi
             mkdir -p "$target_parent"
             mv "$payload_path" "$target"
             echo "Restored original file from payload: $target_rel"
         elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            if ! validate_transaction_metadata_writable "$tx_dir"; then
+                echo "Error: target state changed at apply time: transaction metadata is not writable" >&2
+                exit 1
+            fi
             mkdir -p "$target_parent"
             mv "$payload_path" "$target"
             echo "Restored original directory from payload: $target_rel"
         elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            if ! validate_transaction_metadata_writable "$tx_dir"; then
+                echo "Error: target state changed at apply time: transaction metadata is not writable" >&2
+                exit 1
+            fi
             mkdir -p "$target_parent"
             ln -s -- "$prior_val" "$target"
             echo "Restored prior symlink: $target_rel -> $prior_val"

@@ -1045,3 +1045,47 @@ EOF
     # Clean up permissions so teardown succeeds
     chmod u+w "$tx_dir/payload"
 }
+
+@test "33. Non-writable transaction directory rejects payload-free restore before removing targets" {
+    local tx_id="20260101T000000-111-819"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=2
+EOF
+    cat <<EOF >"$tx_dir/entries"
+0001|.zshrc|absent||.zshrc
+0002|.gitconfig|symlink|old_gitconfig|.gitconfig
+EOF
+
+    ln -sf "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Make transaction directory read-only
+    chmod a-w "$tx_dir"
+
+    # Plan reports conflict due to non-writable transaction directory
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before removing or modifying managed links
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # Managed symlinks in HOME remain intact
+    [ -L "$HOME/.zshrc" ]
+    [ "$(readlink "$HOME/.zshrc")" = "$DOTFILES_DIR/.zshrc" ]
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "$DOTFILES_DIR/.gitconfig" ]
+
+    # Clean up permissions so teardown succeeds
+    chmod u+w "$tx_dir"
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
