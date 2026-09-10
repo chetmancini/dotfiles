@@ -266,6 +266,11 @@ main() {
 
     parse_args "$@"
 
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "git-rm-gone: not inside a git repository" >&2
+        exit 1
+    fi
+
     # awk (not grep) so an empty result still exits 0 under `set -o pipefail`.
     mapfile -t GONE < <(git branch -vv | awk '/: gone]/ { sub(/^[*+ ]+/, ""); print $1 }')
     collect_worktrees

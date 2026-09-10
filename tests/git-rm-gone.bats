@@ -252,3 +252,12 @@ worktree_listed() {
     [[ "$output" == *"stale"* ]]
     ! worktree_listed "$LAST_WT"
 }
+
+@test "git-rm-gone fails cleanly when run outside a git repository" {
+    local non_repo="$TEST_TMP/non-repo"
+    mkdir -p "$non_repo"
+    cd "$non_repo"
+    run "$DOTFILES_DIR/bin/git-rm-gone"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"not inside a git repository"* ]]
+}
