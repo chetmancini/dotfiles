@@ -1230,7 +1230,7 @@ EOF
     [ "$status" -eq 64 ]
 }
 
-@test "39. Interrupted restore resumes after a payload move and finishes remaining work" {
+@test "39. Interrupted restore resumes after target placement and finishes remaining work" {
     local tx_id="20260101T000000-111-825"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local fake_bin="$TMP_HOME/fake-bin"
@@ -1257,17 +1257,14 @@ EOF
 #!/usr/bin/env bash
 "$RESTORE_REAL_MV" "$@"
 status=$?
-source=
+destination=
 for argument in "$@"; do
     case "$argument" in
         -*) ;;
-        *)
-            source="$argument"
-            break
-            ;;
+        *) destination="$argument" ;;
     esac
 done
-if [ "$status" -eq 0 ] && [ "$source" = "$RESTORE_FAIL_SOURCE" ]; then
+if [ "$status" -eq 0 ] && [ "$destination" = "$RESTORE_FAIL_DESTINATION" ]; then
     exit 75
 fi
 exit "$status"
@@ -1276,13 +1273,13 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_FAIL_SOURCE="$tx_dir/payload/0002" \
+        RESTORE_FAIL_DESTINATION="$HOME/.zshrc" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
     [ -f "$HOME/.zshrc" ]
     [ "$(cat "$HOME/.zshrc")" = "original zshrc" ]
-    [ ! -e "$tx_dir/payload/0002" ]
+    [ -f "$tx_dir/payload/0002" ]
     [ -f "$tx_dir/payload/0001" ]
     [ -L "$HOME/.gitconfig" ]
     [ -z "$(find "$HOME" -type d -name '.restore.stage.*' -print -quit)" ]
@@ -1351,4 +1348,104 @@ EOF
     [ -L "$HOME/.gitconfig" ]
     [ -f "$tx_dir/payload/0001" ]
     grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "42. Interrupted target-side copy keeps the journaled payload resumable" {
+    local tx_id="20260101T000000-111-828"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-copy"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'complete original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/cp"
+#!/usr/bin/env bash
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+printf 'partial' >"$destination"
+exit 75
+EOF
+    chmod +x "$fake_bin/cp"
+
+    run env PATH="$fake_bin:$PATH" "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    [ -f "$tx_dir/payload/0001" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "complete original content" ]
+    [ -L "$HOME/.gitconfig" ]
+
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ -f "$HOME/.gitconfig" ]
+    [ "$(cat "$HOME/.gitconfig")" = "complete original content" ]
+    [ ! -e "$tx_dir/payload/0001" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "43. Raced destination directory cannot consume a staged payload" {
+    local tx_id="20260101T000000-111-829"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-race"
+    mkdir -p "$tx_dir/payload/0001/nested" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original nested content\n' >"$tx_dir/payload/0001/nested/file"
+    echo "0001|.config/yazi|directory|payload/0001|yazi" >"$tx_dir/entries"
+    printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
+    mkdir -p "$HOME/.config"
+    ln -s "$DOTFILES_DIR/yazi" "$HOME/.config/yazi"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+if [ "$destination" = "$RESTORE_RACE_TARGET" ]; then
+    mkdir -p "$destination"
+fi
+"$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="$HOME/.config/yazi" \
+        "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target became a directory while restoring"* ]]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    [ -d "$tx_dir/payload/0001" ]
+    [ -f "$tx_dir/payload/0001/nested/file" ]
+
+    rm -rf "$HOME/.config/yazi"
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ -f "$HOME/.config/yazi/nested/file" ]
+    [ "$(cat "$HOME/.config/yazi/nested/file")" = "original nested content" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
 }

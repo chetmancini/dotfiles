@@ -163,15 +163,81 @@ payload_matches_kind() {
     esac && validate_payload_ancestors "$TX_DIR" "${PRIOR_VALUES[$index]}"
 }
 
+path_matches_kind() {
+    local path="$1"
+    local kind="$2"
+    case "$kind" in
+        file) [ -f "$path" ] && [ ! -L "$path" ] ;;
+        directory) [ -d "$path" ] && [ ! -L "$path" ] ;;
+        *) return 1 ;;
+    esac
+}
+
+restore_marker_path() {
+    printf '%s/restore-%s' "$TX_DIR" "${SEQUENCES[$1]}"
+}
+
+restore_stage_path() {
+    local target="$HOME/${TARGETS[$1]}"
+    printf '%s/.restore.stage.%s.%s' "$(dirname "$target")" "$TX_ID" "${SEQUENCES[$1]}"
+}
+
+marker_is_ready() {
+    local marker="$1"
+    local state
+    [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
+    {
+        IFS= read -r state || return 1
+        [ "$state" = ready ] || return 1
+        ! IFS= read -r _
+    } <"$marker"
+}
+
+write_ready_marker() {
+    local index="$1"
+    local marker tmp
+    marker="$(restore_marker_path "$index")"
+    [ ! -L "$marker" ] && { [ ! -e "$marker" ] || [ -f "$marker" ]; } || return 1
+    tmp="$(mktemp "$TX_DIR/restore-${SEQUENCES[$index]}.tmp.XXXXXX")" || return 1
+    printf 'ready\n' >"$tmp"
+    mv -f "$tmp" "$marker"
+}
+
 classify_entry() {
     local index="$1"
     local target="$HOME/${TARGETS[$index]}"
     local expected="$DOTFILES_DIR/${SOURCES[$index]}"
     local kind="${KINDS[$index]}"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
-    local current_link
+    local current_link marker stage nested
 
     validate_target_ancestors "${TARGETS[$index]}" || return 1
+
+    case "$kind" in
+        file | directory)
+            marker="$(restore_marker_path "$index")"
+            stage="$(restore_stage_path "$index")"
+            if [ -e "$marker" ] || [ -L "$marker" ]; then
+                [ "$TX_STATE" = restoring ] || return 1
+                marker_is_ready "$marker" || return 1
+                [ ! -L "$stage" ] || return 1
+                nested="$target/$(basename "$stage")"
+                [ ! -e "$nested" ] && [ ! -L "$nested" ] || return 1
+                if [ -e "$stage" ]; then
+                    path_matches_kind "$stage" "$kind" || return 1
+                    payload_matches_kind "$index" || return 1
+                elif path_matches_kind "$target" "$kind"; then
+                    if [ -e "$payload" ] || [ -L "$payload" ]; then
+                        payload_matches_kind "$index" || return 1
+                    fi
+                    ACTIONS[$index]=applied
+                    return 0
+                fi
+            elif [ -e "$stage" ] || [ -L "$stage" ]; then
+                [ "$TX_STATE" = restoring ] && [ ! -L "$stage" ] || return 1
+            fi
+            ;;
+    esac
 
     if is_managed_symlink "$target" "$expected"; then
         case "$kind" in
@@ -263,6 +329,7 @@ print_entry_plan() {
 
     case "${ACTIONS[$index]}:$kind" in
         conflict:*) echo "  [conflict] $target: target has changed or restore prerequisites are unavailable" >&2 ;;
+        applied:file | applied:directory) echo "  [resume]  $target: finish completed $kind restore" ;;
         original:file | original:directory) echo "  [no-op]   $target: already in original $kind state" ;;
         original:symlink) echo "  [no-op]   $target: already in original symlink state" ;;
         original:absent) echo "  [no-op]   $target: already absent" ;;
@@ -354,11 +421,67 @@ restore_payload() {
     local index="$1"
     local target="$HOME/${TARGETS[$index]}"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local kind="${KINDS[$index]}"
+    local marker stage stage_name nested expected_action
+    marker="$(restore_marker_path "$index")"
+    stage="$(restore_stage_path "$index")"
+    stage_name="$(basename "$stage")"
+
+    if [ "${ACTIONS[$index]}" = applied ]; then
+        if [ -e "$payload" ] || [ -L "$payload" ]; then
+            payload_matches_kind "$index" || return 1
+            case "$kind" in
+                file) rm -f "$payload" ;;
+                directory) rm -r "$payload" ;;
+            esac || return 1
+        fi
+        rm -f "$marker"
+        return 0
+    fi
+
+    if [ -e "$marker" ] || [ -L "$marker" ]; then
+        marker_is_ready "$marker" || return 1
+        if [ ! -e "$stage" ] && [ ! -L "$stage" ]; then
+            rm -f "$marker" || return 1
+        fi
+    fi
+
+    if [ ! -e "$marker" ] && [ ! -L "$marker" ]; then
+        if [ -e "$stage" ] || [ -L "$stage" ]; then
+            [ ! -L "$stage" ] || return 1
+            rm -rf "$stage" || return 1
+        fi
+        payload_matches_kind "$index" || return 1
+        case "$kind" in
+            file) cp -p "$payload" "$stage" ;;
+            directory) cp -pR "$payload" "$stage" ;;
+        esac || return 1
+        path_matches_kind "$stage" "$kind" || return 1
+        write_ready_marker "$index" || return 1
+    fi
+
+    expected_action="${ACTIONS[$index]}"
+    if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
+        echo "Error: target state changed while staging restore: ${TARGETS[$index]}" >&2
+        return 1
+    fi
 
     if [ "${ACTIONS[$index]}" = managed ]; then
         rm -f "$target" || return 1
     fi
-    mv "$payload" "$target"
+    mv "$stage" "$target" || return 1
+    nested="$target/$stage_name"
+    if [ -e "$nested" ] || [ -L "$nested" ]; then
+        echo "Error: target became a directory while restoring: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+    [ ! -e "$stage" ] && [ ! -L "$stage" ] && path_matches_kind "$target" "$kind" || return 1
+
+    case "$kind" in
+        file) rm -f "$payload" ;;
+        directory) rm -r "$payload" ;;
+    esac || return 1
+    rm -f "$marker"
 }
 
 apply_entry() {
@@ -380,7 +503,7 @@ apply_entry() {
             restore_symlink "$index" || return 1
             echo "Restored symlink: ${TARGETS[$index]} -> ${PRIOR_VALUES[$index]}"
             ;;
-        managed:file | managed:directory | missing:file | missing:directory)
+        applied:file | applied:directory | managed:file | managed:directory | missing:file | missing:directory)
             restore_payload "$index" || return 1
             echo "Restored original ${KINDS[$index]}: ${TARGETS[$index]}"
             ;;
