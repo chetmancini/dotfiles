@@ -51,8 +51,8 @@ Options:
 
 Safety:
   The current branch and the worktree you run from are always skipped.
-  Worktrees with uncommitted changes, locked, bare, or detached worktrees
-  are always preserved, even with --force. Without --force, unmerged
+  Worktrees with uncommitted or ignored files, locked, bare, or detached
+  worktrees are always preserved, even with --force. Without --force, unmerged
   branches and worktrees are preserved. Merged means merged into your
   current HEAD, so run from your default branch.
 
@@ -173,8 +173,10 @@ is_current_worktree() {
     [[ -n "$CURRENT_TOPLEVEL" ]] && [[ -e "$1" ]] && [[ "$CURRENT_TOPLEVEL" -ef "$1" ]]
 }
 
+# --ignored: plain `git worktree remove` deletes ignored files without
+# complaint, so ignored content counts as uncommitted work here.
 is_worktree_dirty() {
-    [[ -n "$(git -C "$1" status --porcelain 2>/dev/null)" ]]
+    [[ -n "$(git -C "$1" status --porcelain --ignored 2>/dev/null)" ]]
 }
 
 # True when $1 is checked out in a worktree slated for removal.

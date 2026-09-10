@@ -256,8 +256,9 @@ git-rm-gone --apply --force --yes    # Also delete unmerged gone branches
 - Safe delete with `git branch -d`; unmerged work is preserved unless `--force`
 - Removes worktrees checked out on gone, merged branches (clean only), then
   deletes their branches; stale worktree entries are pruned
-- Always skips the current branch and the worktree you run from; dirty,
-  locked, bare, and detached worktrees are preserved even with `--force`
+- Always skips the current branch and the worktree you run from; dirty
+  (including ignored files), locked, bare, and detached worktrees are
+  preserved even with `--force`
 - Refuses non-interactive deletion without `--yes`
 
 **Typical workflow:**

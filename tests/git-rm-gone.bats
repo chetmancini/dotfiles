@@ -234,6 +234,26 @@ worktree_listed() {
     branch_exists "wt-here"
 }
 
+@test "git-rm-gone --apply --yes preserves a worktree with only ignored files" {
+    git -C "$REPO" worktree add "$TEST_TMP/wt-wt-ignored" -b wt-ignored >/dev/null
+    printf 'local-secret.txt\n' >"$TEST_TMP/wt-wt-ignored/.gitignore"
+    echo "data" >"$TEST_TMP/wt-wt-ignored/tracked.txt"
+    git -C "$TEST_TMP/wt-wt-ignored" add .gitignore tracked.txt
+    git -C "$TEST_TMP/wt-wt-ignored" commit -qm "wt-ignored work"
+    git -C "$TEST_TMP/wt-wt-ignored" push -q -u origin wt-ignored
+    git -C "$REPO" checkout -q main
+    git -C "$REPO" merge -q --no-ff wt-ignored -m "merge wt-ignored"
+    git -C "$REPO" push -q origin --delete wt-ignored
+    git -C "$REPO" fetch -q --prune
+    echo "sekret" >"$TEST_TMP/wt-wt-ignored/local-secret.txt"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"uncommitted changes"* ]]
+    [ -f "$TEST_TMP/wt-wt-ignored/local-secret.txt" ]
+    branch_exists "wt-ignored"
+}
+
 @test "git-rm-gone --apply --force still preserves a dirty worktree" {
     make_gone_worktree "wt-dirty-force" false true
     cd "$REPO"
