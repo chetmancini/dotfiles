@@ -1230,7 +1230,7 @@ EOF
     [ "$status" -eq 64 ]
 }
 
-@test "39. Interrupted restore resumes completed entries and finishes remaining work" {
+@test "39. Interrupted restore resumes after a payload move and finishes remaining work" {
     local tx_id="20260101T000000-111-825"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local fake_bin="$TMP_HOME/fake-bin"
@@ -1257,13 +1257,18 @@ EOF
 #!/usr/bin/env bash
 "$RESTORE_REAL_MV" "$@"
 status=$?
-destination=
+source=
 for argument in "$@"; do
-    destination="$argument"
+    case "$argument" in
+        -*) ;;
+        *)
+            source="$argument"
+            break
+            ;;
+    esac
 done
-if [ "$status" -eq 0 ] && [ "$destination" = "$RESTORE_COMPLETED_TARGET" ]; then
-    rm -f -- "$RESTORE_RACE_TARGET"
-    ln -s /dev/null "$RESTORE_RACE_TARGET"
+if [ "$status" -eq 0 ] && [ "$source" = "$RESTORE_FAIL_SOURCE" ]; then
+    exit 75
 fi
 exit "$status"
 EOF
@@ -1271,19 +1276,16 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_COMPLETED_TARGET="$HOME/.zshrc" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_FAIL_SOURCE="$tx_dir/payload/0002" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
-    [[ "$output" == *"target state changed at apply time: .gitconfig"* ]]
     grep -q '^state=restoring$' "$tx_dir/metadata"
     [ -f "$HOME/.zshrc" ]
     [ "$(cat "$HOME/.zshrc")" = "original zshrc" ]
     [ ! -e "$tx_dir/payload/0002" ]
     [ -f "$tx_dir/payload/0001" ]
-
-    rm -f "$HOME/.gitconfig"
-    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+    [ -L "$HOME/.gitconfig" ]
+    [ -z "$(find "$HOME" -type d -name '.restore.stage.*' -print -quit)" ]
 
     run "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -eq 0 ]

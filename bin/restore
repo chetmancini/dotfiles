@@ -335,7 +335,7 @@ cmd_plan() {
     [ "$actions" -gt 0 ] && echo "Preview only. No files were modified." || echo "No actions required: all targets are already in their pre-install state."
 }
 
-stage_restore() {
+restore_symlink() {
     local index="$1"
     local target="$HOME/${TARGETS[$index]}"
     local parent stage_dir stage_item
@@ -343,10 +343,7 @@ stage_restore() {
     stage_dir="$(mktemp -d "$parent/.restore.stage.XXXXXX")" || return 1
     stage_item="$stage_dir/item"
 
-    case "${KINDS[$index]}" in
-        symlink) ln -s -- "${PRIOR_VALUES[$index]}" "$stage_item" ;;
-        file | directory) mv "$TX_DIR/${PRIOR_VALUES[$index]}" "$stage_item" ;;
-    esac || {
+    ln -s -- "${PRIOR_VALUES[$index]}" "$stage_item" || {
         rmdir "$stage_dir" 2>/dev/null || true
         return 1
     }
@@ -356,6 +353,17 @@ stage_restore() {
     fi
     mv -f "$stage_item" "$target" || return 1
     rmdir "$stage_dir" 2>/dev/null || true
+}
+
+restore_payload() {
+    local index="$1"
+    local target="$HOME/${TARGETS[$index]}"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+
+    if [ "${ACTIONS[$index]}" = managed ]; then
+        rm -f "$target" || return 1
+    fi
+    mv "$payload" "$target"
 }
 
 apply_entry() {
@@ -374,11 +382,11 @@ apply_entry() {
             echo "Removed managed symlink: ${TARGETS[$index]}"
             ;;
         managed:symlink | missing:symlink)
-            stage_restore "$index" || return 1
+            restore_symlink "$index" || return 1
             echo "Restored symlink: ${TARGETS[$index]} -> ${PRIOR_VALUES[$index]}"
             ;;
         managed:file | managed:directory | missing:file | missing:directory)
-            stage_restore "$index" || return 1
+            restore_payload "$index" || return 1
             echo "Restored original ${KINDS[$index]}: ${TARGETS[$index]}"
             ;;
     esac
