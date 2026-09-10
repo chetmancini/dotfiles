@@ -160,6 +160,34 @@ validate_target_ancestors() {
     return 0
 }
 
+# Validate that any existing ancestor directories of target_rel under base_dir
+# are real directories and that none has been redirected via a symlink.
+validate_target_ancestors_install() {
+    local target_rel="$1"
+    local base_dir="${2:-$HOME}"
+    local parent_rel
+    parent_rel="$(dirname "$target_rel")"
+
+    if [ "$parent_rel" = "." ] || [ -z "$parent_rel" ]; then
+        return 0
+    fi
+
+    [ -d "$base_dir" ] && [ ! -L "$base_dir" ] || return 1
+
+    local curr="$base_dir"
+    local part
+    local -a parts=()
+    IFS="/" read -r -a parts <<<"$parent_rel"
+    for part in "${parts[@]}"; do
+        [ -z "$part" ] && continue
+        curr="$curr/$part"
+        if [ -L "$curr" ] || { [ -e "$curr" ] && [ ! -d "$curr" ]; }; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 # Validate that the backup root, transaction directory, and all payload ancestor
 # directories exist as real directories and have not been redirected via symlinks.
 validate_payload_ancestors() {

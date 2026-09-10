@@ -96,3 +96,35 @@ teardown() {
     [ "$status" -eq 0 ]
     [ ! -L "$TEST_HOME/.zshrc" ]
 }
+
+@test "installer refuses to install when a target ancestor directory is a symlink" {
+    local external_dir="$TEST_ROOT/external_config"
+    mkdir -p "$external_dir"
+    ln -s "$external_dir" "$TEST_HOME/.config"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Target ancestor for"* && "$output" == *"is a symlink"* ]]
+
+    # No files created in the external directory or transaction recorded
+    [ ! -e "$external_dir/yazi" ]
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}
+
+@test "installer rejects existing symlink pointing to source with trailing newline" {
+    mkdir -p "$TEST_HOME/.config"
+    python3 -c "import os; os.symlink('$DOTFILES_DIR/yazi\n', '$TEST_HOME/.config/yazi')"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsupported characters in symlink target"* ]]
+
+    # Existing symlink remains untouched and no transaction is created
+    [ -L "$TEST_HOME/.config/yazi" ]
+    raw="$(
+        readlink -n "$TEST_HOME/.config/yazi"
+        printf x
+    )"
+    [ "${raw%x}" = "$DOTFILES_DIR/yazi"$'\n' ]
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}

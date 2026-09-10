@@ -905,3 +905,70 @@ EOF
     [ -L "$HOME/.gitconfig" ]
     grep -q '^state=complete$' "$tx_dir/metadata"
 }
+
+@test "29. Completed transaction rejects missing payload as conflict instead of treating as untouched" {
+    local tx_id="20260101T000000-111-815"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    # Payload 0001 is missing, but target in HOME is an unrelated regular file
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    echo "unrelated file content" >"$HOME/.gitconfig"
+
+    # Plan reports conflict, does not accept as no-op
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before touching the file
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    [ -f "$HOME/.gitconfig" ]
+    [ ! -L "$HOME/.gitconfig" ]
+    [ "$(cat "$HOME/.gitconfig")" = "unrelated file content" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "30. Non-contiguous sequence numbers in journal are rejected before restore" {
+    local tx_id="20260101T000000-111-816"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "content 1" >"$tx_dir/payload/0001"
+    echo "content 3" >"$tx_dir/payload/0003"
+    cat <<EOF >"$tx_dir/entries"
+0001|.gitconfig|file|payload/0001|.gitconfig
+0003|.zshrc|file|payload/0003|.zshrc
+EOF
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+    ln -sf "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+
+    # Plan reports non-contiguous sequence error
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"non-contiguous sequence number"* ]]
+
+    # Apply aborts without touching symlinks
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"non-contiguous sequence number"* ]]
+
+    [ -L "$HOME/.gitconfig" ]
+    [ -L "$HOME/.zshrc" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}

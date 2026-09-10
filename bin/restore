@@ -129,6 +129,7 @@ cmd_plan() {
         raw_lines+=("$line")
     done <"$entries_file"
 
+    local expected_seq=1
     local seen_seqs="|"
     local seen_targets="|"
     local line
@@ -152,6 +153,14 @@ cmd_plan() {
                 ;;
         esac
         seen_seqs="${seen_seqs}${seq}|"
+
+        local expected_seq_str
+        expected_seq_str="$(printf "%04d" "$expected_seq")"
+        if [ "$seq" != "$expected_seq_str" ]; then
+            echo "Error: non-contiguous sequence number '${seq}' in transaction ${tx_id} (expected '${expected_seq_str}')" >&2
+            exit 1
+        fi
+        expected_seq=$((expected_seq + 1))
 
         local norm_target
         norm_target="$(normalize_relative_path "$target_rel")"
@@ -224,12 +233,12 @@ cmd_plan() {
                 echo "  [conflict] $target_rel: target payload missing or invalid, or ancestor directory missing or redirected" >&2
                 conflicts=$((conflicts + 1))
             fi
-        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2a: prior file untouched, payload absent
-            echo "  [no-op]   $target_rel: already in original file state (payload was not moved)"
-        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2b: prior directory untouched, payload absent
-            echo "  [no-op]   $target_rel: already in original directory state (payload was not moved)"
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2a: prior file untouched, payload absent in failed transaction
+            echo "  [no-op]   $target_rel: already in original file state (payload was not moved in failed transaction)"
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2b: prior directory untouched, payload absent in failed transaction
+            echo "  [no-op]   $target_rel: already in original directory state (payload was not moved in failed transaction)"
         elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
             local current_link raw_current_link
             raw_current_link="$(
@@ -281,7 +290,8 @@ cmd_plan() {
 
 verify_apply_preflight() {
     local tx_dir="$1"
-    shift
+    local state="$2"
+    shift 2
     local -a lines=("$@")
 
     local i
@@ -312,11 +322,11 @@ verify_apply_preflight() {
             elif [ "$prior_kind" = "absent" ]; then
                 validate_target_ancestors "$target_rel" && is_valid_precondition=true
             fi
-        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2a: prior file untouched, payload absent
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2a: prior file untouched, payload absent in failed transaction
             is_valid_precondition=true
-        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2b: prior directory untouched, payload absent
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2b: prior directory untouched, payload absent in failed transaction
             is_valid_precondition=true
         elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
             local current_link raw_current_link
@@ -404,6 +414,7 @@ cmd_apply() {
         raw_lines+=("$line")
     done <"$entries_file"
 
+    local expected_seq=1
     local seen_seqs="|"
     local seen_targets="|"
     local line
@@ -428,6 +439,14 @@ cmd_apply() {
         esac
         seen_seqs="${seen_seqs}${seq}|"
 
+        local expected_seq_str
+        expected_seq_str="$(printf "%04d" "$expected_seq")"
+        if [ "$seq" != "$expected_seq_str" ]; then
+            echo "Error: non-contiguous sequence number '${seq}' in transaction ${tx_id} (expected '${expected_seq_str}')" >&2
+            exit 1
+        fi
+        expected_seq=$((expected_seq + 1))
+
         local norm_target
         norm_target="$(normalize_relative_path "$target_rel")"
         case "$seen_targets" in
@@ -440,7 +459,7 @@ cmd_apply() {
     done
 
     # Preflight ALL entries before making ANY change
-    verify_apply_preflight "$tx_dir" "${raw_lines[@]}" || exit 1
+    verify_apply_preflight "$tx_dir" "$state" "${raw_lines[@]}" || exit 1
 
     # Confirmation prompt unless --yes
     if [ "$auto_yes" != true ]; then
@@ -458,7 +477,7 @@ cmd_apply() {
         esac
 
         # Re-verify preflight in case targets changed during confirmation prompt
-        verify_apply_preflight "$tx_dir" "${raw_lines[@]}" || exit 1
+        verify_apply_preflight "$tx_dir" "$state" "${raw_lines[@]}" || exit 1
     fi
 
     # Apply entries in reverse sequence
@@ -531,9 +550,9 @@ cmd_apply() {
             mkdir -p "$target_parent"
             ln -s -- "$prior_val" "$target"
             echo "Restored prior symlink: $target_rel -> $prior_val"
-        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             echo "Already in original state: $target_rel"
-        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$state" = "failed" ] && [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             echo "Already in original state: $target_rel"
         elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
             local current_link raw_current_link

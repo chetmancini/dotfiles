@@ -205,20 +205,24 @@ ask_yes_no() {
 
 # Validate tracked sources before any managed target can be replaced.
 validate_managed_sources() {
-    local group source_rel _target_rel _install_name _doctor_label _description
+    local group source_rel target_rel _install_name _doctor_label _description
     local missing=0
 
     for group in config home legacy; do
-        while IFS='|' read -r source_rel _target_rel _install_name _doctor_label _description; do
+        while IFS='|' read -r source_rel target_rel _install_name _doctor_label _description; do
             if [ ! -e "$DOTFILES_DIR/$source_rel" ]; then
                 print_error "Managed source is missing: $DOTFILES_DIR/$source_rel"
+                missing=$((missing + 1))
+            fi
+            if ! validate_target_ancestors_install "$target_rel"; then
+                print_error "Target ancestor for $target_rel is a symlink or invalid directory"
                 missing=$((missing + 1))
             fi
         done < <(managed_symlinks_for_group "$group")
     done
 
     if [ "$missing" -gt 0 ]; then
-        print_error "Refusing to install with $missing missing managed source(s)"
+        print_error "Refusing to install with $missing invalid managed source/target precondition(s)"
         return 1
     fi
 }
@@ -248,6 +252,10 @@ create_symlink() {
         echo "Error: invalid relative source path: $source_rel" >&2
         exit 1
     }
+    validate_target_ancestors_install "$target_rel" || {
+        echo "Error: target ancestor for $target_rel is a symlink or invalid directory" >&2
+        exit 1
+    }
 
     echo ""
     print_step "${BOLD}$name${NC}"
@@ -260,7 +268,7 @@ create_symlink() {
         return 1
     fi
 
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
+    if [ -L "$target" ] && is_managed_symlink "$target" "$source"; then
         print_success "Already correctly symlinked"
         return 0
     fi
