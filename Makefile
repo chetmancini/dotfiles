@@ -25,7 +25,7 @@ ZSH_FILES := .zshrc chetmancini.zsh-theme forge-zsh.sh linux_specific.sh mac_spe
 .PHONY: format check shell-format shell-format-check shell-syntax shellcheck toml-lint zsh-check bats install-smoke hooks
 STYLUA ?= stylua
 STYLUA_CONFIG := nvim/stylua.toml
-STYLUA_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -name '*.lua' -type f -print | sort | sed 's,^\./,,')
+STYLUA_FILES := $(shell git ls-files '*.lua' | sort)
 
 .PHONY: format check shell-format shell-format-check shell-syntax shellcheck toml-lint zsh-check stylua-check stylua-format
 
