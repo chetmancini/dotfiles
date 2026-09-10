@@ -25,6 +25,7 @@ WT_LOCKED=()
 WT_REMOVABLE=()
 WT_REMOVABLE_BRANCHES=()
 STALE_PATHS=()
+STALE_BRANCHES=()
 WT_REPORT=()
 CURRENT_TOPLEVEL=""
 GONE=()
@@ -175,14 +176,26 @@ is_current_worktree() {
 
 # --ignored: plain `git worktree remove` deletes ignored files without
 # complaint, so ignored content counts as uncommitted work here.
+# --untracked-files=all: a `status.showUntrackedFiles=no` config would
+# otherwise blind this check to untracked and ignored files.
 is_worktree_dirty() {
-    [[ -n "$(git -C "$1" status --porcelain --ignored 2>/dev/null)" ]]
+    [[ -n "$(git -C "$1" status --porcelain --ignored --untracked-files=all 2>/dev/null)" ]]
 }
 
 # True when $1 is checked out in a worktree slated for removal.
 is_wt_removal_planned() {
     local candidate
     for candidate in ${WT_REMOVABLE_BRANCHES[@]+"${WT_REMOVABLE_BRANCHES[@]}"}; do
+        [[ "$candidate" == "$1" ]] && return 0
+    done
+    return 1
+}
+
+# True when $1 is checked out only in a stale entry that --apply will
+# prune, freeing the branch for deletion in the same run.
+is_stale_bound_branch() {
+    local candidate
+    for candidate in ${STALE_BRANCHES[@]+"${STALE_BRANCHES[@]}"}; do
         [[ "$candidate" == "$1" ]] && return 0
     done
     return 1
@@ -200,13 +213,15 @@ wt_path_for_branch() {
     return 1
 }
 
-# Fill WT_REMOVABLE, WT_REMOVABLE_BRANCHES, STALE_PATHS, and WT_REPORT.
+# Fill WT_REMOVABLE, WT_REMOVABLE_BRANCHES, STALE_PATHS, STALE_BRANCHES,
+# and WT_REPORT.
 classify_worktrees() {
     local i path branch
 
     WT_REMOVABLE=()
     WT_REMOVABLE_BRANCHES=()
     STALE_PATHS=()
+    STALE_BRANCHES=()
     WT_REPORT=()
 
     for ((i = 1; i < ${#WT_PATHS[@]}; i++)); do
@@ -215,6 +230,11 @@ classify_worktrees() {
         if [[ ! -e "$path" ]]; then
             STALE_PATHS+=("$path")
             WT_REPORT+=("$path (stale entry - will prune)")
+            # Branches on prunable entries are freed for deletion below.
+            # Locked entries survive `git worktree prune`, so they stay bound.
+            if [[ "${WT_LOCKED[$i]}" != true && "${WT_KINDS[$i]}" == "branch" && -n "$branch" ]]; then
+                STALE_BRANCHES+=("$branch")
+            fi
         elif [[ "${WT_KINDS[$i]}" == "bare" ]]; then
             WT_REPORT+=("$path (bare worktree - will skip)")
         elif [[ "${WT_KINDS[$i]}" == "detached" ]]; then
@@ -305,6 +325,16 @@ main() {
                 echo "  $branch (merged - will remove worktree $wt_path, then delete with -d)"
             else
                 echo "  $branch (UNMERGED - will remove worktree $wt_path, then force-delete with -D)"
+            fi
+            deletable+=("$branch")
+        elif is_stale_bound_branch "$branch"; then
+            if is_merged_into_head "$branch"; then
+                echo "  $branch (merged - will prune its stale worktree entry, then delete with -d)"
+            elif [ "$FORCE" = true ] && [ "$APPLY" = true ]; then
+                echo "  $branch (UNMERGED - will prune its stale worktree entry, then force-delete with -D)"
+            else
+                echo "  $branch (UNMERGED - will preserve; stale worktree entry will still be pruned)"
+                continue
             fi
             deletable+=("$branch")
         elif worktree_branches | grep -qxF "$branch"; then

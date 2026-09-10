@@ -263,14 +263,50 @@ worktree_listed() {
     branch_exists "wt-dirty-force"
 }
 
-@test "git-rm-gone --apply --yes prunes stale worktree entries" {
-    make_gone_worktree "wt-stale" true
-    rm -rf "$TEST_TMP/wt-wt-stale"
+@test "git-rm-gone sees through status.showUntrackedFiles=no" {
+    make_gone_worktree "wt-hidden" true true
+    git -C "$REPO" config status.showUntrackedFiles no
     cd "$REPO"
     run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
     [ "$status" -eq 0 ]
+    [ -d "$TEST_TMP/wt-wt-hidden" ]
+    branch_exists "wt-hidden"
+}
+
+@test "git-rm-gone previews a merged stale branch as deletable, then deletes it" {
+    make_gone_worktree "wt-stale" true
+    rm -rf "$TEST_TMP/wt-wt-stale"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone"
+    [ "$status" -eq 0 ]
     [[ "$output" == *"stale"* ]]
+    [[ "$output" == *"will prune its stale worktree entry, then delete with -d"* ]]
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
+    [ "$status" -eq 0 ]
     ! worktree_listed "$LAST_WT"
+    ! branch_exists "wt-stale"
+}
+
+@test "git-rm-gone preserves an unmerged stale branch without --force" {
+    make_gone_worktree "wt-stale-unmerged" false
+    rm -rf "$TEST_TMP/wt-wt-stale-unmerged"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"UNMERGED - will preserve; stale worktree entry will still be pruned"* ]]
+    ! worktree_listed "$LAST_WT"
+    branch_exists "wt-stale-unmerged"
+}
+
+@test "git-rm-gone previews an unmerged stale branch as deletable with --force" {
+    make_gone_worktree "wt-stale-force" false
+    rm -rf "$TEST_TMP/wt-wt-stale-force"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --force --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"will prune its stale worktree entry, then force-delete with -D"* ]]
+    ! worktree_listed "$LAST_WT"
+    ! branch_exists "wt-stale-force"
 }
 
 @test "git-rm-gone fails cleanly when run outside a git repository" {
