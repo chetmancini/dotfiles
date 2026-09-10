@@ -131,6 +131,12 @@ cmd_plan() {
 
     local expected_count
     expected_count="$(echo "$meta" | (grep '^entry_count=' || true) | cut -d'=' -f2-)"
+    if [ "$state" = "complete" ] || [ "$state" = "restored" ]; then
+        if [ -z "$expected_count" ]; then
+            echo "Error: transaction ${tx_id} is ${state} but missing entry_count in metadata" >&2
+            exit 1
+        fi
+    fi
     if [ -n "$expected_count" ]; then
         if [ "${#raw_lines[@]}" -ne "$expected_count" ]; then
             echo "Error: journal entry count mismatch in transaction ${tx_id}: expected ${expected_count}, got ${#raw_lines[@]}" >&2
@@ -431,6 +437,12 @@ cmd_apply() {
 
     local expected_count
     expected_count="$(echo "$meta" | (grep '^entry_count=' || true) | cut -d'=' -f2-)"
+    if [ "$state" = "complete" ] || [ "$state" = "restored" ]; then
+        if [ -z "$expected_count" ]; then
+            echo "Error: transaction ${tx_id} is ${state} but missing entry_count in metadata" >&2
+            exit 1
+        fi
+    fi
     if [ -n "$expected_count" ]; then
         if [ "${#raw_lines[@]}" -ne "$expected_count" ]; then
             echo "Error: journal entry count mismatch in transaction ${tx_id}: expected ${expected_count}, got ${#raw_lines[@]}" >&2
@@ -560,29 +572,46 @@ cmd_apply() {
                     ;;
                 symlink)
                     mkdir -p "$target_parent"
-                    local stage_link="${target}.restore.tmp.$$"
-                    rm -rf "$stage_link"
-                    ln -s -- "$prior_val" "$stage_link" || {
-                        echo "Error: failed to create symlink for $target_rel" >&2
+                    local stage_dir stage_item
+                    stage_dir="$(mktemp -d "${target_parent}/.restore.stage.XXXXXX")" || {
+                        echo "Error: failed to create staging directory for $target_rel" >&2
                         exit 1
                     }
+                    stage_item="$stage_dir/item"
+                    if ! ln -s -- "$prior_val" "$stage_item"; then
+                        rmdir "$stage_dir" 2>/dev/null || true
+                        echo "Error: failed to create symlink for $target_rel" >&2
+                        exit 1
+                    fi
                     rm -f "$target"
-                    mv -f "$stage_link" "$target"
+                    if ! mv -f "$stage_item" "$target"; then
+                        rm -f "$stage_item" 2>/dev/null || true
+                        rmdir "$stage_dir" 2>/dev/null || true
+                        echo "Error: failed to restore symlink to $target_rel" >&2
+                        exit 1
+                    fi
+                    rmdir "$stage_dir" 2>/dev/null || true
                     echo "Restored symlink: $target_rel -> $prior_val"
                     ;;
                 file | directory)
                     mkdir -p "$target_parent"
-                    local stage_target="${target}.restore.tmp.$$"
-                    rm -rf "$stage_target"
-                    if ! mv "$payload_path" "$stage_target"; then
+                    local stage_dir stage_item
+                    stage_dir="$(mktemp -d "${target_parent}/.restore.stage.XXXXXX")" || {
+                        echo "Error: failed to create staging directory for $target_rel" >&2
+                        exit 1
+                    }
+                    stage_item="$stage_dir/item"
+                    if ! mv "$payload_path" "$stage_item"; then
+                        rmdir "$stage_dir" 2>/dev/null || true
                         echo "Error: failed to stage payload for $target_rel" >&2
                         exit 1
                     fi
                     rm -f "$target"
-                    if ! mv "$stage_target" "$target"; then
+                    if ! mv "$stage_item" "$target"; then
                         echo "Error: failed to restore payload to $target_rel" >&2
                         exit 1
                     fi
+                    rmdir "$stage_dir" 2>/dev/null || true
                     echo "Restored original $prior_kind: $target_rel"
                     ;;
             esac

@@ -135,18 +135,22 @@ validate_journal_entry() {
 }
 
 # Validate that all ancestor directories of target_rel under base_dir exist as
-# real directories and that none has been redirected via a symlink.
+# real directories, that none has been redirected via a symlink, and that the
+# immediate destination parent directory is writable.
 validate_target_ancestors() {
     local target_rel="$1"
     local base_dir="${2:-$HOME}"
     local parent_rel
     parent_rel="$(dirname "$target_rel")"
 
+    [ -d "$base_dir" ] && [ ! -L "$base_dir" ] || return 1
+
+    local curr="$base_dir"
     if [ "$parent_rel" = "." ] || [ -z "$parent_rel" ]; then
+        [ -w "$curr" ] || return 1
         return 0
     fi
 
-    local curr="$base_dir"
     local part
     local -a parts=()
     IFS="/" read -r -a parts <<<"$parent_rel"
@@ -157,6 +161,7 @@ validate_target_ancestors() {
             return 1
         fi
     done
+    [ -w "$curr" ] || return 1
     return 0
 }
 
@@ -287,6 +292,7 @@ read_transaction_metadata() {
 
     local key val
     local m_version="" m_id="" m_created_at="" m_repo_revision="" m_state="" m_entry_count=""
+    local seen_version=false seen_id=false seen_created_at=false seen_repo_rev=false seen_state=false seen_entry_count=false
 
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
@@ -299,27 +305,33 @@ read_transaction_metadata() {
 
         case "$key" in
             version)
-                [ -z "$m_version" ] || return 1
+                [ "$seen_version" = false ] || return 1
+                seen_version=true
                 m_version="$val"
                 ;;
             id)
-                [ -z "$m_id" ] || return 1
+                [ "$seen_id" = false ] || return 1
+                seen_id=true
                 m_id="$val"
                 ;;
             created_at)
-                [ -z "$m_created_at" ] || return 1
+                [ "$seen_created_at" = false ] || return 1
+                seen_created_at=true
                 m_created_at="$val"
                 ;;
             repo_revision)
-                [ -z "$m_repo_revision" ] || return 1
+                [ "$seen_repo_rev" = false ] || return 1
+                seen_repo_rev=true
                 m_repo_revision="$val"
                 ;;
             state)
-                [ -z "$m_state" ] || return 1
+                [ "$seen_state" = false ] || return 1
+                seen_state=true
                 m_state="$val"
                 ;;
             entry_count)
-                [ -z "$m_entry_count" ] || return 1
+                [ "$seen_entry_count" = false ] || return 1
+                seen_entry_count=true
                 case "$val" in
                     *[!0-9]* | "") return 1 ;;
                     *) m_entry_count="$val" ;;

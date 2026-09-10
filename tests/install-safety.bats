@@ -128,3 +128,17 @@ teardown() {
     [ "${raw%x}" = "$DOTFILES_DIR/yazi"$'\n' ]
     [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
 }
+
+@test "installer refuses to install when backup root is a symlink" {
+    local external_backup="$TEST_ROOT/external_backup"
+    mkdir -p "$external_backup"
+    ln -s "$external_backup" "$TEST_HOME/.dotfiles-backup"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"backup root at"* && "$output" == *"is invalid or symlinked"* ]]
+
+    # No files created in external backup directory or home
+    [ ! -e "$external_backup/latest" ]
+    [ ! -L "$TEST_HOME/.zshrc" ]
+}

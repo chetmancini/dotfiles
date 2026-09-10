@@ -176,6 +176,7 @@ id=$valid_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=0
 EOF
     touch "$valid_dir/entries"
     echo "$valid_id" >"$TMP_BACKUP/latest"
@@ -193,6 +194,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=abcdef1
 state=complete
+entry_count=1
 EOF
     echo "SECRET_PAYLOAD_TOKEN" >"$tx_dir/payload/0001"
     echo "0001|.gitconfig|symlink|/super/secret/symlink/target|.gitconfig" >"$tx_dir/entries"
@@ -329,6 +331,7 @@ id=$tx1
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "0001|../etc/passwd|absent||passwd" >"$TMP_BACKUP/$tx1/entries"
     run "$DOTFILES_DIR/bin/restore" --plan "$tx1"
@@ -343,6 +346,7 @@ id=$tx2
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "0001|.gitconfig|absent||../evil" >"$TMP_BACKUP/$tx2/entries"
     run "$DOTFILES_DIR/bin/restore" --plan "$tx2"
@@ -357,6 +361,7 @@ id=$tx3
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=0
 EOF
     touch "$TMP_BACKUP/$tx3/entries"
     run "$DOTFILES_DIR/bin/restore" --plan "$tx3"
@@ -370,6 +375,7 @@ version=1
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=0
 EOF
     touch "$TMP_BACKUP/$tx4/entries"
     run "$DOTFILES_DIR/bin/restore" --plan "$tx4"
@@ -455,6 +461,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     # prior_kind says file, but payload is corrupted to be a directory
     mkdir -p "$tx_dir/payload/0001"
@@ -590,6 +597,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "0001|.gitconfig|symlink|-hyphen-target|.gitconfig" >"$tx_dir/entries"
 
@@ -614,6 +622,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=2
 EOF
     echo "content" >"$tx_dir/payload/0001"
     # Duplicate sequence number 0001
@@ -649,6 +658,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
 
@@ -689,6 +699,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "original content" >"$tx_dir/payload/0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
@@ -724,6 +735,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "original content" >"$tx_dir/payload/0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
@@ -766,6 +778,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "0001|.gitconfig|absent|-|.gitconfig" >"$external_tx/entries"
 
@@ -806,6 +819,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=2
 EOF
     echo "payload 1" >"$tx_dir/payload/0001"
     echo "payload 2" >"$tx_dir/payload/0002"
@@ -842,6 +856,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     echo "original content" >"$tx_dir/payload/0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
@@ -879,6 +894,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
 
     # External entries file outside the transaction directory
@@ -916,6 +932,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=1
 EOF
     # Payload 0001 is missing, but target in HOME is an unrelated regular file
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
@@ -947,6 +964,7 @@ id=$tx_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=complete
+entry_count=2
 EOF
     echo "content 1" >"$tx_dir/payload/0001"
     echo "content 3" >"$tx_dir/payload/0003"
@@ -1088,4 +1106,98 @@ EOF
     # Clean up permissions so teardown succeeds
     chmod u+w "$tx_dir"
     grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "34. Read-only target destination parent causes preflight rejection and preserves targets" {
+    local tx_id="20260101T000000-111-820"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    mkdir -p "$HOME/.config/testpkg"
+    echo "0001|.config/testpkg/config|file|payload/0001|.config/testpkg/config" >"$tx_dir/entries"
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.config/testpkg/config"
+
+    # Make destination parent directory read-only
+    chmod a-w "$HOME/.config/testpkg"
+
+    # Plan reports conflict due to unwritable destination parent
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before removing or modifying managed link
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # Target remains intact
+    [ -L "$HOME/.config/testpkg/config" ]
+    [ "$(readlink "$HOME/.config/testpkg/config")" = "$DOTFILES_DIR/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+
+    chmod u+w "$HOME/.config/testpkg"
+}
+
+@test "35. Completed transaction missing entry_count in metadata is rejected before restore" {
+    local tx_id="20260101T000000-111-821"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan reports missing entry_count
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"missing entry_count in metadata"* ]]
+
+    # Apply aborts without touching symlinks
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"missing entry_count in metadata"* ]]
+
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "36. Metadata with duplicate key having empty initial value is rejected" {
+    local tx_id="20260101T000000-111-822"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=
+state=complete
+entry_count=0
+EOF
+    touch "$tx_dir/entries"
+
+    # read_transaction_metadata returns 1 directly on duplicate key
+    run bash -c "source '$DOTFILES_DIR/bin/lib/transactions.sh' && read_transaction_metadata '$tx_dir/metadata'"
+    [ "$status" -ne 0 ]
+
+    # bin/restore --plan fails to resolve transaction due to invalid metadata
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"could not resolve transaction"* ]]
 }

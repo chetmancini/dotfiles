@@ -301,6 +301,38 @@ create_symlink() {
     fi
 
     if ask_yes_no "  Create this symlink?"; then
+        # Re-inspect exact target state after confirmation before journaling or mutation
+        if [ -L "$target" ] && is_managed_symlink "$target" "$source"; then
+            print_success "Already correctly symlinked"
+            return 0
+        fi
+
+        if [ -L "$target" ]; then
+            prior_kind="symlink"
+            local raw_val
+            raw_val="$(
+                readlink -n "$target"
+                printf 'x'
+            )"
+            prior_val="${raw_val%x}"
+            if [[ "$prior_val" == *$'\n'* || "$prior_val" == *$'\r'* || "$prior_val" == *"|"* ]]; then
+                echo "Error: unsupported characters in symlink target at $target" >&2
+                exit 1
+            fi
+        elif [ -f "$target" ]; then
+            prior_kind="file"
+            prior_val=""
+        elif [ -d "$target" ]; then
+            prior_kind="directory"
+            prior_val=""
+        elif [ ! -e "$target" ]; then
+            prior_kind="absent"
+            prior_val=""
+        else
+            echo "Error: unsupported filesystem object at $target" >&2
+            exit 1
+        fi
+
         if [ "$PLAN_MODE" = true ]; then
             case "$prior_kind" in
                 file | directory)
@@ -322,12 +354,16 @@ create_symlink() {
 
         # Lazily create transaction on the first target that actually needs a change
         if [ -z "$CURRENT_TRANSACTION_ID" ]; then
+            local root
+            root="$(transaction_backup_root)"
+            if [ -L "$root" ] || { [ -e "$root" ] && [ ! -d "$root" ]; }; then
+                echo "Error: backup root at $root is invalid or symlinked" >&2
+                exit 1
+            fi
             CURRENT_TRANSACTION_ID="$(generate_transaction_id)" || {
                 echo "Error: failed to generate transaction ID" >&2
                 exit 1
             }
-            local root
-            root="$(transaction_backup_root)"
             CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
             mkdir -p "$CURRENT_TRANSACTION_DIR/payload"
             local repo_rev
@@ -754,6 +790,14 @@ echo ""
 if ! ask_yes_no "Ready to begin?"; then
     echo "Installation cancelled."
     exit 0
+fi
+
+if [ "$PLAN_MODE" != true ]; then
+    early_tx_root="$(transaction_backup_root)"
+    if [ -L "$early_tx_root" ] || { [ -e "$early_tx_root" ] && [ ! -d "$early_tx_root" ]; }; then
+        echo "Error: backup root at $early_tx_root is invalid or symlinked" >&2
+        exit 1
+    fi
 fi
 
 validate_managed_sources
