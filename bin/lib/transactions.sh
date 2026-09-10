@@ -115,6 +115,32 @@ validate_journal_entry() {
     return 0
 }
 
+# Validate that all ancestor directories of target_rel under base_dir exist as
+# real directories and that none has been redirected via a symlink.
+validate_target_ancestors() {
+    local target_rel="$1"
+    local base_dir="${2:-$HOME}"
+    local parent_rel
+    parent_rel="$(dirname "$target_rel")"
+
+    if [ "$parent_rel" = "." ] || [ -z "$parent_rel" ]; then
+        return 0
+    fi
+
+    local curr="$base_dir"
+    local part
+    local -a parts=()
+    IFS="/" read -r -a parts <<<"$parent_rel"
+    for part in "${parts[@]}"; do
+        [ -z "$part" ] && continue
+        curr="$curr/$part"
+        if [ -L "$curr" ] || [ ! -d "$curr" ]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 # Read and strictly validate metadata from a transaction directory.
 # Only allowlisted keys (version, id, created_at, repo_revision, state) are accepted.
 # Never sources or evals metadata. Outputs key=value on stdout on success.

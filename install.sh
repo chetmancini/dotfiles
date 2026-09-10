@@ -263,7 +263,16 @@ create_symlink() {
     local prior_kind prior_val=""
     if [ -L "$target" ]; then
         prior_kind="symlink"
-        prior_val="$(readlink "$target")"
+        local raw_val
+        raw_val="$(
+            readlink -n "$target"
+            printf 'x'
+        )"
+        prior_val="${raw_val%x}"
+        if [[ "$prior_val" == *$'\n'* || "$prior_val" == *$'\r'* || "$prior_val" == *"|"* ]]; then
+            echo "Error: unsupported characters in symlink target at $target" >&2
+            exit 1
+        fi
     elif [ -f "$target" ]; then
         prior_kind="file"
     elif [ -d "$target" ]; then

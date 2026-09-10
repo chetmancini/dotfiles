@@ -547,3 +547,94 @@ EOF
     [ "$(cat "$HOME/.config/yazi/yazi.toml")" = "test content" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
+
+@test "18. Preflight rejects symlinked ancestor directory when restoring a target" {
+    local tx_id="20260101T000000-111-805"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=failed
+EOF
+    echo "herdr content" >"$tx_dir/payload/0001"
+    echo "0001|.config/herdr/config.toml|file|payload/0001|.config/herdr/config.toml" >"$tx_dir/entries"
+
+    # Ancestor .config/herdr is replaced with a symlink pointing to another directory
+    local redirect_dir="$TMP_BACKUP/redirected_herdr"
+    mkdir -p "$redirect_dir" "$HOME/.config"
+    ln -s "$redirect_dir" "$HOME/.config/herdr"
+
+    # Plan reports conflict because ancestor is a symlink
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts without writing to the redirected target
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ ! -e "$redirect_dir/config.toml" ]
+    grep -q '^state=failed$' "$tx_dir/metadata"
+}
+
+@test "19. Restore safely recreates symlink destinations starting with a hyphen" {
+    local tx_id="20260101T000000-111-806"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "0001|.gitconfig|symlink|-hyphen-target|.gitconfig" >"$tx_dir/entries"
+
+    # Target is managed symlink
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Apply recreates symlink without option parsing error
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "-hyphen-target" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "20. Preflight rejects duplicate sequence numbers in transaction journal" {
+    local tx_id="20260101T000000-111-807"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "content" >"$tx_dir/payload/0001"
+    # Duplicate sequence number 0001
+    cat <<EOF >"$tx_dir/entries"
+0001|.gitconfig|file|payload/0001|.gitconfig
+0001|.zshrc|file|payload/0001|.zshrc
+EOF
+
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+    ln -sf "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+
+    # Plan reports duplicate sequence error
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"duplicate sequence number"* ]]
+
+    # Apply aborts before modifying any symlinks
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"duplicate sequence number"* ]]
+    [ -L "$HOME/.gitconfig" ]
+    [ -L "$HOME/.zshrc" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
