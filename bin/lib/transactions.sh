@@ -141,6 +141,52 @@ validate_target_ancestors() {
     return 0
 }
 
+# Validate that the backup root, transaction directory, and all payload ancestor
+# directories exist as real directories and have not been redirected via symlinks.
+validate_payload_ancestors() {
+    local tx_dir="$1"
+    local prior_val="$2"
+    local root="${3:-$(transaction_backup_root)}"
+
+    [ -n "$root" ] && [ -d "$root" ] && [ ! -L "$root" ] || return 1
+    [ -n "$tx_dir" ] && [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
+    validate_target_ancestors "$prior_val" "$tx_dir"
+}
+
+# Check whether target is a symlink pointing to expected_source, either literally
+# or via canonical physical paths.
+is_managed_symlink() {
+    local target="$1"
+    local expected="$2"
+    [ -L "$target" ] || return 1
+
+    local link_dest
+    link_dest="$(readlink "$target")" || return 1
+    if [ "$link_dest" = "$expected" ]; then
+        return 0
+    fi
+
+    # Fallback to canonical physical path comparison if both exist
+    local link_abs="$link_dest"
+    if [[ "$link_abs" != /* ]]; then
+        link_abs="$(dirname "$target")/$link_abs"
+    fi
+
+    if [ -d "$link_abs" ] && [ -d "$expected" ]; then
+        local can_link can_expected
+        can_link="$(cd -P "$link_abs" 2>/dev/null && pwd)" || return 1
+        can_expected="$(cd -P "$expected" 2>/dev/null && pwd)" || return 1
+        [ "$can_link" = "$can_expected" ] && return 0
+    elif [ -e "$link_abs" ] && [ -e "$expected" ]; then
+        local can_link_dir can_exp_dir
+        can_link_dir="$(cd -P "$(dirname "$link_abs")" 2>/dev/null && pwd)" || return 1
+        can_exp_dir="$(cd -P "$(dirname "$expected")" 2>/dev/null && pwd)" || return 1
+        [ "$can_link_dir/$(basename "$link_abs")" = "$can_exp_dir/$(basename "$expected")" ] && return 0
+    fi
+
+    return 1
+}
+
 # Read and strictly validate metadata from a transaction directory.
 # Only allowlisted keys (version, id, created_at, repo_revision, state) are accepted.
 # Never sources or evals metadata. Outputs key=value on stdout on success.

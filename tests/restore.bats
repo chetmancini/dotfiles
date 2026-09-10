@@ -638,3 +638,120 @@ EOF
     [ -L "$HOME/.zshrc" ]
     grep -q '^state=complete$' "$tx_dir/metadata"
 }
+
+@test "21. Preflight rejects symlinked payload directory" {
+    local tx_id="20260101T000000-111-808"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    # External payload directory outside backup root
+    local external_dir="$TMP_HOME/external_payload"
+    mkdir -p "$external_dir"
+    echo "external payload content" >"$external_dir/0001"
+
+    # Symlink payload/ to external directory
+    ln -s "$external_dir" "$tx_dir/payload"
+
+    # Managed symlink exists
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan reports conflict
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before modifying any files
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # External file and target are untouched
+    [ -f "$external_dir/0001" ]
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "22. Restore recognizes managed symlink installed via symlinked repository path" {
+    local tx_id="20260101T000000-111-809"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    # Create symlink to repo directory
+    local symlink_repo="$TMP_HOME/repo-symlink"
+    ln -s "$DOTFILES_DIR" "$symlink_repo"
+
+    # Target points to symlink_repo path rather than physical DOTFILES_DIR
+    ln -sf "$symlink_repo/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan recognizes it as managed symlink and plans restore
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[restore] .gitconfig: replace managed symlink"* ]]
+
+    # Apply restores original file
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$HOME/.gitconfig" ]
+    [ ! -L "$HOME/.gitconfig" ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "23. Apply fails closed if target state changes unexpectedly at apply time" {
+    local tx_id="20260101T000000-111-810"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    # Target is neither managed symlink nor original file (e.g. symlink to foreign location)
+    ln -sf "/dev/null" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* || "$output" == *"target state changed"* ]]
+    # Metadata is not marked restored
+    grep -q '^state=complete$' "$tx_dir/metadata"
+    # Target still points to foreign location
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "/dev/null" ]
+}
+
+@test "24. Reject multiple transaction selectors in --apply" {
+    # Two explicit selectors
+    run "$DOTFILES_DIR/bin/restore" --apply OLD_ID latest --yes
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"multiple transaction selectors"* ]]
+
+    run "$DOTFILES_DIR/bin/restore" --apply latest OLD_ID --yes
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"multiple transaction selectors"* ]]
+
+    run "$DOTFILES_DIR/bin/restore" --apply id1 id2
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"multiple transaction selectors"* ]]
+}

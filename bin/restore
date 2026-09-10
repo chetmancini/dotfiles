@@ -168,7 +168,7 @@ cmd_plan() {
         target_parent="$(dirname "$target")"
 
         # Determine state
-        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+        if [ -L "$target" ] && is_managed_symlink "$target" "$expected_source"; then
             # State 1: target is the expected managed symlink
             local state1_valid=false
             case "$prior_kind" in
@@ -185,13 +185,13 @@ cmd_plan() {
                     fi
                     ;;
                 file)
-                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel"; then
+                    if [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: replace managed symlink with original file from payload/$seq"
                     fi
                     ;;
                 directory)
-                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel"; then
+                    if [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel"; then
                         state1_valid=true
                         echo "  [restore] $target_rel: replace managed symlink with original directory from payload/$seq"
                     fi
@@ -226,11 +226,11 @@ cmd_plan() {
         elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
             # State 2d: absent target remains absent
             echo "  [no-op]   $target_rel: already absent"
-        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
             echo "  [restore] $target_rel: restore file from payload/$seq (target currently absent)"
             has_actions=$((has_actions + 1))
-        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
             echo "  [restore] $target_rel: restore directory from payload/$seq (target currently absent)"
             has_actions=$((has_actions + 1))
@@ -256,6 +256,79 @@ cmd_plan() {
     else
         echo "Preview only. No files were modified."
     fi
+}
+
+verify_apply_preflight() {
+    local tx_dir="$1"
+    shift
+    local -a lines=("$@")
+
+    local i
+    for ((i = 0; i < ${#lines[@]}; i++)); do
+        local line="${lines[i]}"
+        local -a fields
+        IFS='|' read -r -a fields <<<"$line"
+        local seq="${fields[0]}"
+        local target_rel="${fields[1]}"
+        local prior_kind="${fields[2]}"
+        local prior_val="${fields[3]}"
+        local installed_rel="${fields[4]}"
+
+        local target="$HOME/$target_rel"
+        local expected_source="$DOTFILES_DIR/$installed_rel"
+        local payload_path="$tx_dir/$prior_val"
+
+        local is_valid_precondition=false
+
+        if [ -L "$target" ] && is_managed_symlink "$target" "$expected_source"; then
+            # State 1: target is the expected managed symlink
+            if [ "$prior_kind" = "file" ]; then
+                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "directory" ]; then
+                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "symlink" ]; then
+                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            elif [ "$prior_kind" = "absent" ]; then
+                validate_target_ancestors "$target_rel" && is_valid_precondition=true
+            fi
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2a: prior file untouched, payload absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 2b: prior directory untouched, payload absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
+            local current_link raw_current_link
+            raw_current_link="$(
+                readlink -n "$target"
+                printf 'x'
+            )"
+            current_link="${raw_current_link%x}"
+            if [ "$current_link" = "$prior_val" ] && validate_target_ancestors "$target_rel"; then
+                # State 2c: prior symlink untouched
+                is_valid_precondition=true
+            fi
+        elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            # State 2d: absent target remains absent
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
+            is_valid_precondition=true
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
+            is_valid_precondition=true
+        fi
+
+        if [ "$is_valid_precondition" = false ]; then
+            echo "Conflict detected on ${target_rel}: current state does not match pre-restore preconditions." >&2
+            echo "Restore aborted: no files were modified." >&2
+            return 1
+        fi
+    done
+    return 0
 }
 
 cmd_apply() {
@@ -325,73 +398,7 @@ cmd_apply() {
     done
 
     # Preflight ALL entries before making ANY change
-    local i
-    for ((i = 0; i < ${#raw_lines[@]}; i++)); do
-        line="${raw_lines[i]}"
-        local -a fields
-        IFS='|' read -r -a fields <<<"$line"
-        local seq="${fields[0]}"
-        local target_rel="${fields[1]}"
-        local prior_kind="${fields[2]}"
-        local prior_val="${fields[3]}"
-        local installed_rel="${fields[4]}"
-
-        local target="$HOME/$target_rel"
-        local expected_source="$DOTFILES_DIR/$installed_rel"
-        local payload_path="$tx_dir/$prior_val"
-        local target_parent
-        target_parent="$(dirname "$target")"
-
-        local is_valid_precondition=false
-
-        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
-            # State 1: target is the expected managed symlink
-            if [ "$prior_kind" = "file" ]; then
-                [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel" && is_valid_precondition=true
-            elif [ "$prior_kind" = "directory" ]; then
-                [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_target_ancestors "$target_rel" && is_valid_precondition=true
-            elif [ "$prior_kind" = "symlink" ]; then
-                validate_target_ancestors "$target_rel" && is_valid_precondition=true
-            elif [ "$prior_kind" = "absent" ]; then
-                validate_target_ancestors "$target_rel" && is_valid_precondition=true
-            fi
-        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2a: prior file untouched, payload absent
-            is_valid_precondition=true
-        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 2b: prior directory untouched, payload absent
-            is_valid_precondition=true
-        elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
-            local current_link raw_current_link
-            raw_current_link="$(
-                readlink -n "$target"
-                printf 'x'
-            )"
-            current_link="${raw_current_link%x}"
-            if [ "$current_link" = "$prior_val" ] && validate_target_ancestors "$target_rel"; then
-                # State 2c: prior symlink untouched
-                is_valid_precondition=true
-            fi
-        elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
-            # State 2d: absent target remains absent
-            is_valid_precondition=true
-        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 3a: interrupted install before link creation (file payload exists, target absent, ancestors valid)
-            is_valid_precondition=true
-        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 3b: interrupted install before link creation (directory payload exists, target absent, ancestors valid)
-            is_valid_precondition=true
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
-            # State 4: interrupted install before link creation (prior symlink removed, target absent, ancestors valid)
-            is_valid_precondition=true
-        fi
-
-        if [ "$is_valid_precondition" = false ]; then
-            echo "Conflict detected on ${target_rel}: current state does not match pre-restore preconditions." >&2
-            echo "Restore aborted: no files were modified." >&2
-            exit 1
-        fi
-    done
+    verify_apply_preflight "$tx_dir" "${raw_lines[@]}" || exit 1
 
     # Confirmation prompt unless --yes
     if [ "$auto_yes" != true ]; then
@@ -407,6 +414,9 @@ cmd_apply() {
                 exit 0
                 ;;
         esac
+
+        # Re-verify preflight in case targets changed during confirmation prompt
+        verify_apply_preflight "$tx_dir" "${raw_lines[@]}" || exit 1
     fi
 
     # Apply entries in reverse sequence
@@ -426,7 +436,29 @@ cmd_apply() {
         local target_parent
         target_parent="$(dirname "$target")"
 
-        if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+        if [ -L "$target" ] && is_managed_symlink "$target" "$expected_source"; then
+            # Verify payload and ancestors before mutating
+            case "$prior_kind" in
+                file)
+                    if [ ! -f "$payload_path" ] || [ -L "$payload_path" ] || ! validate_payload_ancestors "$tx_dir" "$prior_val" || ! validate_target_ancestors "$target_rel"; then
+                        echo "Error: target state changed at apply time: $target_rel" >&2
+                        exit 1
+                    fi
+                    ;;
+                directory)
+                    if [ ! -d "$payload_path" ] || [ -L "$payload_path" ] || ! validate_payload_ancestors "$tx_dir" "$prior_val" || ! validate_target_ancestors "$target_rel"; then
+                        echo "Error: target state changed at apply time: $target_rel" >&2
+                        exit 1
+                    fi
+                    ;;
+                symlink | absent)
+                    if ! validate_target_ancestors "$target_rel"; then
+                        echo "Error: target state changed at apply time: $target_rel" >&2
+                        exit 1
+                    fi
+                    ;;
+            esac
+
             # Remove managed symlink first
             rm -f "$target"
 
@@ -445,21 +477,40 @@ cmd_apply() {
                     echo "Restored original $prior_kind: $target_rel"
                     ;;
             esac
-        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        elif [ "$prior_kind" = "file" ] && [ -f "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             mkdir -p "$target_parent"
             mv "$payload_path" "$target"
             echo "Restored original file from payload: $target_rel"
-        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        elif [ "$prior_kind" = "directory" ] && [ -d "$payload_path" ] && [ ! -L "$payload_path" ] && validate_payload_ancestors "$tx_dir" "$prior_val" && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             mkdir -p "$target_parent"
             mv "$payload_path" "$target"
             echo "Restored original directory from payload: $target_rel"
-        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        elif [ "$prior_kind" = "symlink" ] && [ ! -e "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             mkdir -p "$target_parent"
             ln -s -- "$prior_val" "$target"
             echo "Restored prior symlink: $target_rel -> $prior_val"
-        else
-            # Already in original state (State 2)
+        elif [ "$prior_kind" = "file" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -f "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
             echo "Already in original state: $target_rel"
+        elif [ "$prior_kind" = "directory" ] && [ ! -e "$payload_path" ] && [ ! -L "$payload_path" ] && [ -d "$target" ] && [ ! -L "$target" ] && validate_target_ancestors "$target_rel"; then
+            echo "Already in original state: $target_rel"
+        elif [ "$prior_kind" = "symlink" ] && [ -L "$target" ]; then
+            local current_link raw_current_link
+            raw_current_link="$(
+                readlink -n "$target"
+                printf 'x'
+            )"
+            current_link="${raw_current_link%x}"
+            if [ "$current_link" = "$prior_val" ] && validate_target_ancestors "$target_rel"; then
+                echo "Already in original state: $target_rel"
+            else
+                echo "Error: target state changed at apply time: $target_rel" >&2
+                exit 1
+            fi
+        elif [ "$prior_kind" = "absent" ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+            echo "Already in original state: $target_rel"
+        else
+            echo "Error: target state changed at apply time: $target_rel" >&2
+            exit 1
         fi
     done
 
@@ -500,21 +551,19 @@ case "$1" in
         ;;
     --apply)
         shift
-        apply_target="latest"
+        apply_target=""
         apply_yes=false
         while [ $# -gt 0 ]; do
             case "$1" in
                 --yes | -y)
                     apply_yes=true
                     ;;
-                latest)
-                    apply_target="latest"
-                    ;;
                 -*)
                     exit "$EX_USAGE"
                     ;;
                 *)
-                    if [ "$apply_target" != "latest" ]; then
+                    if [ -n "$apply_target" ]; then
+                        echo "Error: multiple transaction selectors provided ('$apply_target' and '$1')" >&2
                         exit "$EX_USAGE"
                     fi
                     apply_target="$1"
@@ -522,7 +571,7 @@ case "$1" in
             esac
             shift
         done
-        cmd_apply "$apply_target" "$apply_yes"
+        cmd_apply "${apply_target:-latest}" "$apply_yes"
         ;;
     *)
         exit "$EX_USAGE"

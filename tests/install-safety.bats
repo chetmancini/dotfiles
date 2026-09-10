@@ -77,3 +77,22 @@ teardown() {
     # No completed transaction created
     [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
 }
+
+@test "installer invoked through a symlinked repo directory creates links that restore cleanly" {
+    local symlinked_repo="$TEST_ROOT/symlinked-repo"
+    ln -s "$DOTFILES_DIR" "$symlinked_repo"
+
+    run env HOME="$TEST_HOME" "$symlinked_repo/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    [ -L "$TEST_HOME/.zshrc" ]
+
+    # Plan restore using the symlinked repo path
+    run env HOME="$TEST_HOME" "$symlinked_repo/bin/restore" --plan latest
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"conflict"* ]]
+
+    # Apply restore using the symlinked repo path
+    run env HOME="$TEST_HOME" "$symlinked_repo/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ ! -L "$TEST_HOME/.zshrc" ]
+}
