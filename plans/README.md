@@ -30,7 +30,7 @@ when done.
 | 012 | Slim shell PATH / toys | P3 | S | — | DONE |
 | 013 | `dot install` + install characterization | P3 | M | 006; 009 helpful | DONE |
 | 014 | Unified structured `dot status` | P1 | M | — | DONE |
-| 015 | Transactional install + `dot restore` | P1 | M | — | TODO |
+| 015 | Transactional install + `dot restore` | P1 | M | — | DONE |
 | 016 | Guarded fast-forward `dot upgrade` | P1 | M | 014, 015 | TODO |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED` (reason)

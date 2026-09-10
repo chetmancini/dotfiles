@@ -9,6 +9,7 @@ available directly on PATH (`doctor`, `brew-sync`, …).
 dot help
 dot status
 dot install --plan --yes --skip-brew   # → ../install.sh
+dot restore --plan latest
 dot doctor --skip-tools
 dot brew-sync
 dot package-sync --update
@@ -22,6 +23,7 @@ dot update          # → update-everything
 |--------|----------|---------|
 | [`dot`](#dot) | Bash | Dispatcher: `dot <cmd>` for tools in this directory |
 | [`status`](#status) | Bash | Unified machine and dotfiles health status |
+| [`restore`](#restore) | Bash | Preview or reverse a versioned install transaction |
 | [`doctor`](#doctor) | Bash | Verify dotfiles installation health |
 | [`package-sync`](#package-sync) | Bash | Inspect or update global npm and pnpm packages |
 | [`cache-clean`](#cache-clean) | Bash | Preview or run supported package-cache cleanup |
@@ -46,6 +48,7 @@ script names still work.
 ```bash
 dot help
 dot install --plan --yes --skip-brew
+dot restore --plan latest
 dot doctor --skip-tools
 dot brew-sync --check
 dot package-sync --update
@@ -54,11 +57,44 @@ dot update
 ```
 
 **Features:**
-- Primary commands with descriptions (`install`, `doctor`, `brew-sync`, `package-sync`, `update`, …)
+- Primary commands with descriptions (`install`, `restore`, `doctor`, `brew-sync`, `package-sync`, `update`, …)
 - `dot install` runs repo-root `install.sh` with flags passed through
 - Auto-lists other executables in `bin/`
 - Rejects path traversal (`dot ../.zshrc` fails)
 - Passes through arguments and exit codes
+
+---
+
+### `restore`
+
+List, preview, or reverse managed symlink changes recorded by `install.sh`.
+Calling `dot restore` without an action prints help and makes no changes.
+
+```bash
+dot restore --list
+dot restore --plan latest
+dot restore --plan 20260810T153045-12345-6789
+dot restore --apply latest          # prompts before applying
+dot restore --apply latest --yes    # non-interactive
+```
+
+Transactions live under `~/.dotfiles-backup/`:
+
+```text
+latest
+<transaction-id>/
+  metadata
+  entries
+  payload/
+```
+
+The journal records only managed symlink targets. Restore validates the entire
+transaction and preflights every target before applying entries in reverse
+order. Any conflict refuses the whole operation; there is no force option.
+Files, directories, and raw prior symlink destinations are preserved, while an
+originally absent target is removed only when it is still the expected managed
+symlink. Historical timestamped backup folders without versioned `metadata`
+remain manual backups and are never guessed or migrated.
 
 ---
 

@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# restore: Preview or reverse versioned dotfiles install transactions.
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+DOTFILES_BIN="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd -P "$DOTFILES_BIN/.." && pwd)"
+
+# shellcheck source=bin/lib/transactions.sh
+source "$DOTFILES_BIN/lib/transactions.sh"
+
+EX_USAGE=64
+TARGETS=()
+PRIOR_KINDS=()
+PRIOR_VALUES=()
+INSTALLED_SOURCES=()
+ENTRY_STATES=()
+ENTRY_COUNT=0
+
+print_help() {
+    cat <<'EOF'
+Usage:
+  dot restore --list
+  dot restore --plan [latest|ID]
+  dot restore --apply [latest|ID] [--yes]
+  dot restore --help
+
+Restore only managed symlink targets recorded by a versioned install
+transaction. Apply preflights every target and refuses the entire restore if
+any target conflicts; there is no force mode.
+EOF
+}
+
+usage_error() {
+    echo "restore: $*" >&2
+    print_help >&2
+    exit "$EX_USAGE"
+}
+
+load_entries() {
+    local directory="$1"
+    local line sequence target_relative prior_kind prior_value installed_source_relative
+    local index=0 prior_target existing
+
+    transaction_validate_entries "$directory"
+    [ -d "$directory/payload" ] && [ ! -L "$directory/payload" ] || {
+        echo "restore: transaction payload is not a regular directory" >&2
+        return 1
+    }
+    while IFS= read -r line; do
+        IFS='|' read -r sequence target_relative prior_kind prior_value installed_source_relative <<<"$line"
+        prior_target="$HOME/$target_relative"
+        for ((existing = 0; existing < index; existing++)); do
+            [ "${TARGETS[$existing]}" != "$prior_target" ] || {
+                echo "restore: duplicate target in transaction: $target_relative" >&2
+                return 1
+            }
+        done
+        TARGETS[$index]="$prior_target"
+        PRIOR_KINDS[$index]="$prior_kind"
+        PRIOR_VALUES[$index]="$prior_value"
+        INSTALLED_SOURCES[$index]="$DOTFILES_DIR/$installed_source_relative"
+        index=$((index + 1))
+    done <"$directory/entries"
+    ENTRY_COUNT="$index"
+}
+
+load_transaction() {
+    local reference="$1"
+    local allowed_states="$2"
+
+    transaction_resolve_reference "$reference"
+    transaction_load_metadata "$TRANSACTION_DIR"
+    case ",$allowed_states," in
+        *,"$TX_STATE",*) ;;
+        *)
+            echo "restore: transaction $TRANSACTION_ID has state '$TX_STATE'; expected $allowed_states" >&2
+            return 1
+            ;;
+    esac
+    load_entries "$TRANSACTION_DIR"
+}
+
+is_missing() {
+    [ ! -e "$1" ] && [ ! -L "$1" ]
+}
+
+is_regular_file() {
+    [ -f "$1" ] && [ ! -L "$1" ]
+}
+
+is_regular_directory() {
+    [ -d "$1" ] && [ ! -L "$1" ]
+}
+
+classify_entry() {
+    local index="$1"
+    local target="${TARGETS[$index]}"
+    local prior_kind="${PRIOR_KINDS[$index]}"
+    local prior_value="${PRIOR_VALUES[$index]}"
+    local expected_source="${INSTALLED_SOURCES[$index]}"
+    local payload="$TRANSACTION_DIR/$prior_value"
+
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$expected_source" ]; then
+        case "$prior_kind" in
+            file)
+                is_regular_file "$payload" || return 1
+                ;;
+            directory)
+                is_regular_directory "$payload" || return 1
+                ;;
+        esac
+        ENTRY_STATES[$index]=restore
+        return 0
+    fi
+
+    case "$prior_kind" in
+        absent)
+            if is_missing "$target"; then
+                ENTRY_STATES[$index]=original
+                return 0
+            fi
+            ;;
+        symlink)
+            if [ -L "$target" ] && [ "$(readlink "$target")" = "$prior_value" ]; then
+                ENTRY_STATES[$index]=original
+                return 0
+            fi
+            if is_missing "$target" && [ -d "$(dirname "$target")" ]; then
+                ENTRY_STATES[$index]=restore
+                return 0
+            fi
+            ;;
+        file)
+            if is_regular_file "$target" && is_missing "$payload"; then
+                ENTRY_STATES[$index]=original
+                return 0
+            fi
+            if is_missing "$target" && is_regular_file "$payload" && [ -d "$(dirname "$target")" ]; then
+                ENTRY_STATES[$index]=restore
+                return 0
+            fi
+            ;;
+        directory)
+            if is_regular_directory "$target" && is_missing "$payload"; then
+                ENTRY_STATES[$index]=original
+                return 0
+            fi
+            if is_missing "$target" && is_regular_directory "$payload" && [ -d "$(dirname "$target")" ]; then
+                ENTRY_STATES[$index]=restore
+                return 0
+            fi
+            ;;
+    esac
+    return 1
+}
+
+preflight() {
+    local index conflicts=0 relative
+    for ((index = 0; index < ENTRY_COUNT; index++)); do
+        if ! classify_entry "$index"; then
+            relative="${TARGETS[$index]#"$HOME/"}"
+            echo "restore: conflict at $relative" >&2
+            conflicts=$((conflicts + 1))
+        fi
+    done
+    if [ "$conflicts" -gt 0 ]; then
+        echo "restore: refusing transaction; $conflicts conflict(s), no targets changed" >&2
+        return 1
+    fi
+}
+
+print_plan() {
+    local index relative prior_kind state
+    echo "Transaction: $TRANSACTION_ID"
+    echo "State: $TX_STATE"
+    if [ "$TX_STATE" = restored ]; then
+        echo "This transaction has already been restored."
+    fi
+    for ((index = 0; index < ENTRY_COUNT; index++)); do
+        relative="${TARGETS[$index]#"$HOME/"}"
+        prior_kind="${PRIOR_KINDS[$index]}"
+        state="${ENTRY_STATES[$index]}"
+        if [ "$state" = original ]; then
+            printf 'NO-OP   %s (already original)\n' "$relative"
+        elif [ "$prior_kind" = absent ]; then
+            printf 'REMOVE  %s (installed managed symlink)\n' "$relative"
+        else
+            printf 'RESTORE %s (%s)\n' "$relative" "$prior_kind"
+        fi
+    done
+}
+
+apply_entries() {
+    local index target prior_kind prior_value payload
+    for ((index = ENTRY_COUNT - 1; index >= 0; index--)); do
+        [ "${ENTRY_STATES[$index]}" = restore ] || continue
+        target="${TARGETS[$index]}"
+        prior_kind="${PRIOR_KINDS[$index]}"
+        prior_value="${PRIOR_VALUES[$index]}"
+        payload="$TRANSACTION_DIR/$prior_value"
+
+        case "$prior_kind" in
+            absent)
+                rm -f "$target"
+                ;;
+            symlink)
+                if [ -L "$target" ]; then
+                    rm -f "$target"
+                fi
+                ln -s "$prior_value" "$target"
+                ;;
+            file | directory)
+                if [ -L "$target" ]; then
+                    rm -f "$target"
+                fi
+                mv "$payload" "$target"
+                ;;
+        esac
+        printf 'Restored %s\n' "${target#"$HOME/"}"
+    done
+    transaction_update_state "$TRANSACTION_DIR" restored
+    echo "Transaction $TRANSACTION_ID restored."
+}
+
+list_transactions() {
+    local directory status=0
+    transaction_validate_backup_root || return 1
+    printf '%-32s %-12s %-20s %-40s %s\n' ID STATE CREATED_AT REPO_REVISION ENTRIES
+    while IFS= read -r directory; do
+        if transaction_load_metadata "$directory" && transaction_validate_entries "$directory"; then
+            printf '%-32s %-12s %-20s %-40s %s\n' \
+                "$TX_ID" "$TX_STATE" "$TX_CREATED_AT" "$TX_REPO_REVISION" "$TRANSACTION_ENTRY_COUNT"
+        else
+            echo "restore: invalid transaction directory: $(basename "$directory")" >&2
+            status=1
+        fi
+    done < <(transaction_list_directories)
+    return "$status"
+}
+
+run_plan() {
+    local reference="$1"
+    load_transaction "$reference" "complete,failed,restored"
+    preflight
+    print_plan
+}
+
+run_apply() {
+    local reference="$1"
+    local assume_yes="$2"
+    local answer
+
+    if ! transaction_resolve_reference "$reference" || ! transaction_load_metadata "$TRANSACTION_DIR"; then
+        return 1
+    fi
+    if [ "$TX_STATE" = restored ]; then
+        echo "restore: transaction $TRANSACTION_ID has already been restored" >&2
+        return 1
+    fi
+    case "$TX_STATE" in
+        complete | failed) ;;
+        *)
+            echo "restore: transaction $TRANSACTION_ID has state '$TX_STATE'; apply requires complete or failed" >&2
+            return 1
+            ;;
+    esac
+    load_entries "$TRANSACTION_DIR"
+    preflight
+    print_plan
+
+    if [ "$assume_yes" != true ]; then
+        if ! read -r -p "Apply this restore? [y/N] " answer; then
+            echo "restore: no confirmation input; refusing restore" >&2
+            return 1
+        fi
+        case "$answer" in
+            [Yy]*) ;;
+            *)
+                echo "Restore cancelled."
+                return 0
+                ;;
+        esac
+    fi
+    apply_entries
+}
+
+main() {
+    local action reference=latest assume_yes=false reference_seen=false
+    [ $# -gt 0 ] || {
+        print_help
+        return 0
+    }
+    action="$1"
+    shift
+
+    case "$action" in
+        --help | -h)
+            [ $# -eq 0 ] || usage_error "--help accepts no arguments"
+            print_help
+            ;;
+        --list)
+            [ $# -eq 0 ] || usage_error "--list accepts no arguments"
+            list_transactions
+            ;;
+        --plan)
+            [ $# -le 1 ] || usage_error "--plan accepts at most one transaction reference"
+            if [ $# -eq 1 ]; then
+                case "$1" in
+                    -*) usage_error "unknown option: $1" ;;
+                    *) reference="$1" ;;
+                esac
+            fi
+            run_plan "$reference"
+            ;;
+        --apply)
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --yes)
+                        [ "$assume_yes" = false ] || usage_error "--yes may be specified only once"
+                        assume_yes=true
+                        ;;
+                    -*) usage_error "unknown option: $1" ;;
+                    *)
+                        [ "$reference_seen" = false ] || usage_error "only one transaction reference is allowed"
+                        reference="$1"
+                        reference_seen=true
+                        ;;
+                esac
+                shift
+            done
+            run_apply "$reference" "$assume_yes"
+            ;;
+        *) usage_error "unknown action: $action" ;;
+    esac
+}
+
+main "$@"

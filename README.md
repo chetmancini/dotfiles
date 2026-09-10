@@ -19,6 +19,20 @@ cd ~/dotfiles
 doctor
 ```
 
+Each applied symlink change is recorded under `~/.dotfiles-backup/` as a
+versioned install transaction. Preview a rollback before applying it:
+
+```bash
+dot restore --list
+dot restore --plan latest
+dot restore --apply latest --yes
+```
+
+Restore validates the complete journal and every current target before changing
+anything. If one target conflicts with the recorded installed state, the whole
+restore is refused. Historical timestamped backup folders without a `metadata`
+file remain manual backups and are never inferred as transactions.
+
 ## What's Included
 
 | Tool | Config | Description |
@@ -83,6 +97,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 
 ### Bootstrap
 - `install.sh` supports interactive, preview, and headless installs (`--plan`, `--yes`, `--skip-brew`, `--with-optional-brew`, `--with-legacy-vim`, etc.)
+- Applied symlink changes create versioned transactions for conflict-safe preview and rollback with `dot restore`
 - `doctor` verifies core symlinks, zsh modules, TPM, and repo health checks (legacy Vim not required)
 - `status` provides fast, unified health checks across symlinks, repos, and Homebrew drift (`dot status` / `dot status --deep`)
 - `dot` dispatches `bin/` tools (`dot help`, `dot status`, `dot doctor`, `dot brew-sync`, …); scripts also stay on PATH
