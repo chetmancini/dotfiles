@@ -1449,3 +1449,57 @@ EOF
     [ "$(cat "$HOME/.config/yazi/nested/file")" = "original nested content" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
+
+@test "44. Resume rejects a restored target edited before payload cleanup" {
+    local tx_id="20260101T000000-111-830"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-resume-edit"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+"$RESTORE_REAL_MV" "$@"
+status=$?
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+if [ "$status" -eq 0 ] && [ "$destination" = "$RESTORE_FAIL_DESTINATION" ]; then
+    exit 75
+fi
+exit "$status"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_FAIL_DESTINATION="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    [ -f "$tx_dir/payload/0001" ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+
+    printf 'edited after interruption\n' >"$HOME/.gitconfig"
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$HOME/.gitconfig")" = "edited after interruption" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}

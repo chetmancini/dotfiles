@@ -21,6 +21,7 @@ TX_ID=
 TX_DIR=
 TX_STATE=
 TX_ENTRY_COUNT=
+TX_REPO_ROOT=
 SEQUENCES=()
 TARGETS=()
 KINDS=()
@@ -61,11 +62,13 @@ load_transaction() {
 
     TX_STATE=
     TX_ENTRY_COUNT=
+    TX_REPO_ROOT="$DOTFILES_DIR"
     while IFS='=' read -r key value; do
         case "$key" in
             id) metadata_id="$value" ;;
             state) TX_STATE="$value" ;;
             entry_count) TX_ENTRY_COUNT="$value" ;;
+            repo_root) TX_REPO_ROOT="$value" ;;
         esac
     done <<<"$metadata"
     [ "$metadata_id" = "$TX_ID" ] || {
@@ -173,6 +176,17 @@ path_matches_kind() {
     esac
 }
 
+payload_matches_target() {
+    local index="$1"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local target="$HOME/${TARGETS[$index]}"
+    case "${KINDS[$index]}" in
+        file) cmp -s "$payload" "$target" ;;
+        directory) diff -qr "$payload" "$target" >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
 restore_marker_path() {
     printf '%s/restore-%s' "$TX_DIR" "${SEQUENCES[$1]}"
 }
@@ -206,7 +220,7 @@ write_ready_marker() {
 classify_entry() {
     local index="$1"
     local target="$HOME/${TARGETS[$index]}"
-    local expected="$DOTFILES_DIR/${SOURCES[$index]}"
+    local expected="$TX_REPO_ROOT/${SOURCES[$index]}"
     local kind="${KINDS[$index]}"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
     local current_link marker stage nested
@@ -229,6 +243,7 @@ classify_entry() {
                 elif path_matches_kind "$target" "$kind"; then
                     if [ -e "$payload" ] || [ -L "$payload" ]; then
                         payload_matches_kind "$index" || return 1
+                        payload_matches_target "$index" || return 1
                     fi
                     ACTIONS[$index]=applied
                     return 0
@@ -430,6 +445,7 @@ restore_payload() {
     if [ "${ACTIONS[$index]}" = applied ]; then
         if [ -e "$payload" ] || [ -L "$payload" ]; then
             payload_matches_kind "$index" || return 1
+            payload_matches_target "$index" || return 1
             case "$kind" in
                 file) rm -f "$payload" ;;
                 directory) rm -r "$payload" ;;

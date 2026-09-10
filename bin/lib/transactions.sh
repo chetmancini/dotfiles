@@ -281,7 +281,7 @@ is_managed_symlink() {
 }
 
 # Read and strictly validate metadata from a transaction directory.
-# Only allowlisted keys (version, id, created_at, repo_revision, state) are accepted.
+# Only allowlisted keys are accepted.
 # Never sources or evals metadata. Outputs key=value on stdout on success.
 read_transaction_metadata() {
     local meta_file="$1"
@@ -291,8 +291,8 @@ read_transaction_metadata() {
     [ -f "$meta_file" ] && [ ! -L "$meta_file" ] || return 1
 
     local key val
-    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_state="" m_entry_count=""
-    local seen_version=false seen_id=false seen_created_at=false seen_repo_rev=false seen_state=false seen_entry_count=false
+    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_repo_root="" m_state="" m_entry_count=""
+    local seen_version=false seen_id=false seen_created_at=false seen_repo_rev=false seen_repo_root=false seen_state=false seen_entry_count=false
 
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
@@ -323,6 +323,12 @@ read_transaction_metadata() {
                 [ "$seen_repo_rev" = false ] || return 1
                 seen_repo_rev=true
                 m_repo_revision="$val"
+                ;;
+            repo_root)
+                [ "$seen_repo_root" = false ] || return 1
+                seen_repo_root=true
+                [[ "$val" = /* ]] || return 1
+                m_repo_root="$val"
                 ;;
             state)
                 [ "$seen_state" = false ] || return 1
@@ -356,6 +362,9 @@ read_transaction_metadata() {
 
     printf "version=%s\nid=%s\ncreated_at=%s\nrepo_revision=%s\nstate=%s\n" \
         "$m_version" "$m_id" "$m_created_at" "$m_repo_revision" "$m_state"
+    if [ -n "$m_repo_root" ]; then
+        printf "repo_root=%s\n" "$m_repo_root"
+    fi
     if [ -n "$m_entry_count" ]; then
         printf "entry_count=%s\n" "$m_entry_count"
     fi
@@ -370,6 +379,7 @@ write_transaction_metadata() {
     local repo_rev="$4"
     local state="$5"
     local entry_count="${6:-}"
+    local repo_root="${7:-}"
 
     validate_transaction_id "$id" || return 1
     case "$state" in
@@ -378,6 +388,10 @@ write_transaction_metadata() {
     esac
     [ -n "$created_at" ] || return 1
     [ -n "$repo_rev" ] || return 1
+    if [ -n "$repo_root" ]; then
+        [[ "$repo_root" = /* ]] || return 1
+        [[ "$repo_root" != *$'\n'* && "$repo_root" != *$'\r'* && "$repo_root" != *"|"* ]] || return 1
+    fi
 
     local meta_file="$tx_dir/metadata"
     local tmp_file
@@ -390,6 +404,9 @@ created_at=$created_at
 repo_revision=$repo_rev
 state=$state
 EOF
+    if [ -n "$repo_root" ]; then
+        printf "repo_root=%s\n" "$repo_root" >>"$tmp_file"
+    fi
     if [ -n "$entry_count" ]; then
         printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
     fi

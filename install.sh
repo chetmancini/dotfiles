@@ -345,7 +345,7 @@ create_symlink() {
             repo_rev="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
             local created_at
             created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" || {
+            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" "" "$DOTFILES_DIR" || {
                 echo "Error: failed to write transaction metadata" >&2
                 exit 1
             }
@@ -355,21 +355,30 @@ create_symlink() {
         local seq
         seq="$(printf "%04d" "$TRANSACTION_SEQUENCE")"
 
+        local prior_kind="$TARGET_KIND"
         local prior_value="$TARGET_PRIOR_VALUE"
-        case "$TARGET_KIND" in
+        case "$prior_kind" in
             file | directory)
                 prior_value="payload/$seq"
                 ;;
         esac
 
         # Append and flush journal record before any move, removal, or link creation
-        append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$TARGET_KIND" "$prior_value" "$source_rel" || {
+        append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$prior_kind" "$prior_value" "$source_rel" || {
             echo "Error: failed to append journal entry for $target_rel" >&2
             exit 1
         }
 
+        # Transaction setup and journal flushing can take time. Refuse to
+        # remove or move a target that no longer matches the recorded state.
+        if ! inspect_target "$target" || [ "$TARGET_KIND" != "$prior_kind" ] ||
+            { [ "$prior_kind" = symlink ] && [ "$TARGET_PRIOR_VALUE" != "$prior_value" ]; }; then
+            echo "Error: target changed before installation: $target_rel" >&2
+            return 1
+        fi
+
         # After the record is durable, move prior file/directory or remove prior symlink
-        case "$TARGET_KIND" in
+        case "$prior_kind" in
             file | directory)
                 mv "$target" "$CURRENT_TRANSACTION_DIR/payload/$seq"
                 print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"

@@ -188,3 +188,57 @@ teardown() {
     [ ! -e "$external_dir/yazi" ]
     [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
 }
+
+@test "installer rechecks a journaled symlink before removing it" {
+    local fake_bin="$TEST_ROOT/fake-bin"
+    local real_git
+    mkdir -p "$fake_bin" "$TEST_HOME/.config"
+    real_git="$(command -v git)"
+    ln -s "prior-yazi" "$TEST_HOME/.config/yazi"
+
+    cat <<'EOF' >"$fake_bin/git"
+#!/usr/bin/env bash
+/bin/rm -f "$INSTALL_RACE_TARGET"
+printf 'replacement created during transaction setup\n' >"$INSTALL_RACE_TARGET"
+exec "$INSTALL_REAL_GIT" "$@"
+EOF
+    chmod +x "$fake_bin/git"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_GIT="$real_git" \
+        INSTALL_RACE_TARGET="$TEST_HOME/.config/yazi" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed before installation: .config/yazi"* ]]
+    [ -f "$TEST_HOME/.config/yazi" ]
+    [ "$(cat "$TEST_HOME/.config/yazi")" = "replacement created during transaction setup" ]
+
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}
+
+@test "restore uses the repository path recorded before the checkout moved" {
+    local original_repo="$TEST_ROOT/original-repo"
+    local moved_repo="$TEST_ROOT/moved-repo"
+    local recorded_root
+    mkdir -p "$original_repo"
+    cp -R "$DOTFILES_DIR/." "$original_repo/"
+    recorded_root="$(cd -P "$original_repo" && pwd)"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    run env HOME="$TEST_HOME" "$original_repo/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    [ -L "$TEST_HOME/.gitconfig" ]
+    local tx_id
+    tx_id="$(tr -d '[:space:]' <"$TEST_HOME/.dotfiles-backup/latest")"
+    grep -Fqx "repo_root=$recorded_root" "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+
+    mv "$original_repo" "$moved_repo"
+    [ ! -e "$original_repo/.gitconfig" ]
+    run env HOME="$TEST_HOME" "$moved_repo/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ ! -L "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+}
