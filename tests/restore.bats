@@ -1293,3 +1293,62 @@ EOF
     [ "$(cat "$HOME/.zshrc")" = "original zshrc" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
+
+@test "40. Prior symlink comparison preserves trailing newlines" {
+    local tx_id="20260101T000000-111-826"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.gitconfig|symlink|original-target|.gitconfig" >"$tx_dir/entries"
+    python3 -c "import os; os.symlink('original-target\n', '$HOME/.gitconfig')"
+
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    raw="$(
+        readlink -n "$HOME/.gitconfig"
+        printf x
+    )"
+    [ "${raw%x}" = $'original-target\n' ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "41. Oversized entry count is rejected without integer coercion" {
+    local tx_id="20260101T000000-111-827"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=99999999999999999999999999999999999999999999999999
+EOF
+    printf 'original\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"journal entry count mismatch"* ]]
+    [[ "$output" != *"integer expression expected"* ]]
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"journal entry count mismatch"* ]]
+    [ -L "$HOME/.gitconfig" ]
+    [ -f "$tx_dir/payload/0001" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}

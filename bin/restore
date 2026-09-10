@@ -45,15 +45,6 @@ usage_error() {
     exit "$EX_USAGE"
 }
 
-read_raw_link() {
-    local raw
-    raw="$(
-        readlink -n "$1"
-        printf x
-    )" || return 1
-    printf '%s' "${raw%x}"
-}
-
 load_transaction() {
     local selector="$1"
     local metadata key value metadata_id=
@@ -156,7 +147,7 @@ load_entries() {
             }
             ;;
     esac
-    if [ -n "$TX_ENTRY_COUNT" ] && [ "${#TARGETS[@]}" -ne "$TX_ENTRY_COUNT" ]; then
+    if [ -n "$TX_ENTRY_COUNT" ] && [ "${#TARGETS[@]}" != "$TX_ENTRY_COUNT" ]; then
         echo "Error: journal entry count mismatch in transaction ${TX_ID}: expected ${TX_ENTRY_COUNT}, got ${#TARGETS[@]}" >&2
         return 1
     fi
@@ -205,7 +196,11 @@ classify_entry() {
             ;;
         symlink)
             if [ -L "$target" ]; then
-                current_link="$(read_raw_link "$target")" || return 1
+                current_link="$(
+                    readlink -n "$target" || exit 1
+                    printf x
+                )" || return 1
+                current_link="${current_link%x}"
                 if [ "$current_link" = "${PRIOR_VALUES[$index]}" ]; then
                     ACTIONS[$index]=original
                     return 0
