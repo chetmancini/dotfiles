@@ -26,6 +26,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
+          args: false
 
       - name: Check shell formatting
         run: make shell-format-check
