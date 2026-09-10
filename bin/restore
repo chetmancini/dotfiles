@@ -148,12 +148,14 @@ load_entries() {
         SOURCES+=("${fields[4]}")
     done <"$journal"
 
-    if [ "$TX_STATE" = complete ] || [ "$TX_STATE" = restored ]; then
-        [ -n "$TX_ENTRY_COUNT" ] || {
-            echo "Error: transaction ${TX_ID} is ${TX_STATE} but missing entry_count in metadata" >&2
-            return 1
-        }
-    fi
+    case "$TX_STATE" in
+        complete | restoring | restored)
+            [ -n "$TX_ENTRY_COUNT" ] || {
+                echo "Error: transaction ${TX_ID} is ${TX_STATE} but missing entry_count in metadata" >&2
+                return 1
+            }
+            ;;
+    esac
     if [ -n "$TX_ENTRY_COUNT" ] && [ "${#TARGETS[@]}" -ne "$TX_ENTRY_COUNT" ]; then
         echo "Error: journal entry count mismatch in transaction ${TX_ID}: expected ${TX_ENTRY_COUNT}, got ${#TARGETS[@]}" >&2
         return 1
@@ -190,13 +192,13 @@ classify_entry() {
 
     case "$kind" in
         file)
-            if [ "$TX_STATE" = failed ] && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
+            if { [ "$TX_STATE" = failed ] || [ "$TX_STATE" = restoring ]; } && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
                 ACTIONS[$index]=original
                 return 0
             fi
             ;;
         directory)
-            if [ "$TX_STATE" = failed ] && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
+            if { [ "$TX_STATE" = failed ] || [ "$TX_STATE" = restoring ]; } && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
                 ACTIONS[$index]=original
                 return 0
             fi
@@ -412,6 +414,14 @@ cmd_apply() {
                 ;;
         esac
         validate_actions apply || return 1
+    fi
+
+    if [ "$TX_STATE" != restoring ]; then
+        update_transaction_state "$TX_DIR" restoring "${#TARGETS[@]}" || {
+            echo "Error: failed to mark transaction state as restoring" >&2
+            return 1
+        }
+        TX_STATE=restoring
     fi
 
     for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do

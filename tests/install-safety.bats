@@ -142,3 +142,49 @@ teardown() {
     [ ! -e "$external_backup/latest" ]
     [ ! -L "$TEST_HOME/.zshrc" ]
 }
+
+@test "installer revalidates target ancestors after interactive confirmation" {
+    local external_dir="$TEST_ROOT/external-config"
+    local input_fifo="$TEST_ROOT/install-input"
+    local install_output="$TEST_ROOT/install-output"
+    local install_status
+    mkdir -p "$external_dir"
+    mkfifo "$input_fifo"
+
+    env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" \
+        --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear \
+        <"$input_fifo" >"$install_output" 2>&1 &
+    local install_pid=$!
+    exec 8>"$input_fifo"
+    printf 'y\n' >&8
+
+    local attempts=0
+    until grep -q "Target: $TEST_HOME/.config/yazi" "$install_output"; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 100 ]; then
+            kill "$install_pid" 2>/dev/null || true
+            exec 8>&-
+            fail "installer did not reach the yazi confirmation"
+        fi
+        sleep 0.05
+    done
+
+    rmdir "$TEST_HOME/.config"
+    ln -s "$external_dir" "$TEST_HOME/.config"
+    [ -L "$TEST_HOME/.config" ]
+    printf 'y\n' >&8
+    exec 8>&-
+    if wait "$install_pid"; then
+        install_status=0
+    else
+        install_status=$?
+    fi
+
+    if [ "$install_status" -eq 0 ]; then
+        cat "$install_output"
+        fail "installer accepted a symlinked target ancestor after confirmation"
+    fi
+    grep -q "target ancestor for .config/yazi changed while awaiting confirmation" "$install_output"
+    [ ! -e "$external_dir/yazi" ]
+    [ ! -f "$TEST_HOME/.dotfiles-backup/latest" ]
+}

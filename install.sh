@@ -296,6 +296,10 @@ create_symlink() {
     inspect_target "$target"
 
     if ask_yes_no "  Create this symlink?"; then
+        validate_target_ancestors_install "$target_rel" || {
+            echo "Error: target ancestor for $target_rel changed while awaiting confirmation" >&2
+            return 1
+        }
         if [ -L "$target" ] && is_managed_symlink "$target" "$source"; then
             print_success "Already correctly symlinked"
             return 0

@@ -350,7 +350,7 @@ read_transaction_metadata() {
     [ -n "$m_created_at" ] || return 1
     [ -n "$m_repo_revision" ] || return 1
     case "$m_state" in
-        in_progress | complete | failed | restored) ;;
+        in_progress | complete | failed | restoring | restored) ;;
         *) return 1 ;;
     esac
 
@@ -373,7 +373,7 @@ write_transaction_metadata() {
 
     validate_transaction_id "$id" || return 1
     case "$state" in
-        in_progress | complete | failed | restored) ;;
+        in_progress | complete | failed | restoring | restored) ;;
         *) return 1 ;;
     esac
     [ -n "$created_at" ] || return 1
@@ -405,7 +405,7 @@ update_transaction_state() {
     [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
 
     case "$new_state" in
-        in_progress | complete | failed | restored) ;;
+        in_progress | complete | failed | restoring | restored) ;;
         *) return 1 ;;
     esac
 
@@ -458,7 +458,8 @@ append_journal_entry() {
 
 # Resolve a transaction ID from 'latest' or an explicit ID.
 # Checks that the directory exists under DOTFILES_BACKUP_ROOT and metadata is valid.
-# If 'latest' is given, verifies the transaction ID points to a valid complete or restored transaction.
+# If 'latest' is given, verifies the transaction ID points to a transaction
+# that is ready to restore, being restored, or already restored.
 resolve_transaction() {
     local input="$1"
     local root
@@ -478,10 +479,10 @@ resolve_transaction() {
         meta="$(read_transaction_metadata "$tx_dir/metadata")" || return 1
         local state
         state="$(echo "$meta" | grep '^state=' | cut -d'=' -f2)"
-        # 'latest' resolves only a validated complete transaction ID (complete or restored)
-        if [ "$state" != "complete" ] && [ "$state" != "restored" ]; then
-            return 1
-        fi
+        case "$state" in
+            complete | restoring | restored) ;;
+            *) return 1 ;;
+        esac
     else
         resolved_id="$input"
         validate_transaction_id "$resolved_id" || return 1

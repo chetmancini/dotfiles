@@ -123,7 +123,7 @@ teardown() {
     [ ! -L "$HOME/.npmrc" ]
 }
 
-@test "6. latest resolves only a validated complete transaction ID" {
+@test "6. latest resolves only a validated restorable transaction ID" {
     # 1. Illegal characters in latest
     echo "../../evil" >"$TMP_BACKUP/latest"
     run "$DOTFILES_DIR/bin/restore" --plan latest
@@ -1228,4 +1228,66 @@ EOF
 
     run "$DOTFILES_DIR/bin/restore" --plan -y
     [ "$status" -eq 64 ]
+}
+
+@test "39. Interrupted restore resumes completed entries and finishes remaining work" {
+    local tx_id="20260101T000000-111-825"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=2
+EOF
+    printf 'original gitconfig\n' >"$tx_dir/payload/0001"
+    printf 'original zshrc\n' >"$tx_dir/payload/0002"
+    cat <<EOF >"$tx_dir/entries"
+0001|.gitconfig|file|payload/0001|.gitconfig
+0002|.zshrc|file|payload/0002|.zshrc
+EOF
+    printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+    ln -s "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+"$RESTORE_REAL_MV" "$@"
+status=$?
+destination=
+for argument in "$@"; do
+    destination="$argument"
+done
+if [ "$status" -eq 0 ] && [ "$destination" = "$RESTORE_COMPLETED_TARGET" ]; then
+    rm -f -- "$RESTORE_RACE_TARGET"
+    ln -s /dev/null "$RESTORE_RACE_TARGET"
+fi
+exit "$status"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_COMPLETED_TARGET="$HOME/.zshrc" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target state changed at apply time: .gitconfig"* ]]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    [ -f "$HOME/.zshrc" ]
+    [ "$(cat "$HOME/.zshrc")" = "original zshrc" ]
+    [ ! -e "$tx_dir/payload/0002" ]
+    [ -f "$tx_dir/payload/0001" ]
+
+    rm -f "$HOME/.gitconfig"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.gitconfig")" = "original gitconfig" ]
+    [ "$(cat "$HOME/.zshrc")" = "original zshrc" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
 }
