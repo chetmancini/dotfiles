@@ -831,3 +831,77 @@ EOF
     [ -f "$tx_dir/payload/0001" ]
     [ -f "$tx_dir/payload/0002" ]
 }
+
+@test "27. Symlink target with trailing newlines is not treated as managed symlink" {
+    local tx_id="20260101T000000-111-813"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+    echo "original content" >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+
+    # Symlink target has trailing newline pointing to expected source + \n
+    python3 -c "import os; os.symlink('$DOTFILES_DIR/.gitconfig\n', '$HOME/.gitconfig')"
+
+    # Plan reports conflict because link is not identified as managed
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    # Apply aborts before modifying the user-modified symlink
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+
+    # Symlink remains with its trailing newline
+    [ -L "$HOME/.gitconfig" ]
+    raw="$(
+        readlink -n "$HOME/.gitconfig"
+        printf x
+    )"
+    [ "${raw%x}" = "$DOTFILES_DIR/.gitconfig"$'\n' ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}
+
+@test "28. Symlinked entries journal is rejected before restore" {
+    local tx_id="20260101T000000-111-814"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+EOF
+
+    # External entries file outside the transaction directory
+    local external_entries="$TMP_HOME/external_entries"
+    echo "0001|.gitconfig|absent|-|.gitconfig" >"$external_entries"
+
+    # Symlink entries into transaction directory
+    ln -s "$external_entries" "$tx_dir/entries"
+
+    # Target is managed symlink
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    # Plan rejects symlinked entries
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"symlink"* ]]
+
+    # Apply rejects symlinked entries before touching any file
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"symlink"* ]]
+
+    # Symlink in HOME is untouched
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+}

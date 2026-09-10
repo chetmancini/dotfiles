@@ -179,8 +179,18 @@ is_managed_symlink() {
     local expected="$2"
     [ -L "$target" ] || return 1
 
-    local link_dest
-    link_dest="$(readlink "$target")" || return 1
+    local raw_link_dest link_dest
+    raw_link_dest="$(
+        readlink -n "$target"
+        printf 'x'
+    )" || return 1
+    link_dest="${raw_link_dest%x}"
+
+    # If the symlink contains newlines or CRs, it is not a valid managed dotfiles link
+    if [[ "$link_dest" == *$'\n'* || "$link_dest" == *$'\r'* ]]; then
+        return 1
+    fi
+
     if [ "$link_dest" = "$expected" ]; then
         return 0
     fi
@@ -352,6 +362,8 @@ append_journal_entry() {
     local val="$5"
     local installed="$6"
 
+    [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
+    [ ! -L "$tx_dir/entries" ] || return 1
     validate_journal_entry "$seq" "$target" "$kind" "$val" "$installed" || return 1
     printf "%s|%s|%s|%s|%s\n" "$seq" "$target" "$kind" "$val" "$installed" >>"$tx_dir/entries"
 }

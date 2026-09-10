@@ -60,7 +60,7 @@ cmd_list() {
         created_at="$(echo "$meta" | grep '^created_at=' | cut -d'=' -f2-)"
         repo_rev="$(echo "$meta" | grep '^repo_revision=' | cut -d'=' -f2-)"
 
-        if [ -f "$tx_dir/entries" ]; then
+        if [ -f "$tx_dir/entries" ] && [ ! -L "$tx_dir/entries" ]; then
             entry_count="$(wc -l <"$tx_dir/entries" | tr -d '[:space:]')"
         fi
 
@@ -113,6 +113,10 @@ cmd_plan() {
     fi
 
     local entries_file="$tx_dir/entries"
+    if [ -L "$entries_file" ] || { [ -e "$entries_file" ] && [ ! -f "$entries_file" ]; }; then
+        echo "Error: entries journal in transaction ${tx_id} is invalid or symlinked" >&2
+        exit 1
+    fi
     if [ ! -f "$entries_file" ]; then
         echo "No entries journaled for transaction ${tx_id}."
         exit 0
@@ -384,6 +388,10 @@ cmd_apply() {
     fi
 
     local entries_file="$tx_dir/entries"
+    if [ -L "$entries_file" ] || { [ -e "$entries_file" ] && [ ! -f "$entries_file" ]; }; then
+        echo "Error: entries journal in transaction ${tx_id} is invalid or symlinked" >&2
+        exit 1
+    fi
     if [ ! -f "$entries_file" ]; then
         echo "No entries journaled for transaction ${tx_id}."
         exit 0
