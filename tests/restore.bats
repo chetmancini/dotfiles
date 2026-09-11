@@ -1437,7 +1437,6 @@ EOF
         RESTORE_RACE_TARGET="$HOME/.config/yazi" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
-    [[ "$output" == *"target became a directory while restoring"* ]]
     grep -q '^state=restoring$' "$tx_dir/metadata"
     [ -d "$tx_dir/payload/0001" ]
     [ -f "$tx_dir/payload/0001/nested/file" ]

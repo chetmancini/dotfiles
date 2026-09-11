@@ -242,7 +242,7 @@ copy_directory_tree() {
     local source="$1"
     local destination="$2"
     mkdir "$destination" || return 1
-    (cd "$source" && tar -cf - .) | (cd "$destination" && tar -xpf -) || return 1
+    (cd "$source" && tar --format=pax -cf - .) | (cd "$destination" && tar -xpf -) || return 1
     touch -r "$source" "$destination"
 }
 
