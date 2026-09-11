@@ -341,6 +341,36 @@ raise SystemExit(tree(sys.argv[1]) != tree(sys.argv[2]))
 PY
 }
 
+directory_hardlinks_match() {
+    python3 - "$1" "$2" <<'PY'
+import os
+import stat
+import sys
+
+def topology(path):
+    groups = {}
+    def fail(error):
+        raise error
+
+    for root, _, files in os.walk(path, followlinks=False, onerror=fail):
+        for name in files:
+            entry = os.path.join(root, name)
+            metadata = os.lstat(entry)
+            if stat.S_ISREG(metadata.st_mode):
+                relative = os.path.relpath(entry, path)
+                groups.setdefault((metadata.st_dev, metadata.st_ino), []).append(relative)
+
+    topology_by_path = {}
+    for paths in groups.values():
+        if len(paths) > 1:
+            representative = min(paths)
+            topology_by_path.update((relative, representative) for relative in paths)
+    return topology_by_path
+
+raise SystemExit(topology(sys.argv[1]) != topology(sys.argv[2]))
+PY
+}
+
 paths_match() {
     local source="$1"
     local target="$2"
@@ -350,10 +380,15 @@ paths_match() {
     local source_count=0 target_count=0
     local -a source_inodes=() target_inodes=() source_groups=() target_groups=()
     local batch_python_xattrs=false
+    local batch_python_hardlinks=false
 
     if [ "$kind" = directory ] && ! command -v xattr >/dev/null 2>&1 && ! command -v getfattr >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
         directory_python_xattrs_match "$source" "$target" || return 1
         batch_python_xattrs=true
+    fi
+    if [ "$kind" = directory ] && command -v python3 >/dev/null 2>&1; then
+        directory_hardlinks_match "$source" "$target" || return 1
+        batch_python_hardlinks=true
     fi
 
     source_metadata="$(path_metadata "$source")" || return 1
@@ -383,7 +418,7 @@ paths_match() {
                     [ "$source_link" = "$target_link" ] || return 1
                 elif [ -f "$source/$relative" ]; then
                     [ -f "$target/$relative" ] && cmp -s "$source/$relative" "$target/$relative" || return 1
-                    if [ "$(path_link_count "$source/$relative")" -gt 1 ]; then
+                    if [ "$batch_python_hardlinks" = false ] && { [ "$(path_link_count "$source/$relative")" -gt 1 ] || [ "$(path_link_count "$target/$relative")" -gt 1 ]; }; then
                         source_inode="$(path_identity "$source/$relative")" || return 1
                         target_inode="$(path_identity "$target/$relative")" || return 1
                         source_group="$relative"

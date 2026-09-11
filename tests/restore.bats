@@ -2178,3 +2178,18 @@ EOF
     [ "$(cat "$HOME/.gitconfig")" = "original content" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
+
+@test "64. Directory identity rejects hard links introduced only in the target" {
+    local source="$TMP_HOME/independent-source"
+    local target="$TMP_HOME/linked-target"
+    mkdir "$source" "$target"
+    printf 'same content\n' >"$source/a"
+    cp -p "$source/a" "$source/b"
+    cp -p "$source/a" "$target/a"
+    ln "$target/a" "$target/b"
+    touch -r "$source" "$target"
+
+    run bash -c 'source "$1"; paths_match "$2" "$3" directory' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
+    [ "$status" -ne 0 ]
+}
