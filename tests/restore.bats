@@ -1911,9 +1911,9 @@ EOF
 @test "57. Interrupted recursive payload cleanup resumes from its recorded state" {
     local tx_id="20260101T000000-111-840"
     local tx_dir="$TMP_BACKUP/$tx_id"
-    local cleanup="$tx_dir/restore-cleanup-0001"
+    local payload="$tx_dir/payload/0001"
     local fake_bin="$TMP_HOME/fake-bin-cleanup"
-    mkdir -p "$tx_dir/payload/0001" "$HOME/.config" "$fake_bin"
+    mkdir -p "$payload" "$HOME/.config" "$fake_bin"
     cat <<EOF >"$tx_dir/metadata"
 version=1
 id=$tx_id
@@ -1922,8 +1922,8 @@ repo_revision=dummy
 state=complete
 entry_count=1
 EOF
-    printf 'first original\n' >"$tx_dir/payload/0001/first"
-    printf 'second original\n' >"$tx_dir/payload/0001/second"
+    printf 'first original\n' >"$payload/first"
+    printf 'second original\n' >"$payload/second"
     echo "0001|.config/yazi|directory|payload/0001|yazi" >"$tx_dir/entries"
     printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
     ln -s "$DOTFILES_DIR/yazi" "$HOME/.config/yazi"
@@ -1941,22 +1941,95 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_RM="$(command -v rm)" \
-        RESTORE_FAIL_CLEANUP="$cleanup" \
+        RESTORE_FAIL_CLEANUP="$payload" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
-    grep -q '^cleaning$' "$tx_dir/restore-0001"
-    [ ! -e "$tx_dir/payload/0001" ]
-    [ ! -e "$cleanup/first" ]
-    [ "$(cat "$cleanup/second")" = "second original" ]
+    grep -q '^deleting$' "$tx_dir/restore-0001"
+    [ ! -e "$payload/first" ]
+    [ "$(cat "$payload/second")" = "second original" ]
     [ "$(cat "$HOME/.config/yazi/first")" = "first original" ]
     [ "$(cat "$HOME/.config/yazi/second")" = "second original" ]
 
     run "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -eq 0 ]
-    [ ! -e "$cleanup" ]
+    [ ! -e "$payload" ]
     [ ! -e "$tx_dir/restore-0001" ]
     [ "$(cat "$HOME/.config/yazi/first")" = "first original" ]
     [ "$(cat "$HOME/.config/yazi/second")" = "second original" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "58. Cleaning state preserves payload when the restored target changes" {
+    local tx_id="20260101T000000-111-841"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    printf 'edited after placement\n' >"$HOME/.gitconfig"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf 'cleaning\n' >"$tx_dir/restore-0001"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$HOME/.gitconfig")" = "edited after placement" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    grep -q '^cleaning$' "$tx_dir/restore-0001"
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "59. Stale in-progress install recovers while a live installer is refused" {
+    local live_id="20260101T000000-111-842"
+    local live_dir="$TMP_BACKUP/$live_id"
+    mkdir -p "$live_dir"
+    cat <<EOF >"$live_dir/metadata"
+version=1
+id=$live_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=in_progress
+owner_pid=$$
+EOF
+    touch "$live_dir/entries"
+
+    run "$DOTFILES_DIR/bin/restore" --plan "$live_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"active installer process"* ]]
+    grep -q '^state=in_progress$' "$live_dir/metadata"
+
+    local stale_id="20260101T000000-111-843"
+    local stale_dir="$TMP_BACKUP/$stale_id"
+    local dead_pid
+    sh -c 'exit 0' &
+    dead_pid=$!
+    wait "$dead_pid"
+    mkdir -p "$stale_dir/payload"
+    cat <<EOF >"$stale_dir/metadata"
+version=1
+id=$stale_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=in_progress
+owner_pid=$dead_pid
+EOF
+    printf 'original content\n' >"$stale_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$stale_dir/entries"
+    printf '%s\n' "$stale_id" >"$TMP_BACKUP/latest"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --plan latest
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"(state: failed)"* ]]
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+    grep -q '^state=restored$' "$stale_dir/metadata"
 }
