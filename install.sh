@@ -282,6 +282,56 @@ stage_backup_payload() {
     rmdir "$copy_dir"
 }
 
+install_symlink_anchored() {
+    local target_rel="$1" source="$2" prior_kind="$3" prior_value="$4" name="$5"
+    local parent_rel target_name
+    parent_rel="$(dirname "$target_rel")"
+    target_name="$(basename "$target_rel")"
+
+    (
+        local current="$HOME" part target
+        local -a parent_parts=()
+        cd -P "$HOME" || return 1
+        [ "$HOME" -ef . ] || return 1
+        if [ "$parent_rel" != . ]; then
+            IFS='/' read -r -a parent_parts <<<"$parent_rel"
+            for part in "${parent_parts[@]}"; do
+                [ -n "$part" ] || continue
+                [ ! -L "$part" ] || return 1
+                if [ ! -e "$part" ]; then
+                    mkdir "$part" || return 1
+                fi
+                [ -d "$part" ] && [ ! -L "$part" ] || return 1
+                cd -P "$part" || return 1
+                current="$current/$part"
+                [ "$current" -ef . ] || return 1
+            done
+        fi
+        target="./$target_name"
+
+        inspect_target "$target" || return 1
+        [ "$TARGET_KIND" = "$prior_kind" ] || return 1
+        case "$prior_kind" in
+            file | directory) paths_match "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" "$prior_kind" || return 1 ;;
+            symlink) [ "$TARGET_PRIOR_VALUE" = "$prior_value" ] || return 1 ;;
+        esac
+
+        case "$prior_kind" in
+            file | directory)
+                guarded_remove_path "$target" "$prior_kind" "$CURRENT_TRANSACTION_DIR/$prior_value" install || return 1
+                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/$prior_value"
+                ;;
+            symlink)
+                guarded_remove_path "$target" symlink "$prior_value" install || return 1
+                print_info "Existing symlink found, replaced"
+                ;;
+        esac
+        place_symlink_no_clobber "$source" "$target" install || return 1
+        validate_target_ancestors_install "$target_rel" || return 1
+        [ "$current" -ef . ]
+    )
+}
+
 # Create a symlink with explanation and transactional safety.
 create_symlink() {
     local source_rel="$1"
@@ -421,34 +471,9 @@ create_symlink() {
             }
         fi
 
-        # After the record and any backup are durable, remove the prior target.
-        case "$prior_kind" in
-            file)
-                guarded_remove_path "$target" file "$CURRENT_TRANSACTION_DIR/$prior_value" install || {
-                    echo "Error: target changed before removal: $target_rel" >&2
-                    return 1
-                }
-                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
-                ;;
-            directory)
-                guarded_remove_path "$target" directory "$CURRENT_TRANSACTION_DIR/$prior_value" install || {
-                    echo "Error: target changed before removal: $target_rel" >&2
-                    return 1
-                }
-                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
-                ;;
-            symlink)
-                guarded_remove_path "$target" symlink "$prior_value" install || {
-                    echo "Error: target changed before removal: $target_rel" >&2
-                    return 1
-                }
-                print_info "Existing symlink found, replaced"
-                ;;
-            absent) ;;
-        esac
-
-        mkdir -p "$(dirname "$target")"
-        if ! place_symlink_no_clobber "$source" "$target" install; then
+        # Hold the validated parent as the working directory while removing and
+        # placing the target so a pathname swap cannot redirect either action.
+        if ! install_symlink_anchored "$target_rel" "$source" "$prior_kind" "$prior_value" "$name"; then
             echo "Error: target changed while creating symlink: $target_rel" >&2
             return 1
         fi

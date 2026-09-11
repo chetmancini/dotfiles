@@ -345,9 +345,10 @@ paths_match() {
     local source="$1"
     local target="$2"
     local kind="$3"
-    local relative prior source_metadata target_metadata source_link target_link
+    local relative source_metadata target_metadata source_link target_link
+    local source_inode target_inode source_group target_group group_index
     local source_count=0 target_count=0
-    local -a regular_paths=()
+    local -a source_inodes=() target_inodes=() source_groups=() target_groups=()
     local batch_python_xattrs=false
 
     if [ "$kind" = directory ] && ! command -v xattr >/dev/null 2>&1 && ! command -v getfattr >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
@@ -382,14 +383,33 @@ paths_match() {
                     [ "$source_link" = "$target_link" ] || return 1
                 elif [ -f "$source/$relative" ]; then
                     [ -f "$target/$relative" ] && cmp -s "$source/$relative" "$target/$relative" || return 1
-                    for prior in "${regular_paths[@]}"; do
-                        if [ "$source/$relative" -ef "$source/$prior" ]; then
-                            [ "$target/$relative" -ef "$target/$prior" ] || return 1
-                        else
-                            [ ! "$target/$relative" -ef "$target/$prior" ] || return 1
+                    if [ "$(path_link_count "$source/$relative")" -gt 1 ]; then
+                        source_inode="$(path_identity "$source/$relative")" || return 1
+                        target_inode="$(path_identity "$target/$relative")" || return 1
+                        source_group="$relative"
+                        target_group="$relative"
+                        for group_index in "${!source_inodes[@]}"; do
+                            if [ "${source_inodes[$group_index]}" = "$source_inode" ]; then
+                                source_group="${source_groups[$group_index]}"
+                                break
+                            fi
+                        done
+                        if [ "$source_group" = "$relative" ]; then
+                            source_inodes+=("$source_inode")
+                            source_groups+=("$relative")
                         fi
-                    done
-                    regular_paths+=("$relative")
+                        for group_index in "${!target_inodes[@]}"; do
+                            if [ "${target_inodes[$group_index]}" = "$target_inode" ]; then
+                                target_group="${target_groups[$group_index]}"
+                                break
+                            fi
+                        done
+                        if [ "$target_group" = "$relative" ]; then
+                            target_inodes+=("$target_inode")
+                            target_groups+=("$relative")
+                        fi
+                        [ "$source_group" = "$target_group" ] || return 1
+                    fi
                 elif [ -d "$source/$relative" ]; then
                     [ -d "$target/$relative" ] || return 1
                 fi
@@ -401,6 +421,27 @@ paths_match() {
             ;;
         *) return 1 ;;
     esac
+}
+
+sync_file_and_parent() {
+    local path="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$path" <<'PY'
+import os
+import sys
+
+path = sys.argv[1]
+with open(path, "rb") as handle:
+    os.fsync(handle.fileno())
+directory = os.open(os.path.dirname(path), os.O_RDONLY)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+    else
+        sync
+    fi
 }
 
 path_link_count() {
@@ -770,7 +811,8 @@ append_journal_entry() {
     [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
     [ ! -L "$tx_dir/entries" ] || return 1
     validate_journal_entry "$seq" "$target" "$kind" "$val" "$installed" || return 1
-    printf "%s|%s|%s|%s|%s\n" "$seq" "$target" "$kind" "$val" "$installed" >>"$tx_dir/entries"
+    printf "%s|%s|%s|%s|%s\n" "$seq" "$target" "$kind" "$val" "$installed" >>"$tx_dir/entries" || return 1
+    sync_file_and_parent "$tx_dir/entries"
 }
 
 # Resolve a transaction ID from 'latest' or an explicit ID.

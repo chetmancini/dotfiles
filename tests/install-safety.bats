@@ -360,7 +360,7 @@ EOF
 
     run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
         INSTALL_REAL_MV="$(command -v mv)" \
-        INSTALL_RACE_TARGET="$TEST_HOME/.config/yazi" \
+        INSTALL_RACE_TARGET="./yazi" \
         "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
     [ "$status" -ne 0 ]
     [[ "$output" == *"target changed while creating symlink: .config/yazi"* ]]
@@ -396,16 +396,74 @@ EOF
     run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
         INSTALL_REAL_MV="$(command -v mv)" \
         INSTALL_REAL_RM="$(command -v rm)" \
-        INSTALL_RACE_TARGET="$TEST_HOME/.gitconfig" \
+        INSTALL_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
     [ "$status" -ne 0 ]
-    [[ "$output" == *"target changed before removal: .gitconfig"* ]]
+    [[ "$output" == *"target changed while creating symlink: .gitconfig"* ]]
     [ "$(cat "$TEST_HOME/.gitconfig")" = "replacement created after backup" ]
 
     local tx_id
     tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
     [ "$(cat "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008")" = "original git config" ]
     grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}
+
+@test "installer placement stays anchored when its parent path is replaced" {
+    local fake_bin="$TEST_ROOT/fake-parent-placement-bin"
+    local saved_parent="$TEST_HOME/.config-original"
+    local external="$TEST_ROOT/external-parent"
+    mkdir -p "$fake_bin" "$external"
+
+    cat <<'EOF' >"$fake_bin/ln"
+#!/usr/bin/env bash
+destination="${@: -1}"
+case "$destination" in
+    ./.install.stage.*)
+        if [ ! -e "$INSTALL_RACE_DONE" ]; then
+            : >"$INSTALL_RACE_DONE"
+            "$INSTALL_REAL_MV" "$INSTALL_PARENT" "$INSTALL_SAVED_PARENT"
+            "$INSTALL_REAL_LN" -s "$INSTALL_EXTERNAL" "$INSTALL_PARENT"
+        fi
+        ;;
+esac
+exec "$INSTALL_REAL_LN" "$@"
+EOF
+    chmod +x "$fake_bin/ln"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_LN="$(command -v ln)" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_PARENT="$TEST_HOME/.config" \
+        INSTALL_SAVED_PARENT="$saved_parent" \
+        INSTALL_EXTERNAL="$external" \
+        INSTALL_RACE_DONE="$TEST_ROOT/parent-placement-raced" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while creating symlink: .config/yazi"* ]]
+    [ -L "$TEST_HOME/.config" ]
+    [ -z "$(find "$external" -mindepth 1 -print -quit)" ]
+    [ -L "$saved_parent/yazi" ]
+}
+
+@test "installer stops before mutation when journal sync fails" {
+    local fake_bin="$TEST_ROOT/fake-journal-sync-bin"
+    mkdir -p "$fake_bin"
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ]; then
+    exit 75
+fi
+exec "$INSTALL_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to append journal entry for .config/yazi"* ]]
+    [ ! -e "$TEST_HOME/.config/yazi" ]
+    [ ! -L "$TEST_HOME/.config/yazi" ]
 }
 
 @test "install and restore preserve regular-file extended attributes" {
