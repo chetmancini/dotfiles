@@ -479,6 +479,25 @@ PY
     fi
 }
 
+sync_parent_directory() {
+    local path="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$path" <<'PY'
+import os
+import sys
+
+parent = os.path.dirname(sys.argv[1]) or "."
+directory = os.open(parent, os.O_RDONLY)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+    else
+        sync
+    fi
+}
+
 sync_tree_and_parent() {
     local path="$1"
     if command -v python3 >/dev/null 2>&1; then

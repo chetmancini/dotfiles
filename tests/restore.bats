@@ -1568,7 +1568,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"target changed while restoring symlink"* ]]
@@ -1612,7 +1612,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"target changed while restoring symlink"* ]]
@@ -1776,7 +1776,7 @@ EOF
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_RM="$(command -v rm)" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"target changed while removing managed symlink"* ]]
@@ -1849,7 +1849,7 @@ EOF
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_RM="$(command -v rm)" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"target changed while removing managed symlink"* ]]
@@ -2271,4 +2271,123 @@ EOF
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$tree"
     [ "$status" -eq 0 ]
     [ -p "$tree/channel" ]
+}
+
+@test "68. Restore marker refuses a failed record write" {
+    local tx_id="20260101T000000-111-851"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-marker-write"
+    local blocked_temp="$TMP_HOME/blocked-marker-temp"
+    mkdir -p "$tx_dir/payload" "$fake_bin" "$blocked_temp"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mktemp"
+#!/usr/bin/env bash
+if [[ "${1:-}" == */restore-*.tmp.* ]]; then
+    printf '%s\n' "$RESTORE_BLOCKED_TEMP"
+    exit 0
+fi
+exec "$RESTORE_REAL_MKTEMP" "$@"
+EOF
+    chmod +x "$fake_bin/mktemp"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_BLOCKED_TEMP="$blocked_temp" \
+        RESTORE_REAL_MKTEMP="$(command -v mktemp)" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ ! -e "$tx_dir/restore-0001" ]
+    [ -z "$(find "$tx_dir" -maxdepth 1 -name 'restore-0001.tmp.*' -print -quit)" ]
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+}
+
+@test "69. Symlink restore stays anchored when its parent path is replaced" {
+    local tx_id="20260101T000000-111-849"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-symlink-parent-race"
+    local saved_parent="$HOME/.config-original"
+    local external="$TMP_BACKUP/external-symlink-parent"
+    mkdir -p "$tx_dir/payload" "$HOME/.config" "$fake_bin" "$external"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.config/item|symlink|prior/target|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.config/item"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+if [ "${1:-}" = -n ] && [ "${2:-}" = ./item ] && [ ! -e "$RESTORE_RACE_DONE" ]; then
+    : >"$RESTORE_RACE_DONE"
+    "$RESTORE_REAL_MV" "$RESTORE_PARENT" "$RESTORE_SAVED_PARENT"
+    ln -s "$RESTORE_EXTERNAL" "$RESTORE_PARENT"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_PARENT="$HOME/.config" \
+        RESTORE_SAVED_PARENT="$saved_parent" \
+        RESTORE_EXTERNAL="$external" \
+        RESTORE_RACE_DONE="$TMP_HOME/symlink-parent-raced" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ -L "$HOME/.config" ]
+    [ -z "$(find "$external" -mindepth 1 -print -quit)" ]
+    [ -L "$saved_parent/item" ]
+    [ "$(readlink "$saved_parent/item")" = "prior/target" ]
+}
+
+@test "70. Symlink restore syncs its parent before final state" {
+    local tx_id="20260101T000000-111-850"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-symlink-sync"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.zshrc|symlink|prior/target|.zshrc" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [ "${2:-}" = ./.zshrc ]; then
+    exit 75
+fi
+exec "$RESTORE_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env PATH="$fake_bin:$PATH" RESTORE_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ -L "$HOME/.zshrc" ]
+    [ "$(readlink "$HOME/.zshrc")" = "prior/target" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
 }

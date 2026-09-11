@@ -253,8 +253,14 @@ write_restore_marker() {
     [ -z "$identity" ] || record="${state}|${identity}"
     [ ! -L "$marker" ] && { [ ! -e "$marker" ] || [ -f "$marker" ]; } || return 1
     tmp="$(mktemp "$TX_DIR/restore-${SEQUENCES[$index]}.tmp.XXXXXX")" || return 1
-    printf '%s\n' "$record" >"$tmp"
-    mv -f "$tmp" "$marker" || return 1
+    if ! printf '%s\n' "$record" >"$tmp"; then
+        rm -f "$tmp" 2>/dev/null || true
+        return 1
+    fi
+    if ! mv -f "$tmp" "$marker"; then
+        rm -f "$tmp" 2>/dev/null || true
+        return 1
+    fi
     sync_file_and_parent "$marker"
 }
 
@@ -509,17 +515,34 @@ cmd_plan() {
     [ "$actions" -gt 0 ] && echo "Preview only. No files were modified." || echo "No actions required: all targets are already in their pre-install state."
 }
 
-restore_symlink() {
+restore_link_entry() {
     local index="$1"
-    local target="$HOME/${TARGETS[$index]}"
+    local absolute_target="$HOME/${TARGETS[$index]}"
+    local parent target_name
+    parent="$(dirname "$absolute_target")"
+    target_name="$(basename "$absolute_target")"
 
-    if [ "${ACTIONS[$index]}" = managed ]; then
-        guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
-    fi
-    if ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
-        echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
-        return 1
-    fi
+    (
+        local target="./$target_name"
+        cd -P "$parent" || return 1
+        validate_target_ancestors "${TARGETS[$index]}" || return 1
+        [ "$parent" -ef . ] || return 1
+
+        if [ "${ACTIONS[$index]}" = managed ]; then
+            if ! guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore; then
+                echo "Error: target changed while removing managed symlink: ${TARGETS[$index]}" >&2
+                return 1
+            fi
+        fi
+        if [ "${KINDS[$index]}" = symlink ] && ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
+            echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
+            return 1
+        fi
+
+        sync_parent_directory "$target" || return 1
+        validate_target_ancestors "${TARGETS[$index]}" || return 1
+        [ "$parent" -ef . ]
+    )
 }
 
 delete_restored_payload() {
@@ -660,7 +683,6 @@ restore_payload_in_parent() {
 apply_entry() {
     local index="$1"
     local expected_action="${ACTIONS[$index]}"
-    local target="$HOME/${TARGETS[$index]}"
 
     if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
         echo "Error: target state changed at apply time: ${TARGETS[$index]}" >&2
@@ -669,14 +691,11 @@ apply_entry() {
     case "${ACTIONS[$index]}:${KINDS[$index]}" in
         original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
         managed:absent)
-            if ! guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore; then
-                echo "Error: target changed while removing managed symlink: ${TARGETS[$index]}" >&2
-                return 1
-            fi
+            restore_link_entry "$index" || return 1
             echo "Removed managed symlink: ${TARGETS[$index]}"
             ;;
         managed:symlink | missing:symlink)
-            restore_symlink "$index" || return 1
+            restore_link_entry "$index" || return 1
             echo "Restored symlink: ${TARGETS[$index]} -> ${PRIOR_VALUES[$index]}"
             ;;
         applied:file | applied:directory | prepared:file | prepared:directory | managed:file | managed:directory | missing:file | missing:directory)
