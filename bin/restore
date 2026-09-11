@@ -184,15 +184,7 @@ payload_matches_target() {
 }
 
 symlink_matches_destination() {
-    local target="$1"
-    local expected="$2"
-    local current
-    [ -L "$target" ] || return 1
-    current="$(
-        readlink -n "$target" || exit 1
-        printf x
-    )" || return 1
-    [ "${current%x}" = "$expected" ]
+    symlink_matches_raw_target "$@"
 }
 
 restore_marker_path() {
@@ -424,30 +416,14 @@ cmd_plan() {
 restore_symlink() {
     local index="$1"
     local target="$HOME/${TARGETS[$index]}"
-    local parent stage_dir stage_item nested
-    parent="$(dirname "$target")"
-    stage_dir="$(mktemp -d "$parent/.restore.stage.XXXXXX")" || return 1
-    stage_item="$stage_dir/item"
-
-    ln -s -- "${PRIOR_VALUES[$index]}" "$stage_item" || {
-        rmdir "$stage_dir" 2>/dev/null || true
-        return 1
-    }
 
     if [ "${ACTIONS[$index]}" = managed ]; then
         rm -f "$target" || return 1
     fi
-    mv -f "$stage_item" "$target" || return 1
-    if ! symlink_matches_destination "$target" "${PRIOR_VALUES[$index]}"; then
-        nested="$target/$(basename "$stage_item")"
-        if [ ! -e "$stage_item" ] && [ ! -L "$stage_item" ] && symlink_matches_destination "$nested" "${PRIOR_VALUES[$index]}"; then
-            rm -f "$nested" || return 1
-        fi
-        rmdir "$stage_dir" 2>/dev/null || true
-        echo "Error: target became a directory while restoring symlink: ${TARGETS[$index]}" >&2
+    if ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
+        echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
         return 1
     fi
-    rmdir "$stage_dir" 2>/dev/null || true
 }
 
 restore_payload() {

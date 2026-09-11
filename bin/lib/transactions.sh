@@ -288,6 +288,48 @@ path_link_count() {
     fi
 }
 
+symlink_matches_raw_target() {
+    local path="$1"
+    local expected="$2"
+    local actual
+    [ -L "$path" ] || return 1
+    actual="$(
+        readlink -n "$path" || exit 1
+        printf x
+    )" || return 1
+    [ "${actual%x}" = "$expected" ]
+}
+
+# Place a symlink without replacing a filesystem object that races into the
+# destination. If a directory consumes the staged link, remove only that link.
+place_symlink_no_clobber() {
+    local raw_target="$1"
+    local destination="$2"
+    local label="$3"
+    local parent stage_dir stage_name stage_item nested result=1
+    parent="$(dirname "$destination")"
+    stage_dir="$(mktemp -d "$parent/.${label}.stage.XXXXXX")" || return 1
+    stage_name="$(basename "$stage_dir")"
+    stage_item="$stage_dir/$stage_name"
+    nested="$destination/$stage_name"
+
+    if ln -s -- "$raw_target" "$stage_item"; then
+        mv -n "$stage_item" "$destination" || true
+        if symlink_matches_raw_target "$destination" "$raw_target"; then
+            result=0
+        elif [ ! -e "$stage_item" ] && [ ! -L "$stage_item" ] &&
+            symlink_matches_raw_target "$nested" "$raw_target"; then
+            rm -f "$nested" || return 1
+        fi
+    fi
+
+    if symlink_matches_raw_target "$stage_item" "$raw_target"; then
+        rm -f "$stage_item" || return 1
+    fi
+    rmdir "$stage_dir" 2>/dev/null || return 1
+    return "$result"
+}
+
 # Check whether target is a symlink pointing to expected_source, either literally
 # or via canonical physical paths.
 is_managed_symlink() {

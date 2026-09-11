@@ -437,7 +437,10 @@ create_symlink() {
         esac
 
         mkdir -p "$(dirname "$target")"
-        ln -s "$source" "$target"
+        if ! place_symlink_no_clobber "$source" "$target" install; then
+            echo "Error: target changed while creating symlink: $target_rel" >&2
+            return 1
+        fi
         print_success "Symlink created"
         SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
     else

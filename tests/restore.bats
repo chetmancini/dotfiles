@@ -1564,7 +1564,7 @@ EOF
         RESTORE_RACE_TARGET="$HOME/.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
-    [[ "$output" == *"target became a directory while restoring symlink"* ]]
+    [[ "$output" == *"target changed while restoring symlink"* ]]
     [ -d "$HOME/.gitconfig" ]
     [ ! -e "$HOME/.gitconfig/item" ]
     [ ! -L "$HOME/.gitconfig/item" ]
@@ -1578,7 +1578,45 @@ EOF
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
 
-@test "47. Resume rejects metadata changes before payload cleanup" {
+@test "47. Symlink restore preserves a regular file raced into its destination" {
+    local tx_id="20260101T000000-111-834"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-symlink-file-race"
+    mkdir -p "$tx_dir" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.gitconfig|symlink|prior-target|.gitconfig" >"$tx_dir/entries"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+destination="${@: -1}"
+if [ "$destination" = "$RESTORE_RACE_TARGET" ]; then
+    printf 'concurrent content\n' >"$destination"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while restoring symlink"* ]]
+    [ -f "$HOME/.gitconfig" ]
+    [ ! -L "$HOME/.gitconfig" ]
+    [ "$(cat "$HOME/.gitconfig")" = "concurrent content" ]
+    [ -z "$(find "$HOME" -type d -name '.restore.stage.*' -print -quit)" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "48. Resume rejects metadata changes before payload cleanup" {
     local tx_id="20260101T000000-111-833"
     local tx_dir="$TMP_BACKUP/$tx_id"
     mkdir -p "$tx_dir/payload"

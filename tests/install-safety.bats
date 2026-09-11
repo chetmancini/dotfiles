@@ -343,3 +343,27 @@ EOF
     [ "$TEST_HOME/.gitconfig" -ef "$TEST_HOME/gitconfig-peer" ]
     [ "$(cat "$TEST_HOME/.gitconfig")" = "hard-linked git config" ]
 }
+
+@test "installer preserves a directory raced into an absent target" {
+    local fake_bin="$TEST_ROOT/fake-link-race-bin"
+    mkdir -p "$fake_bin"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+destination="${@: -1}"
+if [ "$destination" = "$INSTALL_RACE_TARGET" ]; then
+    mkdir -p "$destination"
+fi
+exec "$INSTALL_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_RACE_TARGET="$TEST_HOME/.config/yazi" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while creating symlink: .config/yazi"* ]]
+    [ -d "$TEST_HOME/.config/yazi" ]
+    [ -z "$(find "$TEST_HOME/.config/yazi" -mindepth 1 -print -quit)" ]
+}
