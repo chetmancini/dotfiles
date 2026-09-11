@@ -1662,10 +1662,15 @@ entry_count=1
 EOF
     printf 'original content\n' >"$tx_dir/payload/0001"
     printf 'altered staged content\n' >"$stage"
-    printf 'ready\n' >"$tx_dir/restore-0001"
+    printf 'ready\nextra\n' >"$tx_dir/restore-0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
     ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
 
+    run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"conflict"* ]]
+
+    printf 'ready\n' >"$tx_dir/restore-0001"
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"Conflict detected"* ]]

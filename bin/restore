@@ -211,7 +211,7 @@ read_restore_marker() {
             *) return 1 ;;
         esac
         ! IFS= read -r _
-    } <"$marker"
+    } <"$marker" || return 1
     printf '%s\n' "$state"
 }
 
