@@ -1220,6 +1220,10 @@ EOF
     run "$DOTFILES_DIR/bin/restore" --plan "$tx_id"
     [ "$status" -ne 0 ]
     [[ "$output" == *"directory and metadata IDs do not match"* ]]
+
+    run "$DOTFILES_DIR/bin/restore" --list
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"$other_id"* ]]
 }
 
 @test "38. Plan rejects option-like transaction selectors as usage errors" {
@@ -2039,4 +2043,24 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(cat "$HOME/.gitconfig")" = "original content" ]
     grep -q '^state=restored$' "$stale_dir/metadata"
+}
+
+@test "60. Directory identity compares hard-link equivalence groups" {
+    local source="$TMP_HOME/hard-link-source"
+    local target="$TMP_HOME/hard-link-target"
+    mkdir "$source" "$target"
+    printf 'same content\n' >"$source/a"
+    ln "$source/a" "$source/b"
+    cp -p "$source/a" "$source/c"
+    ln "$source/c" "$source/d"
+
+    cp -p "$source/a" "$target/a"
+    ln "$target/a" "$target/c"
+    cp -p "$source/a" "$target/b"
+    ln "$target/b" "$target/d"
+    touch -r "$source" "$target"
+
+    run bash -c 'source "$1"; paths_match "$2" "$3" directory' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
+    [ "$status" -ne 0 ]
 }

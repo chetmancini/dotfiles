@@ -437,6 +437,7 @@ cmd_list() {
                 repo_revision) revision="$value" ;;
             esac
         done <<<"$metadata"
+        [ "$id" = "$(basename "$tx_dir")" ] || continue
         entries=0
         [ ! -L "$tx_dir/entries" ] && [ -f "$tx_dir/entries" ] && entries="$(wc -l <"$tx_dir/entries" | tr -d '[:space:]')"
         [ "$count" -gt 0 ] || printf '%-32s %-12s %-22s %-12s %s\n' ID STATE CREATED REVISION ENTRIES

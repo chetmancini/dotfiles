@@ -309,8 +309,9 @@ paths_match() {
     local source="$1"
     local target="$2"
     local kind="$3"
-    local relative source_metadata target_metadata source_link target_link
+    local relative prior source_metadata target_metadata source_link target_link
     local source_count=0 target_count=0
+    local -a regular_paths=()
 
     source_metadata="$(path_metadata "$source")" || return 1
     target_metadata="$(path_metadata "$target")" || return 1
@@ -339,6 +340,14 @@ paths_match() {
                     [ "$source_link" = "$target_link" ] || return 1
                 elif [ -f "$source/$relative" ]; then
                     [ -f "$target/$relative" ] && cmp -s "$source/$relative" "$target/$relative" || return 1
+                    for prior in "${regular_paths[@]}"; do
+                        if [ "$source/$relative" -ef "$source/$prior" ]; then
+                            [ "$target/$relative" -ef "$target/$prior" ] || return 1
+                        else
+                            [ ! "$target/$relative" -ef "$target/$prior" ] || return 1
+                        fi
+                    done
+                    regular_paths+=("$relative")
                 elif [ -d "$source/$relative" ]; then
                     [ -d "$target/$relative" ] || return 1
                 fi
