@@ -248,7 +248,11 @@ copy_directory_tree() {
 
 path_metadata() {
     local path="$1"
-    stat -f '%p|%u|%g|%m|%l' "$path" 2>/dev/null || stat -c '%f|%u|%g|%Y|%h' "$path"
+    if stat -f '%p|%u|%g|%m|%l' "$path" >/dev/null 2>&1; then
+        stat -f '%p|%u|%g|%m|%l' "$path"
+    else
+        stat -c '%f|%u|%g|%Y|%h' "$path"
+    fi
 }
 
 paths_match() {
@@ -277,7 +281,11 @@ paths_match() {
 
 path_link_count() {
     local path="$1"
-    stat -f '%l' "$path" 2>/dev/null || stat -c '%h' "$path"
+    if stat -f '%l' "$path" >/dev/null 2>&1; then
+        stat -f '%l' "$path"
+    else
+        stat -c '%h' "$path"
+    fi
 }
 
 # Check whether target is a symlink pointing to expected_source, either literally
