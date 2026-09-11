@@ -647,3 +647,35 @@ EOF
     [ ! -e "$TEST_HOME/.config/yazi" ]
     [ ! -L "$TEST_HOME/.config/yazi" ]
 }
+
+@test "payload staging refuses a replaced backup-root path" {
+    local fake_bin="$TEST_ROOT/fake-payload-root-race-bin"
+    local root="$TEST_HOME/.dotfiles-backup"
+    local saved_root="$TEST_ROOT/saved-payload-root"
+    mkdir -p "$fake_bin"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mktemp"
+#!/usr/bin/env bash
+template="${@: -1}"
+if [[ "$template" == */payload/.copy-* ]] && [ ! -e "$INSTALL_RACE_DONE" ]; then
+    : >"$INSTALL_RACE_DONE"
+    "$INSTALL_REAL_MV" "$INSTALL_BACKUP_ROOT" "$INSTALL_SAVED_ROOT"
+    ln -s "$INSTALL_SAVED_ROOT" "$INSTALL_BACKUP_ROOT"
+fi
+exec "$INSTALL_REAL_MKTEMP" "$@"
+EOF
+    chmod +x "$fake_bin/mktemp"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MKTEMP="$(command -v mktemp)" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_BACKUP_ROOT="$root" \
+        INSTALL_SAVED_ROOT="$saved_root" \
+        INSTALL_RACE_DONE="$TEST_ROOT/payload-root-raced" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [ -L "$root" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+    [ -n "$(find "$saved_root" -path '*/payload/0008' -type f -print -quit)" ]
+}

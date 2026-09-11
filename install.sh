@@ -35,6 +35,9 @@ exec 9<&0
 
 CURRENT_TRANSACTION_ID=""
 CURRENT_TRANSACTION_DIR=""
+CURRENT_TRANSACTION_ROOT=""
+CURRENT_TRANSACTION_ROOT_IDENTITY=""
+CURRENT_TRANSACTION_IDENTITY=""
 TRANSACTION_SEQUENCE=0
 INSTALL_SUCCESS=false
 
@@ -43,7 +46,7 @@ unset GIT_INDEX_FILE
 
 cleanup_install_trap() {
     local exit_code=$?
-    if [ "$INSTALL_SUCCESS" != true ] && [ -n "${CURRENT_TRANSACTION_DIR:-}" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
+    if [ "$INSTALL_SUCCESS" != true ] && validate_current_transaction_paths 2>/dev/null; then
         local meta_file="$CURRENT_TRANSACTION_DIR/metadata"
         if [ -f "$meta_file" ]; then
             local state
@@ -262,6 +265,7 @@ stage_backup_payload() {
     local sequence="$4"
     local copy_dir copy_item
 
+    validate_current_transaction_paths || return 1
     copy_dir="$(mktemp -d "$CURRENT_TRANSACTION_DIR/payload/.copy-${sequence}.XXXXXX")" || return 1
     copy_item="$copy_dir/item"
     case "$kind" in
@@ -270,7 +274,16 @@ stage_backup_payload() {
         *) return 1 ;;
     esac || return 1
     mv "$copy_item" "$payload" || return 1
-    rmdir "$copy_dir"
+    rmdir "$copy_dir" || return 1
+    validate_current_transaction_paths
+}
+
+validate_current_transaction_paths() {
+    [ -n "${CURRENT_TRANSACTION_ROOT:-}" ] && [ -d "$CURRENT_TRANSACTION_ROOT" ] && [ ! -L "$CURRENT_TRANSACTION_ROOT" ] || return 1
+    [ "$(path_identity "$CURRENT_TRANSACTION_ROOT" 2>/dev/null)" = "$CURRENT_TRANSACTION_ROOT_IDENTITY" ] || return 1
+    [ -n "${CURRENT_TRANSACTION_DIR:-}" ] && [ -d "$CURRENT_TRANSACTION_DIR" ] && [ ! -L "$CURRENT_TRANSACTION_DIR" ] || return 1
+    [ "$(path_identity "$CURRENT_TRANSACTION_DIR" 2>/dev/null)" = "$CURRENT_TRANSACTION_IDENTITY" ] || return 1
+    [ -d "$CURRENT_TRANSACTION_DIR/payload" ] && [ ! -L "$CURRENT_TRANSACTION_DIR/payload" ]
 }
 
 initialize_transaction() {
@@ -324,6 +337,7 @@ install_symlink_anchored() {
             done
         fi
         target="./$target_name"
+        validate_current_transaction_paths || return 1
 
         inspect_target "$target" || return 1
         [ "$TARGET_KIND" = "$prior_kind" ] || return 1
@@ -344,6 +358,7 @@ install_symlink_anchored() {
         esac
         place_symlink_no_clobber "$source" "$target" install || return 1
         sync_parent_directory "$target" || return 1
+        validate_current_transaction_paths || return 1
         validate_target_ancestors_install "$target_rel" || return 1
         [ "$current" -ef . ]
     )
@@ -443,7 +458,11 @@ create_symlink() {
                 echo "Error: failed to initialize transaction under $root" >&2
                 exit 1
             }
+            CURRENT_TRANSACTION_ROOT="$root"
             CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
+            CURRENT_TRANSACTION_ROOT_IDENTITY="$(path_identity "$CURRENT_TRANSACTION_ROOT")" || exit 1
+            CURRENT_TRANSACTION_IDENTITY="$(path_identity "$CURRENT_TRANSACTION_DIR")" || exit 1
+            validate_current_transaction_paths || exit 1
         fi
 
         TRANSACTION_SEQUENCE=$((TRANSACTION_SEQUENCE + 1))
@@ -459,7 +478,9 @@ create_symlink() {
         esac
 
         # Append and flush journal record before any move, removal, or link creation
-        append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$prior_kind" "$prior_value" "$source_rel" || {
+        validate_current_transaction_paths &&
+            append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$prior_kind" "$prior_value" "$source_rel" &&
+            validate_current_transaction_paths || {
             echo "Error: failed to append journal entry for $target_rel" >&2
             exit 1
         }
@@ -487,6 +508,10 @@ create_symlink() {
             }
             sync_tree_and_parent "$CURRENT_TRANSACTION_DIR/$prior_value" || {
                 echo "Error: failed to sync backup for $target_rel" >&2
+                return 1
+            }
+            validate_current_transaction_paths || {
+                echo "Error: transaction root changed while backing up $target_rel" >&2
                 return 1
             }
         fi
@@ -888,11 +913,23 @@ install_api_keys_template
 install_git_hooks
 
 if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed before completion" >&2
+        exit 1
+    }
     update_transaction_state "$CURRENT_TRANSACTION_DIR" "complete" "$TRANSACTION_SEQUENCE" || {
         echo "Error: failed to mark transaction complete" >&2
         exit 1
     }
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed while completing installation" >&2
+        exit 1
+    }
     tx_root="$(transaction_backup_root)"
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed before publishing latest" >&2
+        exit 1
+    }
     tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")" || {
         echo "Error: failed to reserve latest transaction pointer" >&2
         exit 1
@@ -903,7 +940,10 @@ if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRE
         echo "Error: failed to publish latest transaction pointer" >&2
         exit 1
     fi
-    sync_file_and_parent "$tx_root/latest"
+    sync_file_and_parent "$tx_root/latest" && validate_current_transaction_paths || {
+        echo "Error: transaction root changed while publishing latest" >&2
+        exit 1
+    }
 fi
 INSTALL_SUCCESS=true
 

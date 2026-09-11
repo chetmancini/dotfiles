@@ -2554,3 +2554,27 @@ EOF
     [ "$(cat "$target")" = "original content" ]
     [ -z "$(find "$TMP_HOME" -maxdepth 1 -type d -name '.test.remove.*' -print -quit)" ]
 }
+
+@test "75. Placed ready stage requires its intact payload" {
+    local tx_id="20260101T000000-111-854"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'untrusted target content\n' >"$HOME/.gitconfig"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf 'ready|1:1\n' >"$tx_dir/restore-0001"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$HOME/.gitconfig")" = "untrusted target content" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    grep -q '^ready|1:1$' "$tx_dir/restore-0001"
+}

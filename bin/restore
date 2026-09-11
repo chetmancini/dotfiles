@@ -330,10 +330,8 @@ classify_entry() {
                             payload_matches_kind "$index" || return 1
                             paths_match "$payload" "$stage" "$kind" || return 1
                         elif path_matches_kind "$target" "$kind"; then
-                            if [ -e "$payload" ] || [ -L "$payload" ]; then
-                                payload_matches_kind "$index" || return 1
-                                payload_matches_target "$index" || return 1
-                            fi
+                            payload_matches_kind "$index" || return 1
+                            payload_matches_target "$index" || return 1
                             ACTIONS[$index]=applied
                             return 0
                         fi
