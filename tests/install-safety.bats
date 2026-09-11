@@ -487,3 +487,18 @@ EOF
     [ "$(cat "$TEST_HOME/.config/yazi/second")" = "second original" ]
     grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
 }
+
+@test "install and restore preserve directory-entry POSIX ACLs" {
+    command -v setfacl >/dev/null 2>&1 && command -v getfacl >/dev/null 2>&1 || skip "no POSIX ACL tools available"
+    mkdir -p "$TEST_HOME/.config/yazi"
+    printf 'ACL-protected content\n' >"$TEST_HOME/.config/yazi/config"
+    setfacl -m u:nobody:r "$TEST_HOME/.config/yazi/config"
+    local expected_acl
+    expected_acl="$(getfacl -cp "$TEST_HOME/.config/yazi/config")"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ "$(getfacl -cp "$TEST_HOME/.config/yazi/config")" = "$expected_acl" ]
+}

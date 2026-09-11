@@ -1871,3 +1871,30 @@ PY
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
     [ "$status" -eq 0 ]
 }
+
+@test "56. Restore preserves an unmarked stage with unexpected content" {
+    local tx_id="20260101T000000-111-839"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local stage="$HOME/.restore.stage.$tx_id.0001"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    printf 'foreign staged content\n' >"$stage"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$stage")" = "foreign staged content" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}

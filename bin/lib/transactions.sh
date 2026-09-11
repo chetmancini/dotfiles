@@ -243,8 +243,8 @@ copy_directory_tree() {
     local destination="$2"
     mkdir "$destination" || return 1
     if tar --version 2>/dev/null | grep -q 'GNU tar'; then
-        (cd "$source" && tar --xattrs --format=pax -cf - .) |
-            (cd "$destination" && tar --xattrs -xpf -) || return 1
+        (cd "$source" && tar --acls --xattrs --format=pax -cf - .) |
+            (cd "$destination" && tar --acls --xattrs -xpf -) || return 1
     else
         (cd "$source" && tar --format=pax -cf - .) |
             (cd "$destination" && tar -xpf -) || return 1

@@ -251,6 +251,9 @@ classify_entry() {
                 fi
             elif [ -e "$stage" ] || [ -L "$stage" ]; then
                 [ "$TX_STATE" = restoring ] && [ ! -L "$stage" ] || return 1
+                path_matches_kind "$stage" "$kind" || return 1
+                payload_matches_kind "$index" || return 1
+                paths_match "$payload" "$stage" "$kind" || return 1
             fi
             ;;
     esac
@@ -460,20 +463,30 @@ restore_payload() {
     if [ ! -e "$marker" ] && [ ! -L "$marker" ]; then
         if [ -e "$stage" ] || [ -L "$stage" ]; then
             [ ! -L "$stage" ] || return 1
-            rm -rf "$stage" || return 1
+            paths_match "$payload" "$stage" "$kind" || return 1
+        else
+            payload_matches_kind "$index" || return 1
+            if ! {
+                case "$kind" in
+                    file)
+                        if [ "$(path_link_count "$payload")" -gt 1 ]; then
+                            ln "$payload" "$stage"
+                        else
+                            copy_file_with_metadata "$payload" "$stage"
+                        fi
+                        ;;
+                    directory) copy_directory_tree "$payload" "$stage" ;;
+                esac
+            } then
+                case "$kind" in
+                    file) rm -f "$stage" ;;
+                    directory) rm -rf "$stage" ;;
+                esac || true
+                return 1
+            fi
+            path_matches_kind "$stage" "$kind" || return 1
+            paths_match "$payload" "$stage" "$kind" || return 1
         fi
-        payload_matches_kind "$index" || return 1
-        case "$kind" in
-            file)
-                if [ "$(path_link_count "$payload")" -gt 1 ]; then
-                    ln "$payload" "$stage"
-                else
-                    copy_file_with_metadata "$payload" "$stage"
-                fi
-                ;;
-            directory) copy_directory_tree "$payload" "$stage" ;;
-        esac || return 1
-        path_matches_kind "$stage" "$kind" || return 1
         write_ready_marker "$index" || return 1
     fi
 
