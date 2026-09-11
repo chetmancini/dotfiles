@@ -317,3 +317,53 @@ worktree_listed() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"not inside a git repository"* ]]
 }
+
+@test "git-rm-gone runs under stock macOS bash 3.2" {
+    [ -x /bin/bash ] || skip "no stock bash available"
+    make_gone_branch "feature-legacy" true
+    cd "$REPO"
+    run /bin/bash "$DOTFILES_DIR/bin/git-rm-gone"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"feature-legacy"* ]]
+    [[ "$output" == *"Preview only"* ]]
+    branch_exists "feature-legacy"
+}
+
+@test "git-rm-gone ignores : gone] in commit subjects without upstream" {
+    git -C "$REPO" checkout -qb innocent
+    echo "x" >"$REPO/x.txt"
+    git -C "$REPO" add x.txt
+    git -C "$REPO" commit -qm "chore: gone] marker"
+    git -C "$REPO" checkout -q main
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"innocent"* ]]
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --force --yes
+    [ "$status" -eq 0 ]
+    branch_exists "innocent"
+}
+
+@test "git-rm-gone preserves assume-unchanged modifications" {
+    make_gone_worktree "wt-assume" true
+    git -C "$TEST_TMP/wt-wt-assume" update-index --assume-unchanged wt-assume.txt
+    echo "sneaky" >>"$TEST_TMP/wt-wt-assume/wt-assume.txt"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
+    [ "$status" -eq 0 ]
+    [ -d "$TEST_TMP/wt-wt-assume" ]
+    [[ "$(cat "$TEST_TMP/wt-wt-assume/wt-assume.txt")" == *"sneaky"* ]]
+    branch_exists "wt-assume"
+}
+
+@test "git-rm-gone reports locked stale entries as skipped, not pruned" {
+    make_gone_worktree "wt-locked" true
+    git -C "$REPO" worktree lock "$TEST_TMP/wt-wt-locked"
+    rm -rf "$TEST_TMP/wt-wt-locked"
+    cd "$REPO"
+    run "$DOTFILES_DIR/bin/git-rm-gone" --apply --yes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"locked - will skip"* ]]
+    worktree_listed "$LAST_WT"
+    branch_exists "wt-locked"
+}

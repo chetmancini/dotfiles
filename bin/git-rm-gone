@@ -178,8 +178,18 @@ is_current_worktree() {
 # complaint, so ignored content counts as uncommitted work here.
 # --untracked-files=all: a `status.showUntrackedFiles=no` config would
 # otherwise blind this check to untracked and ignored files.
+# Lowercase `ls-files -v` tags (e.g. `h`) mark --assume-unchanged paths,
+# whose tracked modifications stay hidden from status; preserve worktrees
+# containing such flags. (Uppercase `S` is sparse skip-worktree: that
+# content matches HEAD and is recoverable, so it does not block removal.)
 is_worktree_dirty() {
-    [[ -n "$(git -C "$1" status --porcelain --ignored --untracked-files=all 2>/dev/null)" ]]
+    if [[ -n "$(git -C "$1" status --porcelain --ignored --untracked-files=all 2>/dev/null)" ]]; then
+        return 0
+    fi
+    if git -C "$1" ls-files -v 2>/dev/null | grep -q '^[a-z]'; then
+        return 0
+    fi
+    return 1
 }
 
 # True when $1 is checked out in a worktree slated for removal.
@@ -227,20 +237,19 @@ classify_worktrees() {
     for ((i = 1; i < ${#WT_PATHS[@]}; i++)); do
         path="${WT_PATHS[$i]}"
         branch="${WT_BRANCHES[$i]}"
-        if [[ ! -e "$path" ]]; then
+        if [[ "${WT_LOCKED[$i]}" == true ]]; then
+            WT_REPORT+=("$path [$branch] (locked - will skip)")
+        elif [[ ! -e "$path" ]]; then
             STALE_PATHS+=("$path")
             WT_REPORT+=("$path (stale entry - will prune)")
             # Branches on prunable entries are freed for deletion below.
-            # Locked entries survive `git worktree prune`, so they stay bound.
-            if [[ "${WT_LOCKED[$i]}" != true && "${WT_KINDS[$i]}" == "branch" && -n "$branch" ]]; then
+            if [[ "${WT_KINDS[$i]}" == "branch" && -n "$branch" ]]; then
                 STALE_BRANCHES+=("$branch")
             fi
         elif [[ "${WT_KINDS[$i]}" == "bare" ]]; then
             WT_REPORT+=("$path (bare worktree - will skip)")
         elif [[ "${WT_KINDS[$i]}" == "detached" ]]; then
             WT_REPORT+=("$path (detached HEAD - will skip)")
-        elif [[ "${WT_LOCKED[$i]}" == true ]]; then
-            WT_REPORT+=("$path [$branch] (locked - will skip)")
         elif is_current_worktree "$path"; then
             WT_REPORT+=("$path [$branch] (current worktree - will skip)")
         elif is_worktree_dirty "$path"; then
@@ -293,8 +302,13 @@ main() {
         exit 1
     fi
 
-    # awk (not grep) so an empty result still exits 0 under `set -o pipefail`.
-    mapfile -t GONE < <(git branch -vv | awk '/: gone]/ { sub(/^[*+ ]+/, ""); print $1 }')
+    GONE=()
+    local ref_branch ref_track
+    while IFS='|' read -r ref_branch ref_track || [[ -n "$ref_branch" ]]; do
+        if [[ "$ref_track" == "[gone]" ]]; then
+            GONE+=("$ref_branch")
+        fi
+    done < <(git for-each-ref --format='%(refname:short)|%(upstream:track)' refs/heads)
     collect_worktrees
     CURRENT_TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 
