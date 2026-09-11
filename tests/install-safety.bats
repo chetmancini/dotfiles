@@ -712,3 +712,43 @@ EOF
     grep -q '^state=in_progress$' "$saved_root"/*/metadata
     [ -L "$TEST_HOME/.npmrc" ]
 }
+
+@test "backup payload publication refuses a raced destination directory" {
+    local fake_bin="$TEST_ROOT/fake-payload-destination-race-bin"
+    local root="$TEST_HOME/.dotfiles-backup"
+    mkdir -p "$fake_bin"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+source_path="${@: -2:1}"
+destination="${@: -1}"
+if [[ "$source_path" == */payload/.copy-0008.*/item ]] &&
+    [[ "$destination" == */payload/0008 ]] && [ ! -e "$INSTALL_RACE_DONE" ]; then
+    : >"$INSTALL_RACE_DONE"
+    mkdir "$destination"
+fi
+exec "$INSTALL_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_RACE_DONE="$TEST_ROOT/payload-destination-raced" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to stage backup for .gitconfig"* ]]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+
+    local tx_id
+    tx_id="$(find "$root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    [ -d "$root/$tx_id/payload/0008" ]
+    [ -z "$(find "$root/$tx_id/payload/0008" -mindepth 1 -print -quit)" ]
+    [ -n "$(find "$root/$tx_id/payload" -path '*/.copy-0008.*/item' -type f -print -quit)" ]
+
+    rmdir "$root/$tx_id/payload/0008"
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+}

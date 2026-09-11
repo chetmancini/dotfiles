@@ -273,7 +273,7 @@ stage_backup_payload() {
         directory) copy_directory_tree "$target" "$copy_item" ;;
         *) return 1 ;;
     esac || return 1
-    mv "$copy_item" "$payload" || return 1
+    move_path_no_clobber_exact "$copy_item" "$payload" || return 1
     rmdir "$copy_dir" || return 1
     validate_current_transaction_paths
 }
