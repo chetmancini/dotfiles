@@ -2335,7 +2335,17 @@ EOF
 
     cat <<'EOF' >"$fake_bin/mv"
 #!/usr/bin/env bash
-if [ "${1:-}" = -n ] && [ "${2:-}" = ./item ] && [ ! -e "$RESTORE_RACE_DONE" ]; then
+source=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *)
+            source="$argument"
+            break
+            ;;
+    esac
+done
+if [ "$source" = ./item ] && [ ! -e "$RESTORE_RACE_DONE" ]; then
     : >"$RESTORE_RACE_DONE"
     "$RESTORE_REAL_MV" "$RESTORE_PARENT" "$RESTORE_SAVED_PARENT"
     ln -s "$RESTORE_EXTERNAL" "$RESTORE_PARENT"
