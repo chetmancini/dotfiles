@@ -325,7 +325,7 @@ EOF
     grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
 }
 
-@test "install and restore preserve an external hard link to a managed file" {
+@test "install snapshots an externally hard-linked file independently" {
     printf 'hard-linked git config\n' >"$TEST_HOME/.gitconfig"
     ln "$TEST_HOME/.gitconfig" "$TEST_HOME/gitconfig-peer"
 
@@ -334,14 +334,16 @@ EOF
     [ -L "$TEST_HOME/.gitconfig" ]
     local tx_id
     tx_id="$(tr -d '[:space:]' <"$TEST_HOME/.dotfiles-backup/latest")"
-    [ "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008" -ef "$TEST_HOME/gitconfig-peer" ]
+    [ ! "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008" -ef "$TEST_HOME/gitconfig-peer" ]
+    printf 'peer changed after install\n' >"$TEST_HOME/gitconfig-peer"
 
     run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -eq 0 ]
     [ -f "$TEST_HOME/.gitconfig" ]
     [ ! -L "$TEST_HOME/.gitconfig" ]
-    [ "$TEST_HOME/.gitconfig" -ef "$TEST_HOME/gitconfig-peer" ]
+    [ ! "$TEST_HOME/.gitconfig" -ef "$TEST_HOME/gitconfig-peer" ]
     [ "$(cat "$TEST_HOME/.gitconfig")" = "hard-linked git config" ]
+    [ "$(cat "$TEST_HOME/gitconfig-peer")" = "peer changed after install" ]
 }
 
 @test "installer preserves a directory raced into an absent target" {
@@ -450,7 +452,7 @@ EOF
     mkdir -p "$fake_bin"
     cat <<'EOF' >"$fake_bin/python3"
 #!/usr/bin/env bash
-if [ "${1:-}" = - ]; then
+if [ "${1:-}" = - ] && [[ "${2:-}" == */entries ]]; then
     exit 75
 fi
 exec "$INSTALL_REAL_PYTHON" "$@"

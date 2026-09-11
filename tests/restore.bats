@@ -2139,3 +2139,42 @@ EOF
     [ "$(cat "$tx_dir/payload/0001")" = "sensitive original content" ]
     [ -L "$saved_parent/item" ]
 }
+
+@test "63. Restore stops before target mutation when state sync fails" {
+    local tx_id="20260101T000000-111-846"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-state-sync"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [[ "${2:-}" == */metadata ]]; then
+    exit 75
+fi
+exec "$RESTORE_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env PATH="$fake_bin:$PATH" RESTORE_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to mark transaction state as restoring"* ]]
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}

@@ -254,18 +254,15 @@ write_restore_marker() {
     [ ! -L "$marker" ] && { [ ! -e "$marker" ] || [ -f "$marker" ]; } || return 1
     tmp="$(mktemp "$TX_DIR/restore-${SEQUENCES[$index]}.tmp.XXXXXX")" || return 1
     printf '%s\n' "$record" >"$tmp"
-    mv -f "$tmp" "$marker"
+    mv -f "$tmp" "$marker" || return 1
+    sync_file_and_parent "$marker"
 }
 
 reserve_restore_stage() {
     local kind="$1" stage="$2" payload="$3"
     case "$kind" in
         file)
-            if [ "$(path_link_count "$payload")" -gt 1 ]; then
-                ln "$payload" "$stage"
-            else
-                (set -o noclobber && : >"$stage")
-            fi
+            (set -o noclobber && : >"$stage")
             ;;
         directory) mkdir "$stage" ;;
         *) return 1 ;;
@@ -276,11 +273,7 @@ copy_payload_into_stage() {
     local kind="$1" payload="$2" stage="$3"
     case "$kind" in
         file)
-            if [ "$(path_link_count "$payload")" -gt 1 ]; then
-                [ "$payload" -ef "$stage" ]
-            else
-                copy_file_with_metadata "$payload" "$stage"
-            fi
+            copy_file_with_metadata "$payload" "$stage"
             ;;
         directory) copy_directory_contents "$payload" "$stage" ;;
         *) return 1 ;;

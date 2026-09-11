@@ -285,9 +285,9 @@ path_identity() {
 path_metadata() {
     local path="$1"
     if stat -f '%Fm' "$path" >/dev/null 2>&1; then
-        stat -f '%p|%u|%g|%Fm|%l' "$path"
+        stat -f '%p|%u|%g|%Fm' "$path"
     else
-        stat -c '%f|%u|%g|%y|%h' "$path"
+        stat -c '%f|%u|%g|%y' "$path"
     fi
 }
 
@@ -787,7 +787,8 @@ EOF
     if [ -n "$entry_count" ]; then
         printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
     fi
-    mv -f "$tmp_file" "$meta_file"
+    mv -f "$tmp_file" "$meta_file" || return 1
+    sync_file_and_parent "$meta_file"
 }
 
 # Update state in metadata by rewriting through a temporary file in the same directory.
@@ -832,7 +833,8 @@ update_transaction_state() {
         printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
     fi
 
-    mv -f "$tmp_file" "$meta_file"
+    mv -f "$tmp_file" "$meta_file" || return 1
+    sync_file_and_parent "$meta_file"
 }
 
 # Append a validated journal entry to the transaction's entries file.

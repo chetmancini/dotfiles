@@ -265,16 +265,7 @@ stage_backup_payload() {
     copy_dir="$(mktemp -d "$CURRENT_TRANSACTION_DIR/payload/.copy-${sequence}.XXXXXX")" || return 1
     copy_item="$copy_dir/item"
     case "$kind" in
-        file)
-            if [ "$(path_link_count "$target")" -gt 1 ]; then
-                ln "$target" "$copy_item" || {
-                    echo "Error: cannot preserve hard-linked file across backup filesystems: $target" >&2
-                    return 1
-                }
-            else
-                copy_file_with_metadata "$target" "$copy_item"
-            fi
-            ;;
+        file) copy_file_with_metadata "$target" "$copy_item" ;;
         directory) copy_directory_tree "$target" "$copy_item" ;;
         *) return 1 ;;
     esac || return 1
@@ -880,6 +871,7 @@ if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRE
     tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")"
     printf "%s\n" "$CURRENT_TRANSACTION_ID" >"$tx_tmp_latest"
     mv -f "$tx_tmp_latest" "$tx_root/latest"
+    sync_file_and_parent "$tx_root/latest"
 fi
 INSTALL_SUCCESS=true
 
