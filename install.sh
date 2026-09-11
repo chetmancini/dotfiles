@@ -912,7 +912,7 @@ install_home_symlinks
 install_api_keys_template
 install_git_hooks
 
-if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRENT_TRANSACTION_DIR" ]; then
+if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ]; then
     validate_current_transaction_paths || {
         echo "Error: transaction root changed before completion" >&2
         exit 1

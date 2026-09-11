@@ -1921,6 +1921,7 @@ EOF
     local tx_id="20260101T000000-111-840"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local payload="$tx_dir/payload/0001"
+    local delete_stage="$tx_dir/.restore.delete.0001"
     local fake_bin="$TMP_HOME/fake-bin-cleanup"
     mkdir -p "$payload" "$HOME/.config" "$fake_bin"
     cat <<EOF >"$tx_dir/metadata"
@@ -1950,13 +1951,14 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_RM="$(command -v rm)" \
-        RESTORE_FAIL_CLEANUP="$payload" \
+        RESTORE_FAIL_CLEANUP="$delete_stage" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
-    grep -q '^deleting$' "$tx_dir/restore-0001"
-    [ ! -e "$payload/first" ]
-    [ "$(cat "$payload/second")" = "second original" ]
+    grep -Eq '^deleting\|[0-9]+:[0-9]+$' "$tx_dir/restore-0001"
+    [ ! -e "$payload" ]
+    [ ! -e "$delete_stage/first" ]
+    [ "$(cat "$delete_stage/second")" = "second original" ]
     [ "$(cat "$HOME/.config/yazi/first")" = "first original" ]
     [ "$(cat "$HOME/.config/yazi/second")" = "second original" ]
 
@@ -2577,4 +2579,33 @@ EOF
     [ "$(cat "$HOME/.gitconfig")" = "untrusted target content" ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
     grep -q '^ready|1:1$' "$tx_dir/restore-0001"
+}
+
+@test "76. Deleting state preserves an intact payload when its target changed" {
+    local tx_id="20260101T000000-111-855"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local payload="$tx_dir/payload/0001"
+    local payload_identity
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$payload"
+    printf 'changed content\n' >"$HOME/.gitconfig"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    payload_identity="$(bash -c 'source "$1"; path_identity "$2"' _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$payload")"
+    printf 'deleting|%s\n' "$payload_identity" >"$tx_dir/restore-0001"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$HOME/.gitconfig")" = "changed content" ]
+    [ "$(cat "$payload")" = "original content" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    grep -q "^deleting|$payload_identity$" "$tx_dir/restore-0001"
 }

@@ -679,3 +679,36 @@ EOF
     [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
     [ -n "$(find "$saved_root" -path '*/payload/0008' -type f -print -quit)" ]
 }
+
+@test "installer fails when its transaction disappears before finalization" {
+    local fake_bin="$TEST_ROOT/fake-finalization-race-bin"
+    local root="$TEST_HOME/.dotfiles-backup"
+    local saved_root="$TEST_ROOT/saved-finalization-root"
+    mkdir -p "$fake_bin"
+
+    cat <<'EOF' >"$fake_bin/mkdir"
+#!/usr/bin/env bash
+"$INSTALL_REAL_MKDIR" "$@" || exit
+destination="${@: -1}"
+if [ "$destination" = "$INSTALL_NPM_PREFIX" ] && [ ! -e "$INSTALL_RACE_DONE" ]; then
+    : >"$INSTALL_RACE_DONE"
+    "$INSTALL_REAL_MV" "$INSTALL_BACKUP_ROOT" "$INSTALL_SAVED_ROOT"
+fi
+EOF
+    chmod +x "$fake_bin/mkdir"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MKDIR="$(command -v mkdir)" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_BACKUP_ROOT="$root" \
+        INSTALL_SAVED_ROOT="$saved_root" \
+        INSTALL_NPM_PREFIX="$TEST_HOME/.npm-global" \
+        INSTALL_RACE_DONE="$TEST_ROOT/finalization-raced" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"transaction root changed before completion"* ]]
+    [ ! -e "$root" ]
+    [ -n "$(find "$saved_root" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
+    grep -q '^state=in_progress$' "$saved_root"/*/metadata
+    [ -L "$TEST_HOME/.npmrc" ]
+}
