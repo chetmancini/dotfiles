@@ -2643,3 +2643,53 @@ EOF
     grep -q '^state=restoring$' "$tx_dir/metadata"
     grep -q "^deleting|$payload_identity$" "$tx_dir/restore-0001"
 }
+
+@test "78. Restore fails if its transaction root moves during apply" {
+    local tx_id="20260101T000000-111-857"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local saved_root="$TMP_HOME/saved-restore-root"
+    local fake_bin="$TMP_HOME/fake-bin-restore-root-race"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.zshrc|symlink|prior/target|.zshrc" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [ "${2:-}" = ./.zshrc ] && [ ! -e "$RESTORE_RACE_DONE" ]; then
+    "$RESTORE_REAL_PYTHON" "$@" || exit
+    : >"$RESTORE_RACE_DONE"
+    "$RESTORE_REAL_MV" "$RESTORE_BACKUP_ROOT" "$RESTORE_SAVED_ROOT"
+    ln -s "$RESTORE_SAVED_ROOT" "$RESTORE_BACKUP_ROOT"
+    exit 0
+fi
+exec "$RESTORE_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_PYTHON="$(command -v python3)" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_BACKUP_ROOT="$TMP_BACKUP" \
+        RESTORE_SAVED_ROOT="$saved_root" \
+        RESTORE_RACE_DONE="$TMP_HOME/restore-root-raced" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"transaction root changed during restore"* ]]
+    [ -L "$TMP_BACKUP" ]
+    [ "$(readlink "$HOME/.zshrc")" = "prior/target" ]
+    grep -q '^state=restoring$' "$saved_root/$tx_id/metadata"
+
+    rm "$TMP_BACKUP"
+    mv "$saved_root" "$TMP_BACKUP"
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    grep -q '^state=restored$' "$TMP_BACKUP/$tx_id/metadata"
+}

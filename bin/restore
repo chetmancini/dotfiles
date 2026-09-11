@@ -18,7 +18,10 @@ source "$BIN_DIR/lib/transactions.sh"
 
 EX_USAGE=64
 TX_ID=
+TX_ROOT=
 TX_DIR=
+TX_ROOT_IDENTITY=
+TX_DIR_IDENTITY=
 TX_STATE=
 TX_ENTRY_COUNT=
 TX_REPO_ROOT=
@@ -48,6 +51,21 @@ usage_error() {
     exit "$EX_USAGE"
 }
 
+validate_transaction_binding() {
+    [ -n "$TX_ROOT" ] && [ -d "$TX_ROOT" ] && [ ! -L "$TX_ROOT" ] || return 1
+    [ "$(path_identity "$TX_ROOT" 2>/dev/null)" = "$TX_ROOT_IDENTITY" ] || return 1
+    [ -n "$TX_DIR" ] && [ -d "$TX_DIR" ] && [ ! -L "$TX_DIR" ] || return 1
+    [ "$(path_identity "$TX_DIR" 2>/dev/null)" = "$TX_DIR_IDENTITY" ]
+}
+
+require_transaction_binding() {
+    local context="$1"
+    validate_transaction_binding || {
+        echo "Error: transaction root changed $context" >&2
+        return 1
+    }
+}
+
 load_transaction() {
     local selector="$1"
     local metadata key value metadata_id='' current_owner_started_at
@@ -56,7 +74,15 @@ load_transaction() {
         echo "Error: could not resolve transaction '${selector}'" >&2
         return 1
     fi
-    TX_DIR="$(transaction_backup_root)/$TX_ID"
+    TX_ROOT="$(transaction_backup_root)"
+    TX_DIR="$TX_ROOT/$TX_ID"
+    [ -d "$TX_ROOT" ] && [ ! -L "$TX_ROOT" ] && [ -d "$TX_DIR" ] && [ ! -L "$TX_DIR" ] || {
+        echo "Error: transaction '${TX_ID}' has an invalid or symlinked path" >&2
+        return 1
+    }
+    TX_ROOT_IDENTITY="$(path_identity "$TX_ROOT")" || return 1
+    TX_DIR_IDENTITY="$(path_identity "$TX_DIR")" || return 1
+    require_transaction_binding "while loading '${TX_ID}'" || return 1
     if ! metadata="$(read_transaction_metadata "$TX_DIR/metadata")"; then
         echo "Error: transaction '${TX_ID}' has invalid metadata" >&2
         return 1
@@ -108,6 +134,7 @@ load_transaction() {
         fi
         TX_STATE=failed
     fi
+    require_transaction_binding "while loading '${TX_ID}'" || return 1
 }
 
 load_entries() {
@@ -789,6 +816,7 @@ cmd_apply() {
     esac
     load_entries || return 1
     validate_actions apply || return 1
+    require_transaction_binding "during preflight" || return 1
 
     if [ "$auto_yes" != true ]; then
         [ -t 0 ] || {
@@ -804,23 +832,30 @@ cmd_apply() {
                 ;;
         esac
         validate_actions apply || return 1
+        require_transaction_binding "after confirmation" || return 1
     fi
 
     if [ "$TX_STATE" != restoring ]; then
+        require_transaction_binding "before starting restore" || return 1
         update_transaction_state "$TX_DIR" restoring "${#TARGETS[@]}" || {
             echo "Error: failed to mark transaction state as restoring" >&2
             return 1
         }
+        require_transaction_binding "while starting restore" || return 1
         TX_STATE=restoring
     fi
 
     for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do
+        require_transaction_binding "during restore" || return 1
         apply_entry "$index" || return 1
+        require_transaction_binding "during restore" || return 1
     done
+    require_transaction_binding "before completing restore" || return 1
     update_transaction_state "$TX_DIR" restored || {
         echo "Error: failed to mark transaction state as restored" >&2
         return 1
     }
+    require_transaction_binding "while completing restore" || return 1
     echo "Transaction ${TX_ID} successfully restored."
 }
 
