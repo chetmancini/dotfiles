@@ -1353,6 +1353,7 @@ EOF
 @test "42. Interrupted target-side copy keeps the journaled payload resumable" {
     local tx_id="20260101T000000-111-828"
     local tx_dir="$TMP_BACKUP/$tx_id"
+    local stage="$HOME/.restore.stage.$tx_id.0001"
     local fake_bin="$TMP_HOME/fake-bin-copy"
     mkdir -p "$tx_dir/payload" "$fake_bin"
     cat <<EOF >"$tx_dir/metadata"
@@ -1378,6 +1379,7 @@ for argument in "$@"; do
     esac
 done
 printf 'partial' >"$destination"
+kill -KILL "$PPID"
 exit 75
 EOF
     chmod +x "$fake_bin/cp"
@@ -1387,6 +1389,8 @@ EOF
     grep -q '^state=restoring$' "$tx_dir/metadata"
     [ -f "$tx_dir/payload/0001" ]
     [ "$(cat "$tx_dir/payload/0001")" = "complete original content" ]
+    [ "$(cat "$stage")" = "partial" ]
+    grep -q '^copying$' "$tx_dir/restore-0001"
     [ -L "$HOME/.gitconfig" ]
 
     run "$DOTFILES_DIR/bin/restore" --apply latest --yes
@@ -1897,4 +1901,57 @@ EOF
     [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
     [ -L "$HOME/.gitconfig" ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "57. Interrupted recursive payload cleanup resumes from its recorded state" {
+    local tx_id="20260101T000000-111-840"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local cleanup="$tx_dir/restore-cleanup-0001"
+    local fake_bin="$TMP_HOME/fake-bin-cleanup"
+    mkdir -p "$tx_dir/payload/0001" "$HOME/.config" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'first original\n' >"$tx_dir/payload/0001/first"
+    printf 'second original\n' >"$tx_dir/payload/0001/second"
+    echo "0001|.config/yazi|directory|payload/0001|yazi" >"$tx_dir/entries"
+    printf '%s\n' "$tx_id" >"$TMP_BACKUP/latest"
+    ln -s "$DOTFILES_DIR/yazi" "$HOME/.config/yazi"
+
+    cat <<'EOF' >"$fake_bin/rm"
+#!/usr/bin/env bash
+destination="${@: -1}"
+if [ "$destination" = "$RESTORE_FAIL_CLEANUP" ]; then
+    "$RESTORE_REAL_RM" -f "$destination/first"
+    exit 75
+fi
+exec "$RESTORE_REAL_RM" "$@"
+EOF
+    chmod +x "$fake_bin/rm"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_RM="$(command -v rm)" \
+        RESTORE_FAIL_CLEANUP="$cleanup" \
+        "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -ne 0 ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+    grep -q '^cleaning$' "$tx_dir/restore-0001"
+    [ ! -e "$tx_dir/payload/0001" ]
+    [ ! -e "$cleanup/first" ]
+    [ "$(cat "$cleanup/second")" = "second original" ]
+    [ "$(cat "$HOME/.config/yazi/first")" = "first original" ]
+    [ "$(cat "$HOME/.config/yazi/second")" = "second original" ]
+
+    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ ! -e "$cleanup" ]
+    [ ! -e "$tx_dir/restore-0001" ]
+    [ "$(cat "$HOME/.config/yazi/first")" = "first original" ]
+    [ "$(cat "$HOME/.config/yazi/second")" = "second original" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
 }
