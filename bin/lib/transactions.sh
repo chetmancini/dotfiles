@@ -244,10 +244,9 @@ validate_transaction_metadata_writable() {
 
 # Copy a directory tree through an archive stream so file metadata, symlinks,
 # and hard-link relationships survive on both BSD and GNU userlands.
-copy_directory_tree() {
+copy_directory_contents() {
     local source="$1"
     local destination="$2"
-    mkdir "$destination" || return 1
     if tar --version 2>/dev/null | grep -q 'GNU tar'; then
         (cd "$source" && tar --acls --xattrs --format=pax -cf - .) |
             (cd "$destination" && tar --acls --xattrs -xpf -) || return 1
@@ -258,14 +257,29 @@ copy_directory_tree() {
     touch -r "$source" "$destination"
 }
 
+copy_directory_tree() {
+    local source="$1"
+    local destination="$2"
+    mkdir "$destination" || return 1
+    copy_directory_contents "$source" "$destination"
+}
+
 copy_file_with_metadata() {
     local source="$1"
     local destination="$2"
     if cp --preserve=all -- "$source" "$destination" 2>/dev/null; then
         return 0
     fi
-    rm -f "$destination" || return 1
     cp -p "$source" "$destination"
+}
+
+path_identity() {
+    local path="$1"
+    if stat -f '%d:%i' "$path" >/dev/null 2>&1; then
+        stat -f '%d:%i' "$path"
+    else
+        stat -c '%d:%i' "$path"
+    fi
 }
 
 path_metadata() {
@@ -305,6 +319,28 @@ path_xattrs_match() {
     [ "$source_xattrs" = "$target_xattrs" ]
 }
 
+directory_python_xattrs_match() {
+    python3 - "$1" "$2" <<'PY'
+import os
+import sys
+
+def tree(path):
+    result = []
+    for root, dirs, files in os.walk(path, followlinks=False):
+        names = [root, *(os.path.join(root, name) for name in dirs + files)]
+        for entry in names:
+            relative = os.path.relpath(entry, path)
+            attrs = tuple(
+                (name, os.getxattr(entry, name, follow_symlinks=False))
+                for name in sorted(os.listxattr(entry, follow_symlinks=False))
+            )
+            result.append((relative, attrs))
+    return sorted(result)
+
+raise SystemExit(tree(sys.argv[1]) != tree(sys.argv[2]))
+PY
+}
+
 paths_match() {
     local source="$1"
     local target="$2"
@@ -312,11 +348,17 @@ paths_match() {
     local relative prior source_metadata target_metadata source_link target_link
     local source_count=0 target_count=0
     local -a regular_paths=()
+    local batch_python_xattrs=false
+
+    if [ "$kind" = directory ] && ! command -v xattr >/dev/null 2>&1 && ! command -v getfattr >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+        directory_python_xattrs_match "$source" "$target" || return 1
+        batch_python_xattrs=true
+    fi
 
     source_metadata="$(path_metadata "$source")" || return 1
     target_metadata="$(path_metadata "$target")" || return 1
     [ "$source_metadata" = "$target_metadata" ] || return 1
-    path_xattrs_match "$source" "$target" || return 1
+    [ "$batch_python_xattrs" = true ] || path_xattrs_match "$source" "$target" || return 1
     case "$kind" in
         file) cmp -s "$source" "$target" ;;
         directory)
@@ -326,7 +368,7 @@ paths_match() {
                 source_metadata="$(path_metadata "$source/$relative")" || return 1
                 target_metadata="$(path_metadata "$target/$relative")" || return 1
                 [ "$source_metadata" = "$target_metadata" ] || return 1
-                path_xattrs_match "$source/$relative" "$target/$relative" || return 1
+                [ "$batch_python_xattrs" = true ] || path_xattrs_match "$source/$relative" "$target/$relative" || return 1
                 if [ -L "$source/$relative" ] || [ -L "$target/$relative" ]; then
                     [ -L "$source/$relative" ] && [ -L "$target/$relative" ] || return 1
                     source_link="$(

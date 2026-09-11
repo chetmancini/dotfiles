@@ -1277,7 +1277,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_FAIL_DESTINATION="$HOME/.zshrc" \
+        RESTORE_FAIL_DESTINATION="./.zshrc" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
@@ -1394,7 +1394,7 @@ EOF
     [ -f "$tx_dir/payload/0001" ]
     [ "$(cat "$tx_dir/payload/0001")" = "complete original content" ]
     [ "$(cat "$stage")" = "partial" ]
-    grep -q '^copying$' "$tx_dir/restore-0001"
+    grep -q '^copying|[0-9][0-9]*:[0-9][0-9]*$' "$tx_dir/restore-0001"
     [ -L "$HOME/.gitconfig" ]
 
     run "$DOTFILES_DIR/bin/restore" --apply latest --yes
@@ -1442,7 +1442,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.config/yazi" \
+        RESTORE_RACE_TARGET="./yazi" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
@@ -1495,7 +1495,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_FAIL_DESTINATION="$HOME/.gitconfig" \
+        RESTORE_FAIL_DESTINATION="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
@@ -1640,7 +1640,7 @@ EOF
     chmod 600 "$tx_dir/payload/0001"
     chmod 644 "$HOME/.gitconfig"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
-    printf 'ready\n' >"$tx_dir/restore-0001"
+    printf 'ready|0:0\n' >"$tx_dir/restore-0001"
 
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
@@ -1666,7 +1666,9 @@ entry_count=1
 EOF
     printf 'original content\n' >"$tx_dir/payload/0001"
     printf 'altered staged content\n' >"$stage"
-    printf 'ready\nextra\n' >"$tx_dir/restore-0001"
+    local stage_identity
+    stage_identity="$(bash -c 'source "$1"; path_identity "$2"' _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$stage")"
+    printf 'ready|%s\nextra\n' "$stage_identity" >"$tx_dir/restore-0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
     ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
 
@@ -1674,7 +1676,7 @@ EOF
     [ "$status" -ne 0 ]
     [[ "$output" == *"conflict"* ]]
 
-    printf 'ready\n' >"$tx_dir/restore-0001"
+    printf 'ready|%s\n' "$stage_identity" >"$tx_dir/restore-0001"
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"Conflict detected"* ]]
@@ -1720,7 +1722,7 @@ EOF
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_MV="$(command -v mv)" \
-        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        RESTORE_RACE_TARGET="./.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
     [ "$(cat "$HOME/.gitconfig")" = "concurrent content" ]
@@ -2063,4 +2065,77 @@ EOF
     run bash -c 'source "$1"; paths_match "$2" "$3" directory' \
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
     [ "$status" -ne 0 ]
+}
+
+@test "61. Reserving marker does not claim a later foreign stage" {
+    local tx_id="20260101T000000-111-844"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local stage="$HOME/.restore.stage.$tx_id.0001"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    printf 'foreign stage\n' >"$stage"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf 'reserving\n' >"$tx_dir/restore-0001"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$stage")" = "foreign stage" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    [ -L "$HOME/.gitconfig" ]
+}
+
+@test "62. Parent replacement cannot redirect staged payload contents" {
+    local tx_id="20260101T000000-111-845"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-parent-race"
+    local saved_parent="$HOME/.config-original"
+    local external="$TMP_BACKUP/external"
+    mkdir -p "$tx_dir/payload" "$HOME/.config" "$fake_bin" "$external"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'sensitive original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.config/item|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.config/item"
+
+    cat <<'EOF' >"$fake_bin/cp"
+#!/usr/bin/env bash
+if [ ! -e "$RESTORE_RACE_DONE" ]; then
+    : >"$RESTORE_RACE_DONE"
+    "$RESTORE_REAL_MV" "$RESTORE_PARENT" "$RESTORE_SAVED_PARENT"
+    ln -s "$RESTORE_EXTERNAL" "$RESTORE_PARENT"
+fi
+exec "$RESTORE_REAL_CP" "$@"
+EOF
+    chmod +x "$fake_bin/cp"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_CP="$(command -v cp)" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_PARENT="$HOME/.config" \
+        RESTORE_SAVED_PARENT="$saved_parent" \
+        RESTORE_EXTERNAL="$external" \
+        RESTORE_RACE_DONE="$TMP_HOME/parent-raced" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ -L "$HOME/.config" ]
+    [ -z "$(find "$external" -mindepth 1 -print -quit)" ]
+    [ -f "$tx_dir/payload/0001" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "sensitive original content" ]
+    [ -L "$saved_parent/item" ]
 }
