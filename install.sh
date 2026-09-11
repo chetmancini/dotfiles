@@ -261,21 +261,24 @@ inspect_target() {
 stage_backup_payload() {
     local target="$1"
     local kind="$2"
-    local payload="$3"
-    local sequence="$4"
-    local copy_dir copy_item
+    local sequence="$3"
 
-    validate_current_transaction_paths || return 1
-    copy_dir="$(mktemp -d "$CURRENT_TRANSACTION_DIR/payload/.copy-${sequence}.XXXXXX")" || return 1
-    copy_item="$copy_dir/item"
-    case "$kind" in
-        file) copy_file_with_metadata "$target" "$copy_item" ;;
-        directory) copy_directory_tree "$target" "$copy_item" ;;
-        *) return 1 ;;
-    esac || return 1
-    move_path_no_clobber_exact "$copy_item" "$payload" || return 1
-    rmdir "$copy_dir" || return 1
-    validate_current_transaction_paths
+    (
+        local copy_dir copy_item payload="./$sequence"
+        cd -P "$CURRENT_TRANSACTION_DIR/payload" || return 1
+        validate_current_transaction_paths || return 1
+        [ "$CURRENT_TRANSACTION_DIR/payload" -ef . ] || return 1
+        copy_dir="$(mktemp -d "./.copy-${sequence}.XXXXXX")" || return 1
+        copy_item="$copy_dir/item"
+        case "$kind" in
+            file) copy_file_with_metadata "$target" "$copy_item" ;;
+            directory) copy_directory_tree "$target" "$copy_item" ;;
+            *) return 1 ;;
+        esac || return 1
+        move_path_no_clobber_exact "$copy_item" "$payload" || return 1
+        rmdir "$copy_dir" || return 1
+        validate_current_transaction_paths && [ "$CURRENT_TRANSACTION_DIR/payload" -ef . ]
+    )
 }
 
 validate_current_transaction_paths() {
@@ -494,7 +497,7 @@ create_symlink() {
         fi
 
         if [ "$prior_kind" = file ] || [ "$prior_kind" = directory ]; then
-            stage_backup_payload "$target" "$prior_kind" "$CURRENT_TRANSACTION_DIR/$prior_value" "$seq" || {
+            stage_backup_payload "$target" "$prior_kind" "$seq" || {
                 echo "Error: failed to stage backup for $target_rel" >&2
                 return 1
             }

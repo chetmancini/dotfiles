@@ -233,6 +233,10 @@ payload_delete_stage_path() {
     printf '%s/.restore.delete.%s' "$TX_DIR" "${SEQUENCES[$1]}"
 }
 
+payload_purge_stage_path() {
+    printf '%s/.restore.purge.%s' "$TX_DIR" "${SEQUENCES[$1]}"
+}
+
 read_restore_marker() {
     local marker="$1"
     local record state identity
@@ -304,7 +308,7 @@ classify_entry() {
     local expected="$TX_REPO_ROOT/${SOURCES[$index]}"
     local kind="${KINDS[$index]}"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
-    local marker stage delete_stage marker_record marker_state marker_identity nested
+    local marker stage delete_stage purge_stage marker_record marker_state marker_identity nested
 
     validate_target_ancestors "${TARGETS[$index]}" || return 1
 
@@ -313,6 +317,7 @@ classify_entry() {
             marker="$(restore_marker_path "$index")"
             stage="$(restore_stage_path "$index")"
             delete_stage="$(payload_delete_stage_path "$index")"
+            purge_stage="$(payload_purge_stage_path "$index")"
             if [ -e "$marker" ] || [ -L "$marker" ]; then
                 [ "$TX_STATE" = restoring ] || return 1
                 marker_record="$(read_restore_marker "$marker")" || return 1
@@ -354,12 +359,18 @@ classify_entry() {
                         path_matches_kind "$target" "$kind" || return 1
                         if [ -e "$payload" ] || [ -L "$payload" ]; then
                             [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] || return 1
+                            [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
                             payload_matches_kind "$index" || return 1
                             [ "$(path_identity "$payload")" = "$marker_identity" ] || return 1
                             payload_matches_target "$index" || return 1
                         elif [ -e "$delete_stage" ] || [ -L "$delete_stage" ]; then
+                            [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
                             path_matches_kind "$delete_stage" "$kind" || return 1
                             [ "$(path_identity "$delete_stage")" = "$marker_identity" ] || return 1
+                            paths_match "$delete_stage" "$target" "$kind" || return 1
+                        elif [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
+                            path_matches_kind "$purge_stage" "$kind" || return 1
+                            [ "$(path_identity "$purge_stage")" = "$marker_identity" ] || return 1
                         fi
                         ACTIONS[$index]=applied
                         return 0
@@ -370,7 +381,7 @@ classify_entry() {
                 path_matches_kind "$stage" "$kind" || return 1
                 payload_matches_kind "$index" || return 1
                 paths_match "$payload" "$stage" "$kind" || return 1
-            elif [ -e "$delete_stage" ] || [ -L "$delete_stage" ]; then
+            elif [ -e "$delete_stage" ] || [ -L "$delete_stage" ] || [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
                 return 1
             fi
             ;;
@@ -574,13 +585,15 @@ restore_link_entry() {
 delete_restored_payload() {
     local index="$1"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
-    local delete_stage
+    local delete_stage purge_stage
     local kind="${KINDS[$index]}"
     local expected_identity="$2"
     delete_stage="$(payload_delete_stage_path "$index")"
+    purge_stage="$(payload_purge_stage_path "$index")"
 
     if [ -e "$payload" ] || [ -L "$payload" ]; then
         [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] || return 1
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
         path_matches_kind "$payload" "$kind" || return 1
         [ "$(path_identity "$payload")" = "$expected_identity" ] || return 1
         payload_matches_target "$index" || return 1
@@ -588,15 +601,25 @@ delete_restored_payload() {
         [ "$(path_identity "$delete_stage")" = "$expected_identity" ] || return 1
     fi
     if [ -e "$delete_stage" ] || [ -L "$delete_stage" ]; then
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
         path_matches_kind "$delete_stage" "$kind" || return 1
         [ "$(path_identity "$delete_stage")" = "$expected_identity" ] || return 1
+        paths_match "$delete_stage" "$HOME/${TARGETS[$index]}" "$kind" || return 1
+        move_path_no_clobber_exact "$delete_stage" "$purge_stage" || return 1
+        [ "$(path_identity "$purge_stage")" = "$expected_identity" ] || return 1
+        sync_parent_directory "$purge_stage" || return 1
+    fi
+    if [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
+        path_matches_kind "$purge_stage" "$kind" || return 1
+        [ "$(path_identity "$purge_stage")" = "$expected_identity" ] || return 1
         case "$kind" in
-            file) rm -f "$delete_stage" ;;
-            directory) rm -r "$delete_stage" ;;
+            file) rm -f "$purge_stage" ;;
+            directory) rm -r "$purge_stage" ;;
         esac || return 1
     fi
     [ ! -e "$payload" ] && [ ! -L "$payload" ] &&
-        [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ]
+        [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] &&
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ]
 }
 
 restore_payload() {
