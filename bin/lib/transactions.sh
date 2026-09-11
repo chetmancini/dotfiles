@@ -484,27 +484,35 @@ sync_tree_and_parent() {
     if command -v python3 >/dev/null 2>&1; then
         python3 - "$path" <<'PY'
 import os
+import stat
 import sys
 
 path = sys.argv[1]
 
 def flush(entry):
-    descriptor = os.open(entry, os.O_RDONLY)
+    metadata = os.lstat(entry)
+    if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+        return
+
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(entry, flags)
     try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino):
+            raise RuntimeError(f"path changed while syncing: {entry}")
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
 
 if os.path.isdir(path) and not os.path.islink(path):
-    for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
+    def fail(error):
+        raise error
+
+    for root, dirs, files in os.walk(path, topdown=False, followlinks=False, onerror=fail):
         for name in files:
-            entry = os.path.join(root, name)
-            if not os.path.islink(entry):
-                flush(entry)
+            flush(os.path.join(root, name))
         for name in dirs:
-            entry = os.path.join(root, name)
-            if not os.path.islink(entry):
-                flush(entry)
+            flush(os.path.join(root, name))
         flush(root)
 else:
     flush(path)
@@ -769,6 +777,16 @@ read_transaction_metadata() {
     return 0
 }
 
+append_transaction_metadata_field() {
+    local tmp_file="$1"
+    local key="$2"
+    local value="$3"
+    if ! printf "%s=%s\n" "$key" "$value" >>"$tmp_file"; then
+        rm -f "$tmp_file" 2>/dev/null || true
+        return 1
+    fi
+}
+
 # Write a new transaction metadata file. Always sets version=1.
 write_transaction_metadata() {
     local tx_dir="$1"
@@ -801,28 +819,29 @@ write_transaction_metadata() {
 
     local meta_file="$tx_dir/metadata"
     local tmp_file
-    tmp_file="$(mktemp "$tx_dir/metadata.tmp.XXXXXX")"
+    tmp_file="$(mktemp "$tx_dir/metadata.tmp.XXXXXX")" || return 1
 
-    cat <<EOF >"$tmp_file"
-version=1
-id=$id
-created_at=$created_at
-repo_revision=$repo_rev
-state=$state
-EOF
+    append_transaction_metadata_field "$tmp_file" version 1 || return 1
+    append_transaction_metadata_field "$tmp_file" id "$id" || return 1
+    append_transaction_metadata_field "$tmp_file" created_at "$created_at" || return 1
+    append_transaction_metadata_field "$tmp_file" repo_revision "$repo_rev" || return 1
+    append_transaction_metadata_field "$tmp_file" state "$state" || return 1
     if [ -n "$repo_root" ]; then
-        printf "repo_root=%s\n" "$repo_root" >>"$tmp_file"
+        append_transaction_metadata_field "$tmp_file" repo_root "$repo_root" || return 1
     fi
     if [ -n "$owner_pid" ]; then
-        printf "owner_pid=%s\n" "$owner_pid" >>"$tmp_file"
+        append_transaction_metadata_field "$tmp_file" owner_pid "$owner_pid" || return 1
     fi
     if [ -n "$owner_started_at" ]; then
-        printf "owner_started_at=%s\n" "$owner_started_at" >>"$tmp_file"
+        append_transaction_metadata_field "$tmp_file" owner_started_at "$owner_started_at" || return 1
     fi
     if [ -n "$entry_count" ]; then
-        printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+        append_transaction_metadata_field "$tmp_file" entry_count "$entry_count" || return 1
     fi
-    mv -f "$tmp_file" "$meta_file" || return 1
+    if ! mv -f "$tmp_file" "$meta_file"; then
+        rm -f "$tmp_file" 2>/dev/null || true
+        return 1
+    fi
     sync_file_and_parent "$meta_file"
 }
 
@@ -846,29 +865,32 @@ update_transaction_state() {
     read_transaction_metadata "$meta_file" >/dev/null || return 1
 
     local tmp_file
-    tmp_file="$(mktemp "$tx_dir/metadata.tmp.XXXXXX")"
+    tmp_file="$(mktemp "$tx_dir/metadata.tmp.XXXXXX")" || return 1
     local key val
     local wrote_entry_count=false
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
         if [ "$key" = "state" ]; then
-            printf "state=%s\n" "$new_state" >>"$tmp_file"
+            append_transaction_metadata_field "$tmp_file" state "$new_state" || return 1
         elif [ "$key" = "entry_count" ]; then
             if [ -n "$entry_count" ]; then
-                printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+                append_transaction_metadata_field "$tmp_file" entry_count "$entry_count" || return 1
             else
-                printf "entry_count=%s\n" "$val" >>"$tmp_file"
+                append_transaction_metadata_field "$tmp_file" entry_count "$val" || return 1
             fi
             wrote_entry_count=true
         else
-            printf "%s=%s\n" "$key" "$val" >>"$tmp_file"
+            append_transaction_metadata_field "$tmp_file" "$key" "$val" || return 1
         fi
     done <"$meta_file"
     if [ "$wrote_entry_count" = false ] && [ -n "$entry_count" ]; then
-        printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"
+        append_transaction_metadata_field "$tmp_file" entry_count "$entry_count" || return 1
     fi
 
-    mv -f "$tmp_file" "$meta_file" || return 1
+    if ! mv -f "$tmp_file" "$meta_file"; then
+        rm -f "$tmp_file" 2>/dev/null || true
+        return 1
+    fi
     sync_file_and_parent "$meta_file"
 }
 

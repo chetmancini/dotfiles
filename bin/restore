@@ -589,6 +589,7 @@ restore_payload_in_parent() {
                 payload_matches_kind "$index" || return 1
                 payload_matches_target "$index" || return 1
             fi
+            sync_tree_and_parent "$target" || return 1
             write_restore_marker "$index" deleting || return 1
         fi
         delete_restored_payload "$index" || return 1
@@ -650,6 +651,7 @@ restore_payload_in_parent() {
 
     write_restore_marker "$index" cleaning || return 1
     payload_matches_target "$index" || return 1
+    sync_tree_and_parent "$target" || return 1
     write_restore_marker "$index" deleting || return 1
     delete_restored_payload "$index" || return 1
     rm -f "$marker"

@@ -2193,3 +2193,82 @@ EOF
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
     [ "$status" -ne 0 ]
 }
+
+@test "65. Metadata update refuses a failed state-line write" {
+    local tx_id="20260101T000000-111-847"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+
+    run bash -c '
+        source "$1"
+        printf() {
+            if [ "${1:-}" = "%s=%s\\n" ] && [ "${2:-}" = state ] && [ "${3:-}" = restoring ]; then
+                return 75
+            fi
+            builtin printf "$@"
+        }
+        update_transaction_state "$2" restoring
+    ' _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$tx_dir"
+    [ "$status" -ne 0 ]
+    grep -q '^state=complete$' "$tx_dir/metadata"
+    [ -z "$(find "$tx_dir" -maxdepth 1 -name 'metadata.tmp.*' -print -quit)" ]
+}
+
+@test "66. Restore keeps its payload when restored-target sync fails" {
+    local tx_id="20260101T000000-111-848"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-target-sync"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [ "${2:-}" = ./.gitconfig ]; then
+    exit 75
+fi
+exec "$RESTORE_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env PATH="$fake_bin:$PATH" RESTORE_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    grep -q '^cleaning$' "$tx_dir/restore-0001"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ ! -e "$tx_dir/payload/0001" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "67. Tree sync does not open named-pipe entries" {
+    local tree="$TMP_HOME/tree-with-fifo"
+    mkdir "$tree"
+    printf 'regular content\n' >"$tree/regular"
+    mkfifo "$tree/channel"
+
+    run bash -c 'source "$1"; sync_tree_and_parent "$2"' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$tree"
+    [ "$status" -eq 0 ]
+    [ -p "$tree/channel" ]
+}
