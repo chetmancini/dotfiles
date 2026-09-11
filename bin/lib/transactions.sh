@@ -246,13 +246,51 @@ copy_directory_tree() {
     touch -r "$source" "$destination"
 }
 
+copy_file_with_metadata() {
+    local source="$1"
+    local destination="$2"
+    if cp --preserve=all -- "$source" "$destination" 2>/dev/null; then
+        return 0
+    fi
+    rm -f "$destination" || return 1
+    cp -p "$source" "$destination"
+}
+
 path_metadata() {
     local path="$1"
-    if stat -f '%p|%u|%g|%m|%l' "$path" >/dev/null 2>&1; then
-        stat -f '%p|%u|%g|%m|%l' "$path"
+    if stat -f '%Fm' "$path" >/dev/null 2>&1; then
+        stat -f '%p|%u|%g|%Fm|%l' "$path"
     else
-        stat -c '%f|%u|%g|%Y|%h' "$path"
+        stat -c '%f|%u|%g|%y|%h' "$path"
     fi
+}
+
+path_xattrs() {
+    local path="$1"
+    if command -v xattr >/dev/null 2>&1; then
+        if [ -L "$path" ]; then
+            xattr -lxs "$path"
+        else
+            xattr -lx "$path"
+        fi
+    elif command -v getfattr >/dev/null 2>&1; then
+        if [ -L "$path" ]; then
+            getfattr -h -d -m - -- "$path" 2>/dev/null | sed '1d'
+        else
+            getfattr -d -m - -- "$path" 2>/dev/null | sed '1d'
+        fi
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import os, sys; p = sys.argv[1]; print(repr([(name, os.getxattr(p, name, follow_symlinks=False)) for name in sorted(os.listxattr(p, follow_symlinks=False))]))' "$path"
+    fi
+}
+
+path_xattrs_match() {
+    local source="$1"
+    local target="$2"
+    local source_xattrs target_xattrs
+    source_xattrs="$(path_xattrs "$source")" || return 1
+    target_xattrs="$(path_xattrs "$target")" || return 1
+    [ "$source_xattrs" = "$target_xattrs" ]
 }
 
 paths_match() {
@@ -264,6 +302,7 @@ paths_match() {
     source_metadata="$(path_metadata "$source")" || return 1
     target_metadata="$(path_metadata "$target")" || return 1
     [ "$source_metadata" = "$target_metadata" ] || return 1
+    path_xattrs_match "$source" "$target" || return 1
     case "$kind" in
         file) cmp -s "$source" "$target" ;;
         directory)
@@ -273,6 +312,7 @@ paths_match() {
                 source_metadata="$(path_metadata "$source/$relative")" || return 1
                 target_metadata="$(path_metadata "$target/$relative")" || return 1
                 [ "$source_metadata" = "$target_metadata" ] || return 1
+                path_xattrs_match "$source/$relative" "$target/$relative" || return 1
                 if [ -L "$source/$relative" ] || [ -L "$target/$relative" ]; then
                     [ -L "$source/$relative" ] && [ -L "$target/$relative" ] || return 1
                     source_link="$(
@@ -340,6 +380,53 @@ place_symlink_no_clobber() {
     fi
     rmdir "$stage_dir" 2>/dev/null || return 1
     return "$result"
+}
+
+# Atomically quarantine the current destination, verify that the quarantined
+# object is the one the journal describes, then remove only that object.
+guarded_remove_path() {
+    local target="$1"
+    local kind="$2"
+    local expected="$3"
+    local label="$4"
+    local parent stage_dir stage_name stage_item nested matches=false
+    parent="$(dirname "$target")"
+    stage_dir="$(mktemp -d "$parent/.${label}.remove.XXXXXX")" || return 1
+    stage_name="$(basename "$stage_dir")"
+    stage_item="$stage_dir/$stage_name"
+    nested="$target/$stage_name"
+
+    if ! mv -n "$target" "$stage_item"; then
+        rmdir "$stage_dir" 2>/dev/null || true
+        return 1
+    fi
+    case "$kind" in
+        file | directory) paths_match "$expected" "$stage_item" "$kind" && matches=true ;;
+        symlink) symlink_matches_raw_target "$stage_item" "$expected" && matches=true ;;
+        managed) is_managed_symlink "$stage_item" "$expected" && matches=true ;;
+        *) return 1 ;;
+    esac
+
+    if [ "$matches" = true ]; then
+        case "$kind" in
+            directory) rm -rf "$stage_item" || matches=false ;;
+            *) rm -f "$stage_item" || matches=false ;;
+        esac
+        if [ "$matches" = true ]; then
+            rmdir "$stage_dir" 2>/dev/null || return 1
+            [ ! -e "$target" ] && [ ! -L "$target" ]
+            return
+        fi
+    fi
+
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        mv -n "$stage_item" "$target" || true
+        if [ ! -e "$stage_item" ] && [ ! -L "$stage_item" ] && { [ -e "$nested" ] || [ -L "$nested" ]; }; then
+            mv -n "$nested" "$stage_item" || true
+        fi
+    fi
+    rmdir "$stage_dir" 2>/dev/null || true
+    return 1
 }
 
 # Check whether target is a symlink pointing to expected_source, either literally

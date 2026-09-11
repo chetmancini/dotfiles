@@ -272,7 +272,7 @@ stage_backup_payload() {
                     return 1
                 }
             else
-                cp -p "$target" "$copy_item"
+                copy_file_with_metadata "$target" "$copy_item"
             fi
             ;;
         directory) copy_directory_tree "$target" "$copy_item" ;;
@@ -422,15 +422,24 @@ create_symlink() {
         # After the record and any backup are durable, remove the prior target.
         case "$prior_kind" in
             file)
-                rm -f "$target"
+                guarded_remove_path "$target" file "$CURRENT_TRANSACTION_DIR/$prior_value" install || {
+                    echo "Error: target changed before removal: $target_rel" >&2
+                    return 1
+                }
                 print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
                 ;;
             directory)
-                rm -rf "$target"
+                guarded_remove_path "$target" directory "$CURRENT_TRANSACTION_DIR/$prior_value" install || {
+                    echo "Error: target changed before removal: $target_rel" >&2
+                    return 1
+                }
                 print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
                 ;;
             symlink)
-                rm -f "$target"
+                guarded_remove_path "$target" symlink "$prior_value" install || {
+                    echo "Error: target changed before removal: $target_rel" >&2
+                    return 1
+                }
                 print_info "Existing symlink found, replaced"
                 ;;
             absent) ;;

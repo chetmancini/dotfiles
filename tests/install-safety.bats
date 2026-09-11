@@ -297,7 +297,7 @@ for argument in "$@"; do
         *) target="$argument" ;;
     esac
 done
-if [ "$target" = "$INSTALL_FAIL_TARGET" ]; then
+if [[ "$target" == *"$INSTALL_FAIL_TARGET"* ]]; then
     exit 75
 fi
 exec "$INSTALL_REAL_RM" "$@"
@@ -306,7 +306,7 @@ EOF
 
     run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
         INSTALL_REAL_RM="$real_rm" \
-        INSTALL_FAIL_TARGET="$TEST_HOME/.gitconfig" \
+        INSTALL_FAIL_TARGET=".install.remove." \
         "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
     [ "$status" -ne 0 ]
     [ -f "$TEST_HOME/.gitconfig" ]
@@ -366,4 +366,66 @@ EOF
     [[ "$output" == *"target changed while creating symlink: .config/yazi"* ]]
     [ -d "$TEST_HOME/.config/yazi" ]
     [ -z "$(find "$TEST_HOME/.config/yazi" -mindepth 1 -print -quit)" ]
+}
+
+@test "installer preserves a file replaced after backup verification" {
+    local fake_bin="$TEST_ROOT/fake-remove-race-bin"
+    mkdir -p "$fake_bin"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+source=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *)
+            source="$argument"
+            break
+            ;;
+    esac
+done
+if [ "$source" = "$INSTALL_RACE_TARGET" ]; then
+    "$INSTALL_REAL_RM" -f "$source"
+    printf 'replacement created after backup\n' >"$source"
+fi
+exec "$INSTALL_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_REAL_RM="$(command -v rm)" \
+        INSTALL_RACE_TARGET="$TEST_HOME/.gitconfig" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed before removal: .gitconfig"* ]]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "replacement created after backup" ]
+
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    [ "$(cat "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008")" = "original git config" ]
+    grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}
+
+@test "install and restore preserve regular-file extended attributes" {
+    printf 'attributed git config\n' >"$TEST_HOME/.gitconfig"
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -w user.dotfiles preserved "$TEST_HOME/.gitconfig"
+    elif command -v setfattr >/dev/null 2>&1 && command -v getfattr >/dev/null 2>&1; then
+        setfattr -n user.dotfiles -v preserved "$TEST_HOME/.gitconfig"
+    else
+        skip "no extended-attribute tools available"
+    fi
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+
+    if command -v xattr >/dev/null 2>&1; then
+        [ "$(xattr -p user.dotfiles "$TEST_HOME/.gitconfig")" = preserved ]
+    else
+        [ "$(getfattr --only-values -n user.dotfiles "$TEST_HOME/.gitconfig")" = preserved ]
+    fi
 }

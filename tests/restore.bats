@@ -1723,10 +1723,10 @@ EOF
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
 
-@test "51. Restore propagates failure removing a target that was originally absent" {
+@test "51. Restore preserves a directory raced into an originally absent target" {
     local tx_id="20260101T000000-111-837"
     local tx_dir="$TMP_BACKUP/$tx_id"
-    local fake_bin="$TMP_HOME/fake-bin-absent-race"
+    local fake_bin="$TMP_HOME/fake-bin-absent-directory-race"
     mkdir -p "$tx_dir" "$fake_bin"
     cat <<EOF >"$tx_dir/metadata"
 version=1
@@ -1739,19 +1739,29 @@ EOF
     echo "0001|.gitconfig|absent||.gitconfig" >"$tx_dir/entries"
     ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
 
-    cat <<'EOF' >"$fake_bin/rm"
+    cat <<'EOF' >"$fake_bin/mv"
 #!/usr/bin/env bash
-target="${@: -1}"
-if [ "$target" = "$RESTORE_RACE_TARGET" ]; then
-    "$RESTORE_REAL_RM" -f "$target"
-    mkdir "$target"
+source=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *)
+            source="$argument"
+            break
+            ;;
+    esac
+done
+if [ "$source" = "$RESTORE_RACE_TARGET" ]; then
+    "$RESTORE_REAL_RM" -f "$source"
+    mkdir "$source"
 fi
-exec "$RESTORE_REAL_RM" "$@"
+exec "$RESTORE_REAL_MV" "$@"
 EOF
-    chmod +x "$fake_bin/rm"
+    chmod +x "$fake_bin/mv"
 
     run env PATH="$fake_bin:$PATH" \
         RESTORE_REAL_RM="$(command -v rm)" \
+        RESTORE_REAL_MV="$(command -v mv)" \
         RESTORE_RACE_TARGET="$HOME/.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
@@ -1782,6 +1792,73 @@ EOF
 
     run env PATH="$fake_bin:$PATH" bash -c \
         'source "$1"; paths_match "$2" "$3" directory' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
+    [ "$status" -ne 0 ]
+}
+
+@test "53. Restore preserves a file raced into an originally absent target" {
+    local tx_id="20260101T000000-111-838"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-absent-file-race"
+    mkdir -p "$tx_dir" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.gitconfig|absent||.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+source=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *)
+            source="$argument"
+            break
+            ;;
+    esac
+done
+if [ "$source" = "$RESTORE_RACE_TARGET" ]; then
+    "$RESTORE_REAL_RM" -f "$source"
+    printf 'concurrent content\n' >"$source"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_RM="$(command -v rm)" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while removing managed symlink"* ]]
+    [ -f "$HOME/.gitconfig" ]
+    [ ! -L "$HOME/.gitconfig" ]
+    [ "$(cat "$HOME/.gitconfig")" = "concurrent content" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "54. File identity compares subsecond modification times" {
+    local source="$TMP_HOME/subsecond-source"
+    local target="$TMP_HOME/subsecond-target"
+    printf 'same content\n' >"$source"
+    cp -p "$source" "$target"
+    python3 - "$source" "$target" <<'PY'
+import os
+import sys
+
+os.utime(sys.argv[1], ns=(1_700_000_000_100_000_000,) * 2)
+os.utime(sys.argv[2], ns=(1_700_000_000_200_000_000,) * 2)
+PY
+
+    run bash -c 'source "$1"; paths_match "$2" "$3" file' \
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
     [ "$status" -ne 0 ]
 }

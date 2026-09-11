@@ -419,7 +419,7 @@ restore_symlink() {
     local target="$HOME/${TARGETS[$index]}"
 
     if [ "${ACTIONS[$index]}" = managed ]; then
-        rm -f "$target" || return 1
+        guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
     fi
     if ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
         echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
@@ -468,7 +468,7 @@ restore_payload() {
                 if [ "$(path_link_count "$payload")" -gt 1 ]; then
                     ln "$payload" "$stage"
                 else
-                    cp -p "$payload" "$stage"
+                    copy_file_with_metadata "$payload" "$stage"
                 fi
                 ;;
             directory) copy_directory_tree "$payload" "$stage" ;;
@@ -484,7 +484,7 @@ restore_payload() {
     fi
 
     if [ "${ACTIONS[$index]}" = managed ]; then
-        rm -f "$target" || return 1
+        guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
     fi
     mv -n "$stage" "$target" || return 1
     nested="$target/$stage_name"
@@ -518,7 +518,7 @@ apply_entry() {
     case "${ACTIONS[$index]}:${KINDS[$index]}" in
         original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
         managed:absent)
-            if ! rm -f "$target" || [ -e "$target" ] || [ -L "$target" ]; then
+            if ! guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore; then
                 echo "Error: target changed while removing managed symlink: ${TARGETS[$index]}" >&2
                 return 1
             fi
