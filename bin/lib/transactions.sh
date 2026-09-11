@@ -242,7 +242,13 @@ copy_directory_tree() {
     local source="$1"
     local destination="$2"
     mkdir "$destination" || return 1
-    (cd "$source" && tar --format=pax -cf - .) | (cd "$destination" && tar -xpf -) || return 1
+    if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+        (cd "$source" && tar --xattrs --format=pax -cf - .) |
+            (cd "$destination" && tar --xattrs -xpf -) || return 1
+    else
+        (cd "$source" && tar --format=pax -cf - .) |
+            (cd "$destination" && tar -xpf -) || return 1
+    fi
     touch -r "$source" "$destination"
 }
 
@@ -298,6 +304,7 @@ paths_match() {
     local target="$2"
     local kind="$3"
     local relative source_metadata target_metadata source_link target_link
+    local source_count=0 target_count=0
 
     source_metadata="$(path_metadata "$source")" || return 1
     target_metadata="$(path_metadata "$target")" || return 1
@@ -306,8 +313,8 @@ paths_match() {
     case "$kind" in
         file) cmp -s "$source" "$target" ;;
         directory)
-            diff -qr "$source" "$target" >/dev/null 2>&1 || return 1
             while IFS= read -r -d '' relative; do
+                source_count=$((source_count + 1))
                 relative="${relative#./}"
                 source_metadata="$(path_metadata "$source/$relative")" || return 1
                 target_metadata="$(path_metadata "$target/$relative")" || return 1
@@ -324,8 +331,16 @@ paths_match() {
                         printf x
                     )" || return 1
                     [ "$source_link" = "$target_link" ] || return 1
+                elif [ -f "$source/$relative" ]; then
+                    [ -f "$target/$relative" ] && cmp -s "$source/$relative" "$target/$relative" || return 1
+                elif [ -d "$source/$relative" ]; then
+                    [ -d "$target/$relative" ] || return 1
                 fi
             done < <(cd "$source" && find . -mindepth 1 -print0)
+            while IFS= read -r -d '' _; do
+                target_count=$((target_count + 1))
+            done < <(cd "$target" && find . -mindepth 1 -print0)
+            [ "$source_count" -eq "$target_count" ]
             ;;
         *) return 1 ;;
     esac
@@ -389,7 +404,7 @@ guarded_remove_path() {
     local kind="$2"
     local expected="$3"
     local label="$4"
-    local parent stage_dir stage_name stage_item nested matches=false
+    local parent stage_dir stage_name stage_item nested matches=false cleanup_failed=false
     parent="$(dirname "$target")"
     stage_dir="$(mktemp -d "$parent/.${label}.remove.XXXXXX")" || return 1
     stage_name="$(basename "$stage_dir")"
@@ -409,9 +424,12 @@ guarded_remove_path() {
 
     if [ "$matches" = true ]; then
         case "$kind" in
-            directory) rm -rf "$stage_item" || matches=false ;;
+            directory) rm -rf "$stage_item" || cleanup_failed=true ;;
             *) rm -f "$stage_item" || matches=false ;;
         esac
+        if [ "$cleanup_failed" = true ]; then
+            return 1
+        fi
         if [ "$matches" = true ]; then
             rmdir "$stage_dir" 2>/dev/null || return 1
             [ ! -e "$target" ] && [ ! -L "$target" ]

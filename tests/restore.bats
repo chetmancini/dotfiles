@@ -1861,3 +1861,13 @@ PY
         _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
     [ "$status" -ne 0 ]
 }
+
+@test "55. Directory identity accepts matching dangling symlinks" {
+    local source="$TMP_HOME/dangling-source"
+    local target="$TMP_HOME/dangling-target"
+    mkdir "$source"
+    ln -s nowhere "$source/link"
+    run bash -c 'source "$1"; copy_directory_tree "$2" "$3"; paths_match "$2" "$3" directory' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
+    [ "$status" -eq 0 ]
+}

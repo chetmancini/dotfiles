@@ -429,3 +429,61 @@ EOF
         [ "$(getfattr --only-values -n user.dotfiles "$TEST_HOME/.gitconfig")" = preserved ]
     fi
 }
+
+@test "install and restore preserve directory-entry extended attributes" {
+    mkdir -p "$TEST_HOME/.config/yazi"
+    printf 'attributed directory content\n' >"$TEST_HOME/.config/yazi/config"
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -w user.dotfiles preserved "$TEST_HOME/.config/yazi/config"
+    elif command -v setfattr >/dev/null 2>&1 && command -v getfattr >/dev/null 2>&1; then
+        setfattr -n user.dotfiles -v preserved "$TEST_HOME/.config/yazi/config"
+    else
+        skip "no extended-attribute tools available"
+    fi
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+
+    if command -v xattr >/dev/null 2>&1; then
+        [ "$(xattr -p user.dotfiles "$TEST_HOME/.config/yazi/config")" = preserved ]
+    else
+        [ "$(getfattr --only-values -n user.dotfiles "$TEST_HOME/.config/yazi/config")" = preserved ]
+    fi
+}
+
+@test "failed quarantined directory cleanup remains restorable" {
+    local fake_bin="$TEST_ROOT/fake-directory-cleanup-bin"
+    mkdir -p "$fake_bin" "$TEST_HOME/.config/yazi"
+    printf 'first original\n' >"$TEST_HOME/.config/yazi/first"
+    printf 'second original\n' >"$TEST_HOME/.config/yazi/second"
+
+    cat <<'EOF' >"$fake_bin/rm"
+#!/usr/bin/env bash
+target="${@: -1}"
+if [[ "$target" == *".install.remove."* ]] && [ -d "$target" ]; then
+    "$INSTALL_REAL_RM" -f "$target/first"
+    exit 75
+fi
+exec "$INSTALL_REAL_RM" "$@"
+EOF
+    chmod +x "$fake_bin/rm"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_RM="$(command -v rm)" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [ ! -e "$TEST_HOME/.config/yazi" ]
+
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    [ "$(cat "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0001/first")" = "first original" ]
+    [ "$(cat "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0001/second")" = "second original" ]
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TEST_HOME/.config/yazi/first")" = "first original" ]
+    [ "$(cat "$TEST_HOME/.config/yazi/second")" = "second original" ]
+    grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}
