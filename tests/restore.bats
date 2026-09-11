@@ -2439,10 +2439,10 @@ EOF
     cat <<'EOF' >"$fake_bin/cp"
 #!/usr/bin/env bash
 destination="${@: -1}"
-if stat -f '%Lp' "$destination" >/dev/null 2>&1; then
-    stat -f '%Lp' "$destination" >"$RESTORE_OBSERVED_MODE"
-else
+if stat -c '%a' "$destination" >/dev/null 2>&1; then
     stat -c '%a' "$destination" >"$RESTORE_OBSERVED_MODE"
+else
+    stat -f '%Lp' "$destination" >"$RESTORE_OBSERVED_MODE"
 fi
 exec "$RESTORE_REAL_CP" "$@"
 EOF
@@ -2454,7 +2454,7 @@ EOF
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -eq 0 ]
     [ "$(cat "$observed_mode")" = 600 ]
-    [ "$(stat -f '%Lp' "$HOME/.gitconfig" 2>/dev/null || stat -c '%a' "$HOME/.gitconfig")" = 600 ]
+    [ "$(stat -c '%a' "$HOME/.gitconfig" 2>/dev/null || stat -f '%Lp' "$HOME/.gitconfig")" = 600 ]
 }
 
 @test "73. Portable placement fallback removes a consumed stage" {
