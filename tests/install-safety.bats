@@ -585,3 +585,65 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(getfacl -cp "$TEST_HOME/.config/yazi/config")" = "$expected_acl" ]
 }
+
+@test "transaction creation stays anchored when the backup root is replaced" {
+    local fake_bin="$TEST_ROOT/fake-backup-root-race-bin"
+    local root="$TEST_HOME/.dotfiles-backup"
+    local saved_root="$TEST_ROOT/saved-backup-root"
+    local external="$TEST_ROOT/external-backup-root"
+    mkdir -p "$fake_bin" "$external"
+
+    cat <<'EOF' >"$fake_bin/mkdir"
+#!/usr/bin/env bash
+if [[ "${1:-}" =~ ^[0-9]{8}T[0-9]{6}- ]] && [ ! -e "$INSTALL_RACE_DONE" ]; then
+    : >"$INSTALL_RACE_DONE"
+    "$INSTALL_REAL_MV" "$INSTALL_BACKUP_ROOT" "$INSTALL_SAVED_ROOT"
+    ln -s "$INSTALL_EXTERNAL_ROOT" "$INSTALL_BACKUP_ROOT"
+fi
+exec "$INSTALL_REAL_MKDIR" "$@"
+EOF
+    chmod +x "$fake_bin/mkdir"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_MKDIR="$(command -v mkdir)" \
+        INSTALL_REAL_MV="$(command -v mv)" \
+        INSTALL_BACKUP_ROOT="$root" \
+        INSTALL_SAVED_ROOT="$saved_root" \
+        INSTALL_EXTERNAL_ROOT="$external" \
+        INSTALL_RACE_DONE="$TEST_ROOT/backup-root-raced" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to initialize transaction"* ]]
+    [ -L "$root" ]
+    [ -z "$(find "$external" -mindepth 1 -print -quit)" ]
+    [ -n "$(find "$saved_root" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
+    [ ! -L "$TEST_HOME/.config/yazi" ]
+}
+
+@test "installer syncs an installed link before transaction completion" {
+    local fake_bin="$TEST_ROOT/fake-installed-link-sync-bin"
+    mkdir -p "$fake_bin"
+
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [ "${2:-}" = ./yazi ]; then
+    exit 75
+fi
+exec "$INSTALL_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [ -L "$TEST_HOME/.config/yazi" ]
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ ! -e "$TEST_HOME/.config/yazi" ]
+    [ ! -L "$TEST_HOME/.config/yazi" ]
+}

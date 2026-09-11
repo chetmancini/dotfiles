@@ -276,25 +276,10 @@ reserve_restore_stage() {
 }
 
 place_restore_stage_exact() {
-    local stage="$1" target="$2" kind="$3" payload="$4" expected_identity="$5"
-    local nested
-    nested="$target/$(basename "$stage")"
+    local stage="$1" target="$2" expected_identity="$3"
 
     [ "$(path_identity "$stage")" = "$expected_identity" ] || return 1
-    if mv -n -T "$stage" "$target" 2>/dev/null; then
-        :
-    elif [ ! -e "$target" ] && [ ! -L "$target" ] && { [ -e "$stage" ] || [ -L "$stage" ]; }; then
-        mv -n "$stage" "$target" || return 1
-    else
-        return 1
-    fi
-
-    if [ -e "$nested" ] || [ -L "$nested" ]; then
-        [ "$(path_identity "$nested")" = "$expected_identity" ] || return 1
-        guarded_remove_path "$nested" "$kind" "$payload" restore-stage || return 1
-        return 1
-    fi
-    [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+    move_path_no_clobber_exact "$stage" "$target" || return 1
     [ "$(path_identity "$target")" = "$expected_identity" ]
 }
 
@@ -681,7 +666,7 @@ restore_payload_in_parent() {
     if [ "${ACTIONS[$index]}" = managed ]; then
         guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
     fi
-    if ! place_restore_stage_exact "$stage" "$target" "$kind" "$payload" "$stage_identity"; then
+    if ! place_restore_stage_exact "$stage" "$target" "$stage_identity"; then
         echo "Error: target changed while placing restore: ${TARGETS[$index]}" >&2
         return 1
     fi

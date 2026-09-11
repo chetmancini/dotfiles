@@ -273,6 +273,30 @@ stage_backup_payload() {
     rmdir "$copy_dir"
 }
 
+initialize_transaction() {
+    local root="$1" id="$2" created_at="$3" repo_rev="$4" owner_started_at="$5"
+    local parent root_name
+    parent="$(dirname "$root")"
+    root_name="$(basename "$root")"
+
+    (
+        cd -P "$parent" || return 1
+        [ "$parent" -ef . ] || return 1
+        [ ! -L "$root_name" ] && { [ ! -e "$root_name" ] || [ -d "$root_name" ]; } || return 1
+        if [ ! -e "$root_name" ]; then
+            (umask 077 && mkdir "$root_name") || return 1
+            sync_parent_directory "./$root_name" || return 1
+        fi
+        cd -P "$root_name" || return 1
+        [ "$root" -ef . ] || return 1
+        (umask 077 && mkdir "$id") || return 1
+        (umask 077 && mkdir "$id/payload") || return 1
+        write_transaction_metadata "./$id" "$id" "$created_at" "$repo_rev" in_progress "" "$DOTFILES_DIR" "$$" "$owner_started_at" || return 1
+        sync_parent_directory "./$id" || return 1
+        [ "$root" -ef . ]
+    )
+}
+
 install_symlink_anchored() {
     local target_rel="$1" source="$2" prior_kind="$3" prior_value="$4" name="$5"
     local parent_rel target_name
@@ -291,6 +315,7 @@ install_symlink_anchored() {
                 [ ! -L "$part" ] || return 1
                 if [ ! -e "$part" ]; then
                     mkdir "$part" || return 1
+                    sync_parent_directory "./$part" || return 1
                 fi
                 [ -d "$part" ] && [ ! -L "$part" ] || return 1
                 cd -P "$part" || return 1
@@ -318,6 +343,7 @@ install_symlink_anchored() {
                 ;;
         esac
         place_symlink_no_clobber "$source" "$target" install || return 1
+        sync_parent_directory "$target" || return 1
         validate_target_ancestors_install "$target_rel" || return 1
         [ "$current" -ef . ]
     )
@@ -407,18 +433,17 @@ create_symlink() {
                 echo "Error: failed to generate transaction ID" >&2
                 exit 1
             }
-            CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
-            mkdir -p "$CURRENT_TRANSACTION_DIR/payload"
             local repo_rev
             repo_rev="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
             local created_at
             created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             local owner_started_at
             owner_started_at="$(process_start_identity "$$")" || owner_started_at="unverified-$CURRENT_TRANSACTION_ID"
-            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" "" "$DOTFILES_DIR" "$$" "$owner_started_at" || {
-                echo "Error: failed to write transaction metadata" >&2
+            initialize_transaction "$root" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "$owner_started_at" || {
+                echo "Error: failed to initialize transaction under $root" >&2
                 exit 1
             }
+            CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
         fi
 
         TRANSACTION_SEQUENCE=$((TRANSACTION_SEQUENCE + 1))
@@ -868,9 +893,16 @@ if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ] && [ -d "$CURRE
         exit 1
     }
     tx_root="$(transaction_backup_root)"
-    tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")"
-    printf "%s\n" "$CURRENT_TRANSACTION_ID" >"$tx_tmp_latest"
-    mv -f "$tx_tmp_latest" "$tx_root/latest"
+    tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")" || {
+        echo "Error: failed to reserve latest transaction pointer" >&2
+        exit 1
+    }
+    if ! printf "%s\n" "$CURRENT_TRANSACTION_ID" >"$tx_tmp_latest" ||
+        ! mv -f "$tx_tmp_latest" "$tx_root/latest"; then
+        rm -f "$tx_tmp_latest" 2>/dev/null || true
+        echo "Error: failed to publish latest transaction pointer" >&2
+        exit 1
+    fi
     sync_file_and_parent "$tx_root/latest"
 fi
 INSTALL_SUCCESS=true

@@ -563,27 +563,60 @@ symlink_matches_raw_target() {
     [ "${actual%x}" = "$expected" ]
 }
 
+recover_moved_path() {
+    local moved="$1" original="$2"
+    [ ! -e "$original" ] && [ ! -L "$original" ] || return 1
+    if ! mv -n -T "$moved" "$original" 2>/dev/null; then
+        [ ! -e "$original" ] && [ ! -L "$original" ] || return 1
+        mv -n "$moved" "$original" || return 1
+    fi
+    [ ! -e "$moved" ] && [ ! -L "$moved" ]
+}
+
+move_path_no_clobber_exact() {
+    local source="$1" destination="$2"
+    local source_identity nested
+    source_identity="$(path_identity "$source")" || return 1
+    nested="$destination/$(basename "$source")"
+
+    if mv -n -T "$source" "$destination" 2>/dev/null; then
+        :
+    elif [ ! -e "$destination" ] && [ ! -L "$destination" ] &&
+        [ "$(path_identity "$source" 2>/dev/null)" = "$source_identity" ]; then
+        mv -n "$source" "$destination" || return 1
+    else
+        return 1
+    fi
+
+    if [ ! -e "$source" ] && [ ! -L "$source" ] &&
+        [ "$(path_identity "$destination" 2>/dev/null)" = "$source_identity" ]; then
+        return 0
+    fi
+    if [ ! -e "$source" ] && [ ! -L "$source" ] &&
+        [ "$(path_identity "$nested" 2>/dev/null)" = "$source_identity" ]; then
+        recover_moved_path "$nested" "$source" || return 1
+    elif [ ! -e "$source" ] && [ ! -L "$source" ] && { [ -e "$destination" ] || [ -L "$destination" ]; }; then
+        recover_moved_path "$destination" "$source" || return 1
+    fi
+    return 1
+}
+
 # Place a symlink without replacing a filesystem object that races into the
 # destination. If a directory consumes the staged link, remove only that link.
 place_symlink_no_clobber() {
     local raw_target="$1"
     local destination="$2"
     local label="$3"
-    local parent stage_dir stage_name stage_item nested result=1
+    local parent stage_dir stage_name stage_item result=1
     parent="$(dirname "$destination")"
     stage_dir="$(mktemp -d "$parent/.${label}.stage.XXXXXX")" || return 1
     stage_name="$(basename "$stage_dir")"
     stage_item="$stage_dir/$stage_name"
-    nested="$destination/$stage_name"
 
-    if ln -s -- "$raw_target" "$stage_item"; then
-        mv -n "$stage_item" "$destination" || true
-        if symlink_matches_raw_target "$destination" "$raw_target"; then
-            result=0
-        elif [ ! -e "$stage_item" ] && [ ! -L "$stage_item" ] &&
-            symlink_matches_raw_target "$nested" "$raw_target"; then
-            rm -f "$nested" || return 1
-        fi
+    if ln -s -- "$raw_target" "$stage_item" &&
+        move_path_no_clobber_exact "$stage_item" "$destination" &&
+        symlink_matches_raw_target "$destination" "$raw_target"; then
+        result=0
     fi
 
     if symlink_matches_raw_target "$stage_item" "$raw_target"; then
@@ -600,14 +633,13 @@ guarded_remove_path() {
     local kind="$2"
     local expected="$3"
     local label="$4"
-    local parent stage_dir stage_name stage_item nested matches=false cleanup_failed=false
+    local parent stage_dir stage_name stage_item matches=false cleanup_failed=false
     parent="$(dirname "$target")"
     stage_dir="$(mktemp -d "$parent/.${label}.remove.XXXXXX")" || return 1
     stage_name="$(basename "$stage_dir")"
     stage_item="$stage_dir/$stage_name"
-    nested="$target/$stage_name"
-
-    if ! mv -n "$target" "$stage_item"; then
+    if ! move_path_no_clobber_exact "$target" "$stage_item"; then
+        rmdir "$stage_item" 2>/dev/null || true
         rmdir "$stage_dir" 2>/dev/null || true
         return 1
     fi
@@ -634,10 +666,7 @@ guarded_remove_path() {
     fi
 
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
-        mv -n "$stage_item" "$target" || true
-        if [ ! -e "$stage_item" ] && [ ! -L "$stage_item" ] && { [ -e "$nested" ] || [ -L "$nested" ]; }; then
-            mv -n "$nested" "$stage_item" || true
-        fi
+        move_path_no_clobber_exact "$stage_item" "$target" || true
     fi
     rmdir "$stage_dir" 2>/dev/null || true
     return 1

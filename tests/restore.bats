@@ -2457,7 +2457,7 @@ EOF
     [ "$(stat -c '%a' "$HOME/.gitconfig" 2>/dev/null || stat -f '%Lp' "$HOME/.gitconfig")" = 600 ]
 }
 
-@test "73. Portable placement fallback removes a consumed stage" {
+@test "73. Portable placement fallback recovers a consumed stage" {
     local tx_id="20260101T000000-111-853"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local fake_bin="$TMP_HOME/fake-bin-portable-placement"
@@ -2501,6 +2501,7 @@ EOF
     [ -d "$target" ]
     [ ! -e "$nested" ]
     [ -z "$(find "$target" -mindepth 1 -print -quit)" ]
+    [ "$(cat "$HOME/.config/.restore.stage.$tx_id.0001/file")" = "private original content" ]
     [ "$(cat "$tx_dir/payload/0001/file")" = "private original content" ]
 
     rmdir "$target"
@@ -2508,4 +2509,38 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(cat "$target/file")" = "private original content" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "74. Quarantine move recovers from a raced destination directory" {
+    local target="$TMP_HOME/quarantine-target"
+    local expected="$TMP_HOME/quarantine-expected"
+    local fake_bin="$TMP_HOME/fake-bin-quarantine-race"
+    mkdir -p "$fake_bin"
+    printf 'original content\n' >"$target"
+    cp -p "$target" "$expected"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+for argument in "$@"; do
+    if [ "$argument" = -T ]; then
+        exit 64
+    fi
+done
+destination="${@: -1}"
+if [[ "$destination" == *".test.remove."*/* ]] && [ ! -e "$RESTORE_RACE_DONE" ]; then
+    : >"$RESTORE_RACE_DONE"
+    mkdir "$destination"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_DONE="$TMP_HOME/quarantine-raced" \
+        bash -c 'source "$1"; guarded_remove_path "$2" file "$3" test' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$target" "$expected"
+    [ "$status" -ne 0 ]
+    [ "$(cat "$target")" = "original content" ]
+    [ -z "$(find "$TMP_HOME" -maxdepth 1 -type d -name '.test.remove.*' -print -quit)" ]
 }
