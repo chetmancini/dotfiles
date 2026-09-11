@@ -255,6 +255,24 @@ inspect_target() {
     fi
 }
 
+stage_backup_payload() {
+    local target="$1"
+    local kind="$2"
+    local payload="$3"
+    local sequence="$4"
+    local copy_dir copy_item
+
+    copy_dir="$(mktemp -d "$CURRENT_TRANSACTION_DIR/payload/.copy-${sequence}.XXXXXX")" || return 1
+    copy_item="$copy_dir/item"
+    case "$kind" in
+        file) cp -p "$target" "$copy_item" ;;
+        directory) copy_directory_tree "$target" "$copy_item" ;;
+        *) return 1 ;;
+    esac || return 1
+    mv "$copy_item" "$payload" || return 1
+    rmdir "$copy_dir"
+}
+
 # Create a symlink with explanation and transactional safety.
 create_symlink() {
     local source_rel="$1"
@@ -377,10 +395,32 @@ create_symlink() {
             return 1
         fi
 
-        # After the record is durable, move prior file/directory or remove prior symlink
+        if [ "$prior_kind" = file ] || [ "$prior_kind" = directory ]; then
+            stage_backup_payload "$target" "$prior_kind" "$CURRENT_TRANSACTION_DIR/$prior_value" "$seq" || {
+                echo "Error: failed to stage backup for $target_rel" >&2
+                return 1
+            }
+            if ! inspect_target "$target" || [ "$TARGET_KIND" != "$prior_kind" ]; then
+                echo "Error: target changed while backing it up: $target_rel" >&2
+                return 1
+            fi
+            case "$prior_kind" in
+                file) cmp -s "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" ;;
+                directory) diff -qr "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" >/dev/null 2>&1 ;;
+            esac || {
+                echo "Error: target changed while backing it up: $target_rel" >&2
+                return 1
+            }
+        fi
+
+        # After the record and any backup are durable, remove the prior target.
         case "$prior_kind" in
-            file | directory)
-                mv "$target" "$CURRENT_TRANSACTION_DIR/payload/$seq"
+            file)
+                rm -f "$target"
+                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
+                ;;
+            directory)
+                rm -rf "$target"
                 print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/payload/$seq"
                 ;;
             symlink)

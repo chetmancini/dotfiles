@@ -242,3 +242,85 @@ EOF
     [ ! -L "$TEST_HOME/.gitconfig" ]
     [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
 }
+
+@test "failed backup copy leaves the original target restorable" {
+    local fake_bin="$TEST_ROOT/fake-copy-bin"
+    mkdir -p "$fake_bin"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/cp"
+#!/usr/bin/env bash
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+printf 'partial backup' >"$destination"
+exit 75
+EOF
+    chmod +x "$fake_bin/cp"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to stage backup for .gitconfig"* ]]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+    [ ! -e "$TEST_HOME/.dotfiles-backup/$tx_id/backup-0008" ]
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+    grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}
+
+@test "completed staged backup makes an interrupted removal resumable" {
+    local fake_bin="$TEST_ROOT/fake-remove-bin"
+    local real_rm
+    mkdir -p "$fake_bin"
+    real_rm="$(command -v rm)"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/rm"
+#!/usr/bin/env bash
+target=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) target="$argument" ;;
+    esac
+done
+if [ "$target" = "$INSTALL_FAIL_TARGET" ]; then
+    exit 75
+fi
+exec "$INSTALL_REAL_RM" "$@"
+EOF
+    chmod +x "$fake_bin/rm"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_RM="$real_rm" \
+        INSTALL_FAIL_TARGET="$TEST_HOME/.gitconfig" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+
+    local tx_id
+    tx_id="$(find "$TEST_HOME/.dotfiles-backup" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)"
+    grep -q '^state=failed$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+    [ "$(cat "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008")" = "original git config" ]
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+    [ ! -e "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008" ]
+    grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
+}

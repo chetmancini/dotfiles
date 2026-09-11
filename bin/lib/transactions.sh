@@ -236,6 +236,15 @@ validate_transaction_metadata_writable() {
     return 0
 }
 
+# Copy a directory tree through an archive stream so file metadata, symlinks,
+# and hard-link relationships survive on both BSD and GNU userlands.
+copy_directory_tree() {
+    local source="$1"
+    local destination="$2"
+    mkdir "$destination" || return 1
+    (cd "$source" && tar -cf - .) | (cd "$destination" && tar -xpf -)
+}
+
 # Check whether target is a symlink pointing to expected_source, either literally
 # or via canonical physical paths.
 is_managed_symlink() {

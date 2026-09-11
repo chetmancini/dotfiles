@@ -1503,3 +1503,77 @@ EOF
     [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
 }
+
+@test "45. Directory restore preserves hard-linked files" {
+    local tx_id="20260101T000000-111-831"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload/0001" "$HOME/.config"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'shared inode content\n' >"$tx_dir/payload/0001/original"
+    ln "$tx_dir/payload/0001/original" "$tx_dir/payload/0001/hard-link"
+    echo "0001|.config/yazi|directory|payload/0001|yazi" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/yazi" "$HOME/.config/yazi"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -f "$HOME/.config/yazi/original" ]
+    [ "$HOME/.config/yazi/original" -ef "$HOME/.config/yazi/hard-link" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "46. Symlink restore rejects a directory raced into its destination" {
+    local tx_id="20260101T000000-111-832"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-symlink-race"
+    mkdir -p "$tx_dir" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.gitconfig|symlink|prior-target|.gitconfig" >"$tx_dir/entries"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+if [ "$destination" = "$RESTORE_RACE_TARGET" ]; then
+    mkdir -p "$destination"
+fi
+"$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target became a directory while restoring symlink"* ]]
+    [ -d "$HOME/.gitconfig" ]
+    [ ! -e "$HOME/.gitconfig/item" ]
+    [ ! -L "$HOME/.gitconfig/item" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+
+    rmdir "$HOME/.gitconfig"
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ -L "$HOME/.gitconfig" ]
+    [ "$(readlink "$HOME/.gitconfig")" = "prior-target" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
