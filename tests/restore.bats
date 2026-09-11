@@ -2693,3 +2693,45 @@ EOF
     [ "$status" -eq 0 ]
     grep -q '^state=restored$' "$TMP_BACKUP/$tx_id/metadata"
 }
+
+@test "79. Portable move recovery leaves an unverified destination untouched" {
+    local source="$TMP_HOME/move-source"
+    local destination="$TMP_HOME/move-destination"
+    local saved_source="$TMP_HOME/move-source-saved"
+    local fake_bin="$TMP_HOME/fake-bin-move-second-race"
+    mkdir -p "$fake_bin"
+    printf 'original source\n' >"$source"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+for argument in "$@"; do
+    if [ "$argument" = -T ]; then
+        exit 64
+    fi
+done
+source_path="${@: -2:1}"
+destination="${@: -1}"
+if [ "$source_path" = "$RESTORE_RACE_SOURCE" ] && [ "$destination" = "$RESTORE_RACE_DESTINATION" ]; then
+    mkdir "$destination"
+    printf 'foreign destination\n' >"$destination/foreign"
+fi
+"$RESTORE_REAL_MV" "$@" || exit
+if [ "$source_path" = "$RESTORE_RACE_SOURCE" ] && [ "$destination" = "$RESTORE_RACE_DESTINATION" ]; then
+    "$RESTORE_REAL_MV" "$destination/$(basename "$source_path")" "$RESTORE_SAVED_SOURCE"
+fi
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_SOURCE="$source" \
+        RESTORE_RACE_DESTINATION="$destination" \
+        RESTORE_SAVED_SOURCE="$saved_source" \
+        bash -c 'source "$1"; move_path_no_clobber_exact "$2" "$3"' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$destination"
+    [ "$status" -ne 0 ]
+    [ ! -e "$source" ]
+    [ -d "$destination" ]
+    [ "$(cat "$destination/foreign")" = "foreign destination" ]
+    [ "$(cat "$saved_source")" = "original source" ]
+}

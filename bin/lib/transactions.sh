@@ -595,8 +595,6 @@ move_path_no_clobber_exact() {
     if [ ! -e "$source" ] && [ ! -L "$source" ] &&
         [ "$(path_identity "$nested" 2>/dev/null)" = "$source_identity" ]; then
         recover_moved_path "$nested" "$source" || return 1
-    elif [ ! -e "$source" ] && [ ! -L "$source" ] && { [ -e "$destination" ] || [ -L "$destination" ]; }; then
-        recover_moved_path "$destination" "$source" || return 1
     fi
     return 1
 }
