@@ -469,6 +469,10 @@ create_symlink() {
                 echo "Error: target changed while backing it up: $target_rel" >&2
                 return 1
             }
+            sync_tree_and_parent "$CURRENT_TRANSACTION_DIR/$prior_value" || {
+                echo "Error: failed to sync backup for $target_rel" >&2
+                return 1
+            }
         fi
 
         # Hold the validated parent as the working directory while removing and

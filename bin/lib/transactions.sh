@@ -444,6 +444,42 @@ PY
     fi
 }
 
+sync_tree_and_parent() {
+    local path="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$path" <<'PY'
+import os
+import sys
+
+path = sys.argv[1]
+
+def flush(entry):
+    descriptor = os.open(entry, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+if os.path.isdir(path) and not os.path.islink(path):
+    for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
+        for name in files:
+            entry = os.path.join(root, name)
+            if not os.path.islink(entry):
+                flush(entry)
+        for name in dirs:
+            entry = os.path.join(root, name)
+            if not os.path.islink(entry):
+                flush(entry)
+        flush(root)
+else:
+    flush(path)
+flush(os.path.dirname(path))
+PY
+    else
+        sync
+    fi
+}
+
 path_link_count() {
     local path="$1"
     if stat -f '%l' "$path" >/dev/null 2>&1; then

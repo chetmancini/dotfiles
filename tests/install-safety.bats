@@ -466,6 +466,29 @@ EOF
     [ ! -L "$TEST_HOME/.config/yazi" ]
 }
 
+@test "installer preserves the original when payload sync fails" {
+    local fake_bin="$TEST_ROOT/fake-payload-sync-bin"
+    mkdir -p "$fake_bin"
+    printf 'original git config\n' >"$TEST_HOME/.gitconfig"
+    cat <<'EOF' >"$fake_bin/python3"
+#!/usr/bin/env bash
+if [ "${1:-}" = - ] && [[ "${2:-}" == */payload/0008 ]]; then
+    exit 75
+fi
+exec "$INSTALL_REAL_PYTHON" "$@"
+EOF
+    chmod +x "$fake_bin/python3"
+
+    run env HOME="$TEST_HOME" PATH="$fake_bin:$PATH" \
+        INSTALL_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"failed to sync backup for .gitconfig"* ]]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ ! -L "$TEST_HOME/.gitconfig" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "original git config" ]
+}
+
 @test "install and restore preserve regular-file extended attributes" {
     printf 'attributed git config\n' >"$TEST_HOME/.gitconfig"
     if command -v xattr >/dev/null 2>&1; then
