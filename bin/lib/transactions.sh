@@ -259,7 +259,7 @@ paths_match() {
     local source="$1"
     local target="$2"
     local kind="$3"
-    local relative source_metadata target_metadata
+    local relative source_metadata target_metadata source_link target_link
 
     source_metadata="$(path_metadata "$source")" || return 1
     target_metadata="$(path_metadata "$target")" || return 1
@@ -273,6 +273,18 @@ paths_match() {
                 source_metadata="$(path_metadata "$source/$relative")" || return 1
                 target_metadata="$(path_metadata "$target/$relative")" || return 1
                 [ "$source_metadata" = "$target_metadata" ] || return 1
+                if [ -L "$source/$relative" ] || [ -L "$target/$relative" ]; then
+                    [ -L "$source/$relative" ] && [ -L "$target/$relative" ] || return 1
+                    source_link="$(
+                        readlink -n "$source/$relative" || exit 1
+                        printf x
+                    )" || return 1
+                    target_link="$(
+                        readlink -n "$target/$relative" || exit 1
+                        printf x
+                    )" || return 1
+                    [ "$source_link" = "$target_link" ] || return 1
+                fi
             done < <(cd "$source" && find . -mindepth 1 -print0)
             ;;
         *) return 1 ;;

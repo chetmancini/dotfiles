@@ -240,6 +240,7 @@ classify_entry() {
                 if [ -e "$stage" ]; then
                     path_matches_kind "$stage" "$kind" || return 1
                     payload_matches_kind "$index" || return 1
+                    paths_match "$payload" "$stage" "$kind" || return 1
                 elif path_matches_kind "$target" "$kind"; then
                     if [ -e "$payload" ] || [ -L "$payload" ]; then
                         payload_matches_kind "$index" || return 1
@@ -485,13 +486,18 @@ restore_payload() {
     if [ "${ACTIONS[$index]}" = managed ]; then
         rm -f "$target" || return 1
     fi
-    mv "$stage" "$target" || return 1
+    mv -n "$stage" "$target" || return 1
     nested="$target/$stage_name"
     if [ -e "$nested" ] || [ -L "$nested" ]; then
         echo "Error: target became a directory while restoring: ${TARGETS[$index]}" >&2
         return 1
     fi
-    [ ! -e "$stage" ] && [ ! -L "$stage" ] && path_matches_kind "$target" "$kind" || return 1
+    if [ -e "$stage" ] || [ -L "$stage" ]; then
+        echo "Error: target changed while placing restore: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+    path_matches_kind "$target" "$kind" || return 1
+    paths_match "$payload" "$target" "$kind" || return 1
 
     case "$kind" in
         file) rm -f "$payload" ;;
@@ -512,7 +518,10 @@ apply_entry() {
     case "${ACTIONS[$index]}:${KINDS[$index]}" in
         original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
         managed:absent)
-            rm -f "$target"
+            if ! rm -f "$target" || [ -e "$target" ] || [ -L "$target" ]; then
+                echo "Error: target changed while removing managed symlink: ${TARGETS[$index]}" >&2
+                return 1
+            fi
             echo "Removed managed symlink: ${TARGETS[$index]}"
             ;;
         managed:symlink | missing:symlink)

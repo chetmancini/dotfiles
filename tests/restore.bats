@@ -1643,3 +1643,146 @@ EOF
     [ ! "$HOME/.gitconfig" -ef "$tx_dir/payload/0001" ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
 }
+
+@test "49. Resume rejects a ready stage changed before placement" {
+    local tx_id="20260101T000000-111-835"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local stage="$HOME/.restore.stage.$tx_id.0001"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    printf 'altered staged content\n' >"$stage"
+    printf 'ready\n' >"$tx_dir/restore-0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ "$(cat "$stage")" = "altered staged content" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    [ -L "$HOME/.gitconfig" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "50. Payload restore preserves a regular file raced into its destination" {
+    local tx_id="20260101T000000-111-836"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local stage="$HOME/.restore.stage.$tx_id.0001"
+    local fake_bin="$TMP_HOME/fake-bin-payload-file-race"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+destination=
+for argument in "$@"; do
+    case "$argument" in
+        -*) ;;
+        *) destination="$argument" ;;
+    esac
+done
+if [ "$destination" = "$RESTORE_RACE_TARGET" ]; then
+    printf 'concurrent content\n' >"$destination"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while placing restore"* ]]
+    [ "$(cat "$HOME/.gitconfig")" = "concurrent content" ]
+    [ "$(cat "$stage")" = "original content" ]
+    [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+
+    rm -f "$HOME/.gitconfig"
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.gitconfig")" = "original content" ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "51. Restore propagates failure removing a target that was originally absent" {
+    local tx_id="20260101T000000-111-837"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-absent-race"
+    mkdir -p "$tx_dir" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    echo "0001|.gitconfig|absent||.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/rm"
+#!/usr/bin/env bash
+target="${@: -1}"
+if [ "$target" = "$RESTORE_RACE_TARGET" ]; then
+    "$RESTORE_REAL_RM" -f "$target"
+    mkdir "$target"
+fi
+exec "$RESTORE_REAL_RM" "$@"
+EOF
+    chmod +x "$fake_bin/rm"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_RM="$(command -v rm)" \
+        RESTORE_RACE_TARGET="$HOME/.gitconfig" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"target changed while removing managed symlink"* ]]
+    [ -d "$HOME/.gitconfig" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
+
+@test "52. Directory identity compares raw internal symlink targets" {
+    local source="$TMP_HOME/source-directory"
+    local target="$TMP_HOME/target-directory"
+    local fake_bin="$TMP_HOME/fake-bin-diff"
+    mkdir -p "$source" "$target" "$fake_bin"
+    printf 'same content\n' >"$source/a"
+    cp -p "$source/a" "$source/b"
+    ln -s a "$source/choice"
+    cp -pR "$source/." "$target/"
+    rm "$target/choice"
+    ln -s b "$target/choice"
+    touch -h -r "$source/choice" "$target/choice"
+    touch -r "$source" "$target"
+
+    cat <<'EOF' >"$fake_bin/diff"
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$fake_bin/diff"
+
+    run env PATH="$fake_bin:$PATH" bash -c \
+        'source "$1"; paths_match "$2" "$3" directory' \
+        _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$source" "$target"
+    [ "$status" -ne 0 ]
+}
