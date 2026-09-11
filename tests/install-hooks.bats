@@ -5,6 +5,7 @@ setup() {
     load helpers.bash
     unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
     TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-hooks.XXXXXX")"
+    TEST_ROOT="$(cd "$TEST_ROOT" && pwd -P)"
     REPO="$TEST_ROOT/repo"
     WORKTREE="$TEST_ROOT/worktree"
     mkdir -p "$REPO/scripts"

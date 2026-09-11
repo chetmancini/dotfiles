@@ -99,7 +99,7 @@ Use this transaction layout under the current backup root:
 
 ```text
 ~/.dotfiles-backup/
-  latest                     # one complete transaction ID, plain text
+  latest                     # one restorable transaction ID, plain text
   20260810T153045-12345-6789/ # UTC timestamp, PID, and random suffix
     metadata                 # key=value metadata; never sourced as shell
     entries                  # pipe-delimited trusted journal records
@@ -109,9 +109,9 @@ Use this transaction layout under the current backup root:
 ```
 
 Required metadata keys are `version=1`, `id`, `created_at`, `repo_revision`, and
-`state`. Allowed states are `in_progress`, `complete`, `failed`, and `restored`.
-The parser must read allowlisted keys as data; it must never `source`, `eval`, or
-execute transaction contents.
+`state`. Allowed states are `in_progress`, `complete`, `failed`, `restoring`,
+and `restored`. The parser must read allowlisted keys as data; it must never
+`source`, `eval`, or execute transaction contents.
 
 Each `entries` record is:
 
@@ -344,7 +344,8 @@ Create `tests/restore.bats`, following the temp-HOME pattern in
 3. Installation over a directory preserves the entire directory tree.
 4. Installation over relative and absolute symlinks records raw link targets.
 5. An originally absent target is removed during restore.
-6. `latest` resolves only a validated complete transaction ID.
+6. `latest` resolves only a validated complete, restoring, or restored
+   transaction ID.
 7. `--list` omits payload contents and prior symlink targets.
 8. `--plan` produces actions but byte-for-byte leaves HOME and metadata alone.
 9. `--apply --yes` restores all prior kinds in reverse order and marks restored.

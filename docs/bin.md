@@ -14,6 +14,26 @@ The `bin/` directory contains utility scripts for common tasks: archive extracti
 
 Scripts use a shared helper library at `bin/lib/helpers.sh` for consistent output formatting.
 
+### Install recovery
+
+`install.sh` records each changed managed symlink target in a version-1
+transaction beneath `~/.dotfiles-backup/`. Use the public `dot restore` command
+to inspect or reverse one:
+
+```bash
+dot restore --list
+dot restore --plan latest
+dot restore --apply latest
+dot restore --apply 20260810T153045-12345-6789 --yes
+```
+
+`--apply` validates the full metadata and journal, then preflights every target
+before mutating any of them. A target changed since installation causes the
+whole restore to fail closed, with no partial restore and no force option.
+Transactions retain `metadata`, `entries`, and any remaining `payload/` for
+audit. Older timestamped backup folders without versioned metadata are manual
+backups; restore never infers their contents.
+
 ## Scripts Reference
 
 ### Daily Workflow

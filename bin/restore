@@ -1,0 +1,906 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# restore: Transactional rollback for dotfiles symlink installation.
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+BIN_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+DOTFILES_DIR="$(cd -P "$BIN_DIR/.." && pwd)"
+
+# shellcheck source=bin/lib/transactions.sh
+source "$BIN_DIR/lib/transactions.sh"
+
+EX_USAGE=64
+TX_ID=
+TX_ROOT=
+TX_DIR=
+TX_ROOT_IDENTITY=
+TX_DIR_IDENTITY=
+TX_STATE=
+TX_ENTRY_COUNT=
+TX_REPO_ROOT=
+TX_OWNER_PID=
+TX_OWNER_STARTED_AT=
+SEQUENCES=()
+TARGETS=()
+KINDS=()
+PRIOR_VALUES=()
+SOURCES=()
+ACTIONS=()
+
+print_help() {
+    cat <<'EOF'
+Usage:
+  dot restore --list
+  dot restore --plan [latest|ID]
+  dot restore --apply [latest|ID] [--yes]
+  dot restore --help
+
+Safely inspect and roll back dotfiles install transactions.
+EOF
+}
+
+usage_error() {
+    echo "Error: $*" >&2
+    exit "$EX_USAGE"
+}
+
+validate_transaction_binding() {
+    [ -n "$TX_ROOT" ] && [ -d "$TX_ROOT" ] && [ ! -L "$TX_ROOT" ] || return 1
+    [ "$(path_identity "$TX_ROOT" 2>/dev/null)" = "$TX_ROOT_IDENTITY" ] || return 1
+    [ -n "$TX_DIR" ] && [ -d "$TX_DIR" ] && [ ! -L "$TX_DIR" ] || return 1
+    [ "$(path_identity "$TX_DIR" 2>/dev/null)" = "$TX_DIR_IDENTITY" ]
+}
+
+require_transaction_binding() {
+    local context="$1"
+    validate_transaction_binding || {
+        echo "Error: transaction root changed $context" >&2
+        return 1
+    }
+}
+
+load_transaction() {
+    local selector="$1"
+    local metadata key value metadata_id='' current_owner_started_at
+
+    if ! TX_ID="$(resolve_transaction "$selector")"; then
+        echo "Error: could not resolve transaction '${selector}'" >&2
+        return 1
+    fi
+    TX_ROOT="$(transaction_backup_root)"
+    TX_DIR="$TX_ROOT/$TX_ID"
+    [ -d "$TX_ROOT" ] && [ ! -L "$TX_ROOT" ] && [ -d "$TX_DIR" ] && [ ! -L "$TX_DIR" ] || {
+        echo "Error: transaction '${TX_ID}' has an invalid or symlinked path" >&2
+        return 1
+    }
+    TX_ROOT_IDENTITY="$(path_identity "$TX_ROOT")" || return 1
+    TX_DIR_IDENTITY="$(path_identity "$TX_DIR")" || return 1
+    require_transaction_binding "while loading '${TX_ID}'" || return 1
+    if ! metadata="$(read_transaction_metadata "$TX_DIR/metadata")"; then
+        echo "Error: transaction '${TX_ID}' has invalid metadata" >&2
+        return 1
+    fi
+
+    TX_STATE=
+    TX_ENTRY_COUNT=
+    TX_REPO_ROOT="$DOTFILES_DIR"
+    TX_OWNER_PID=
+    TX_OWNER_STARTED_AT=
+    while IFS='=' read -r key value; do
+        case "$key" in
+            id) metadata_id="$value" ;;
+            state) TX_STATE="$value" ;;
+            entry_count) TX_ENTRY_COUNT="$value" ;;
+            repo_root) TX_REPO_ROOT="$value" ;;
+            owner_pid) TX_OWNER_PID="$value" ;;
+            owner_started_at) TX_OWNER_STARTED_AT="$value" ;;
+        esac
+    done <<<"$metadata"
+    [ "$metadata_id" = "$TX_ID" ] || {
+        echo "Error: transaction directory and metadata IDs do not match" >&2
+        return 1
+    }
+    if [ "$TX_STATE" = in_progress ]; then
+        [ -n "$TX_OWNER_PID" ] || {
+            echo "Error: transaction '${TX_ID}' is in progress without a verifiable installer owner" >&2
+            return 1
+        }
+        if kill -0 "$TX_OWNER_PID" 2>/dev/null; then
+            [ -n "$TX_OWNER_STARTED_AT" ] || {
+                echo "Error: transaction '${TX_ID}' has a live but unverifiable installer owner" >&2
+                return 1
+            }
+            case "$TX_OWNER_STARTED_AT" in
+                unverified-*)
+                    echo "Error: transaction '${TX_ID}' has a live but unverifiable installer owner" >&2
+                    return 1
+                    ;;
+            esac
+            if ! current_owner_started_at="$(process_start_identity "$TX_OWNER_PID")"; then
+                echo "Error: transaction '${TX_ID}' has a live installer owner whose identity cannot be verified" >&2
+                return 1
+            fi
+            if [ "$current_owner_started_at" = "$TX_OWNER_STARTED_AT" ]; then
+                echo "Error: transaction '${TX_ID}' is owned by active installer process ${TX_OWNER_PID}" >&2
+                return 1
+            fi
+        fi
+        TX_STATE=failed
+    fi
+    require_transaction_binding "while loading '${TX_ID}'" || return 1
+}
+
+load_entries() {
+    local journal="$TX_DIR/entries"
+    local line expected=1 seen_sequences='|' seen_targets='|'
+    local expected_sequence normalized_target
+    local -a fields
+
+    if [ -L "$journal" ] || { [ -e "$journal" ] && [ ! -f "$journal" ]; }; then
+        echo "Error: entries journal in transaction ${TX_ID} is invalid or symlinked" >&2
+        return 1
+    fi
+    [ -f "$journal" ] || {
+        echo "Error: transaction ${TX_ID} has no entries journal" >&2
+        return 1
+    }
+
+    SEQUENCES=()
+    TARGETS=()
+    KINDS=()
+    PRIOR_VALUES=()
+    SOURCES=()
+    ACTIONS=()
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        fields=()
+        IFS='|' read -r -a fields <<<"$line"
+        if [ "${#fields[@]}" -ne 5 ]; then
+            echo "Error: malformed entry in transaction ${TX_ID}: $line" >&2
+            return 1
+        fi
+        if ! validate_journal_entry "${fields[0]}" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"; then
+            echo "Error: entry validation failed in transaction ${TX_ID}: $line" >&2
+            return 1
+        fi
+
+        case "$seen_sequences" in
+            *"|${fields[0]}|"*)
+                echo "Error: duplicate sequence number '${fields[0]}' in transaction ${TX_ID}" >&2
+                return 1
+                ;;
+        esac
+        seen_sequences="${seen_sequences}${fields[0]}|"
+        printf -v expected_sequence '%04d' "$expected"
+        if [ "${fields[0]}" != "$expected_sequence" ]; then
+            echo "Error: non-contiguous sequence number '${fields[0]}' in transaction ${TX_ID} (expected '${expected_sequence}')" >&2
+            return 1
+        fi
+        expected=$((expected + 1))
+
+        normalized_target="$(normalize_relative_path "${fields[1]}")"
+        case "$seen_targets" in
+            *"|${normalized_target}|"*)
+                echo "Error: duplicate target path '${fields[1]}' in transaction ${TX_ID}" >&2
+                return 1
+                ;;
+        esac
+        seen_targets="${seen_targets}${normalized_target}|"
+
+        SEQUENCES+=("${fields[0]}")
+        TARGETS+=("${fields[1]}")
+        KINDS+=("${fields[2]}")
+        PRIOR_VALUES+=("${fields[3]}")
+        SOURCES+=("${fields[4]}")
+    done <"$journal"
+
+    case "$TX_STATE" in
+        complete | restoring | restored)
+            [ -n "$TX_ENTRY_COUNT" ] || {
+                echo "Error: transaction ${TX_ID} is ${TX_STATE} but missing entry_count in metadata" >&2
+                return 1
+            }
+            ;;
+    esac
+    if [ -n "$TX_ENTRY_COUNT" ] && [ "${#TARGETS[@]}" != "$TX_ENTRY_COUNT" ]; then
+        echo "Error: journal entry count mismatch in transaction ${TX_ID}: expected ${TX_ENTRY_COUNT}, got ${#TARGETS[@]}" >&2
+        return 1
+    fi
+}
+
+payload_matches_kind() {
+    local index="$1"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    case "${KINDS[$index]}" in
+        file) [ -f "$payload" ] && [ ! -L "$payload" ] ;;
+        directory) [ -d "$payload" ] && [ ! -L "$payload" ] ;;
+        *) return 1 ;;
+    esac && validate_payload_ancestors "$TX_DIR" "${PRIOR_VALUES[$index]}"
+}
+
+path_matches_kind() {
+    local path="$1"
+    local kind="$2"
+    case "$kind" in
+        file) [ -f "$path" ] && [ ! -L "$path" ] ;;
+        directory) [ -d "$path" ] && [ ! -L "$path" ] ;;
+        *) return 1 ;;
+    esac
+}
+
+payload_matches_target() {
+    local index="$1"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local target="$HOME/${TARGETS[$index]}"
+    paths_match "$payload" "$target" "${KINDS[$index]}"
+}
+
+symlink_matches_destination() {
+    symlink_matches_raw_target "$@"
+}
+
+restore_marker_path() {
+    printf '%s/restore-%s' "$TX_DIR" "${SEQUENCES[$1]}"
+}
+
+restore_stage_path() {
+    local target="$HOME/${TARGETS[$1]}"
+    printf '%s/.restore.stage.%s.%s' "$(dirname "$target")" "$TX_ID" "${SEQUENCES[$1]}"
+}
+
+payload_delete_stage_path() {
+    printf '%s/.restore.delete.%s' "$TX_DIR" "${SEQUENCES[$1]}"
+}
+
+payload_purge_stage_path() {
+    printf '%s/.restore.purge.%s' "$TX_DIR" "${SEQUENCES[$1]}"
+}
+
+read_restore_marker() {
+    local marker="$1"
+    local record state identity
+    [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
+    {
+        IFS= read -r record || return 1
+        IFS='|' read -r state identity <<<"$record"
+        case "$state" in
+            reserving | cleaning) [ -z "$identity" ] || return 1 ;;
+            copying | ready | deleting) [[ "$identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1 ;;
+            *) return 1 ;;
+        esac
+        ! IFS= read -r _
+    } <"$marker" || return 1
+    printf '%s\n' "$record"
+}
+
+write_restore_marker() {
+    local index="$1" state="$2" identity="${3:-}"
+    local marker tmp record="$state"
+    marker="$(restore_marker_path "$index")"
+    [ -z "$identity" ] || record="${state}|${identity}"
+    [ ! -L "$marker" ] && { [ ! -e "$marker" ] || [ -f "$marker" ]; } || return 1
+    tmp="$(mktemp "$TX_DIR/restore-${SEQUENCES[$index]}.tmp.XXXXXX")" || return 1
+    if ! printf '%s\n' "$record" >"$tmp"; then
+        rm -f "$tmp" 2>/dev/null || true
+        return 1
+    fi
+    if ! mv -f "$tmp" "$marker"; then
+        rm -f "$tmp" 2>/dev/null || true
+        return 1
+    fi
+    sync_file_and_parent "$marker"
+}
+
+reserve_restore_stage() {
+    local kind="$1" stage="$2" payload="$3"
+    case "$kind" in
+        file)
+            (umask 077 && set -o noclobber && : >"$stage")
+            ;;
+        directory) (umask 077 && mkdir "$stage") ;;
+        *) return 1 ;;
+    esac
+}
+
+place_restore_stage_exact() {
+    local stage="$1" target="$2" expected_identity="$3"
+
+    [ "$(path_identity "$stage")" = "$expected_identity" ] || return 1
+    move_path_no_clobber_exact "$stage" "$target" || return 1
+    [ "$(path_identity "$target")" = "$expected_identity" ]
+}
+
+copy_payload_into_stage() {
+    local kind="$1" payload="$2" stage="$3"
+    case "$kind" in
+        file)
+            copy_file_with_metadata "$payload" "$stage"
+            ;;
+        directory) copy_directory_contents "$payload" "$stage" ;;
+        *) return 1 ;;
+    esac
+}
+
+classify_entry() {
+    local index="$1"
+    local target="$HOME/${TARGETS[$index]}"
+    local expected="$TX_REPO_ROOT/${SOURCES[$index]}"
+    local kind="${KINDS[$index]}"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local marker stage delete_stage purge_stage marker_record marker_state marker_identity nested
+
+    validate_target_ancestors "${TARGETS[$index]}" || return 1
+
+    case "$kind" in
+        file | directory)
+            marker="$(restore_marker_path "$index")"
+            stage="$(restore_stage_path "$index")"
+            delete_stage="$(payload_delete_stage_path "$index")"
+            purge_stage="$(payload_purge_stage_path "$index")"
+            if [ -e "$marker" ] || [ -L "$marker" ]; then
+                [ "$TX_STATE" = restoring ] || return 1
+                marker_record="$(read_restore_marker "$marker")" || return 1
+                IFS='|' read -r marker_state marker_identity <<<"$marker_record"
+                [ ! -L "$stage" ] || return 1
+                nested="$target/$(basename "$stage")"
+                [ ! -e "$nested" ] && [ ! -L "$nested" ] || return 1
+                case "$marker_state" in
+                    reserving)
+                        [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+                        ;;
+                    copying)
+                        path_matches_kind "$stage" "$kind" || return 1
+                        [ "$(path_identity "$stage")" = "$marker_identity" ] || return 1
+                        ;;
+                    ready)
+                        if [ -e "$stage" ]; then
+                            path_matches_kind "$stage" "$kind" || return 1
+                            [ "$(path_identity "$stage")" = "$marker_identity" ] || return 1
+                            payload_matches_kind "$index" || return 1
+                            paths_match "$payload" "$stage" "$kind" || return 1
+                        elif path_matches_kind "$target" "$kind"; then
+                            payload_matches_kind "$index" || return 1
+                            payload_matches_target "$index" || return 1
+                            ACTIONS[$index]=applied
+                            return 0
+                        fi
+                        ;;
+                    cleaning)
+                        [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+                        path_matches_kind "$target" "$kind" || return 1
+                        payload_matches_kind "$index" || return 1
+                        payload_matches_target "$index" || return 1
+                        ACTIONS[$index]=applied
+                        return 0
+                        ;;
+                    deleting)
+                        [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+                        path_matches_kind "$target" "$kind" || return 1
+                        if [ -e "$payload" ] || [ -L "$payload" ]; then
+                            [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] || return 1
+                            [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
+                            payload_matches_kind "$index" || return 1
+                            [ "$(path_identity "$payload")" = "$marker_identity" ] || return 1
+                            payload_matches_target "$index" || return 1
+                        elif [ -e "$delete_stage" ] || [ -L "$delete_stage" ]; then
+                            [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
+                            path_matches_kind "$delete_stage" "$kind" || return 1
+                            [ "$(path_identity "$delete_stage")" = "$marker_identity" ] || return 1
+                            paths_match "$delete_stage" "$target" "$kind" || return 1
+                        elif [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
+                            path_matches_kind "$purge_stage" "$kind" || return 1
+                            [ "$(path_identity "$purge_stage")" = "$marker_identity" ] || return 1
+                        fi
+                        ACTIONS[$index]=applied
+                        return 0
+                        ;;
+                esac
+            elif [ -e "$stage" ] || [ -L "$stage" ]; then
+                [ "$TX_STATE" = restoring ] && [ ! -L "$stage" ] || return 1
+                path_matches_kind "$stage" "$kind" || return 1
+                payload_matches_kind "$index" || return 1
+                paths_match "$payload" "$stage" "$kind" || return 1
+            elif [ -e "$delete_stage" ] || [ -L "$delete_stage" ] || [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
+                return 1
+            fi
+            ;;
+    esac
+
+    if is_managed_symlink "$target" "$expected"; then
+        case "$kind" in
+            file | directory) payload_matches_kind "$index" || return 1 ;;
+        esac
+        ACTIONS[$index]=managed
+        return 0
+    fi
+
+    if { [ "$kind" = file ] || [ "$kind" = directory ]; } &&
+        { [ "$TX_STATE" = failed ] || [ "$TX_STATE" = restoring ]; } &&
+        path_matches_kind "$target" "$kind" && payload_matches_kind "$index" && payload_matches_target "$index"; then
+        ACTIONS[$index]=prepared
+        return 0
+    fi
+
+    case "$kind" in
+        file)
+            if { [ "$TX_STATE" = failed ] || [ "$TX_STATE" = restoring ]; } && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -f "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
+                return 0
+            fi
+            ;;
+        directory)
+            if { [ "$TX_STATE" = failed ] || [ "$TX_STATE" = restoring ]; } && [ ! -e "$payload" ] && [ ! -L "$payload" ] && [ -d "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
+                return 0
+            fi
+            ;;
+        symlink)
+            if symlink_matches_destination "$target" "${PRIOR_VALUES[$index]}"; then
+                ACTIONS[$index]=original
+                return 0
+            fi
+            ;;
+        absent)
+            if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+                ACTIONS[$index]=original
+                return 0
+            fi
+            ;;
+    esac
+
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        case "$kind" in
+            file | directory) payload_matches_kind "$index" || return 1 ;;
+            symlink) ;;
+            *) return 1 ;;
+        esac
+        ACTIONS[$index]=missing
+        return 0
+    fi
+    return 1
+}
+
+validate_actions() {
+    local mode="$1"
+    local index conflicts=0
+
+    if ! validate_transaction_metadata_writable "$TX_DIR"; then
+        if [ "$mode" = apply ]; then
+            echo "Conflict detected: transaction directory or metadata is not writable." >&2
+        else
+            echo "  [conflict] transaction directory or metadata is not writable" >&2
+        fi
+        return 1
+    fi
+
+    for ((index = 0; index < ${#TARGETS[@]}; index++)); do
+        if ! classify_entry "$index"; then
+            ACTIONS[$index]=conflict
+            conflicts=$((conflicts + 1))
+            if [ "$mode" = apply ]; then
+                echo "Conflict detected on ${TARGETS[$index]}: current state does not match restore preconditions." >&2
+            fi
+        fi
+    done
+    [ "$conflicts" -eq 0 ] || {
+        [ "$mode" != apply ] || echo "Restore aborted: no files were modified." >&2
+        return 1
+    }
+}
+
+print_entry_plan() {
+    local index="$1"
+    local target="${TARGETS[$index]}"
+    local kind="${KINDS[$index]}"
+    local sequence="${SEQUENCES[$index]}"
+
+    case "${ACTIONS[$index]}:$kind" in
+        conflict:*) echo "  [conflict] $target: target has changed or restore prerequisites are unavailable" >&2 ;;
+        applied:file | applied:directory) echo "  [resume]  $target: finish completed $kind restore" ;;
+        prepared:file | prepared:directory) echo "  [resume]  $target: discard completed backup; target is already original" ;;
+        original:file | original:directory) echo "  [no-op]   $target: already in original $kind state" ;;
+        original:symlink) echo "  [no-op]   $target: already in original symlink state" ;;
+        original:absent) echo "  [no-op]   $target: already absent" ;;
+        managed:absent) echo "  [restore] $target: remove managed symlink (target was originally absent)" ;;
+        managed:symlink) echo "  [restore] $target: replace managed symlink with prior symlink -> ${PRIOR_VALUES[$index]}" ;;
+        managed:file | managed:directory) echo "  [restore] $target: replace managed symlink with original $kind from payload/$sequence" ;;
+        missing:symlink) echo "  [restore] $target: recreate prior symlink -> ${PRIOR_VALUES[$index]} (target currently absent)" ;;
+        missing:file | missing:directory) echo "  [restore] $target: restore $kind from payload/$sequence (target currently absent)" ;;
+    esac
+}
+
+cmd_list() {
+    local tx_dir metadata key value id state created revision entries count=0
+    while IFS= read -r tx_dir; do
+        [ -n "$tx_dir" ] || continue
+        metadata="$(read_transaction_metadata "$tx_dir/metadata" 2>/dev/null)" || continue
+        id=
+        state=
+        created=
+        revision=
+        while IFS='=' read -r key value; do
+            case "$key" in
+                id) id="$value" ;;
+                state) state="$value" ;;
+                created_at) created="$value" ;;
+                repo_revision) revision="$value" ;;
+            esac
+        done <<<"$metadata"
+        [ "$id" = "$(basename "$tx_dir")" ] || continue
+        entries=0
+        [ ! -L "$tx_dir/entries" ] && [ -f "$tx_dir/entries" ] && entries="$(wc -l <"$tx_dir/entries" | tr -d '[:space:]')"
+        [ "$count" -gt 0 ] || printf '%-32s %-12s %-22s %-12s %s\n' ID STATE CREATED REVISION ENTRIES
+        printf '%-32s %-12s %-22s %-12s %s\n' "$id" "$state" "$created" "$revision" "$entries"
+        count=$((count + 1))
+    done < <(list_transaction_dirs)
+    [ "$count" -gt 0 ] || echo "No transactions found in $(transaction_backup_root)"
+}
+
+cmd_plan() {
+    local selector="$1" index conflicts=0 actions=0
+    load_transaction "$selector" || return 1
+    case "$TX_STATE" in
+        restored)
+            echo "Transaction ${TX_ID} is already restored."
+            return 0
+            ;;
+        in_progress)
+            echo "Error: transaction ${TX_ID} is in progress (not complete or failed)" >&2
+            return 1
+            ;;
+    esac
+    load_entries || return 1
+
+    validate_actions plan || conflicts=1
+    echo "Plan restore for transaction ${TX_ID} (state: ${TX_STATE}):"
+    echo
+    for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do
+        print_entry_plan "$index"
+        [ "${ACTIONS[$index]}" = original ] || actions=$((actions + 1))
+    done
+    echo
+    if [ "$conflicts" -ne 0 ]; then
+        echo "Preflight check failed: conflict(s) detected. Restore cannot proceed safely." >&2
+        return 1
+    fi
+    [ "$actions" -gt 0 ] && echo "Preview only. No files were modified." || echo "No actions required: all targets are already in their pre-install state."
+}
+
+restore_link_entry() {
+    local index="$1"
+    local absolute_target="$HOME/${TARGETS[$index]}"
+    local parent target_name
+    parent="$(dirname "$absolute_target")"
+    target_name="$(basename "$absolute_target")"
+
+    (
+        local target="./$target_name"
+        cd -P "$parent" || return 1
+        validate_target_ancestors "${TARGETS[$index]}" || return 1
+        [ "$parent" -ef . ] || return 1
+
+        if [ "${ACTIONS[$index]}" = managed ]; then
+            if ! guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore; then
+                echo "Error: target changed while removing managed symlink: ${TARGETS[$index]}" >&2
+                return 1
+            fi
+        fi
+        case "${ACTIONS[$index]}:${KINDS[$index]}" in
+            original:symlink) symlink_matches_destination "$target" "${PRIOR_VALUES[$index]}" || return 1 ;;
+            original:absent) [ ! -e "$target" ] && [ ! -L "$target" ] || return 1 ;;
+        esac
+        if [ "${ACTIONS[$index]}" != original ] && [ "${KINDS[$index]}" = symlink ] &&
+            ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
+            echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
+            return 1
+        fi
+
+        sync_parent_directory "$target" || return 1
+        validate_target_ancestors "${TARGETS[$index]}" || return 1
+        [ "$parent" -ef . ]
+    )
+}
+
+delete_restored_payload() {
+    local index="$1"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local delete_stage purge_stage
+    local kind="${KINDS[$index]}"
+    local expected_identity="$2"
+    delete_stage="$(payload_delete_stage_path "$index")"
+    purge_stage="$(payload_purge_stage_path "$index")"
+
+    if [ -e "$payload" ] || [ -L "$payload" ]; then
+        [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] || return 1
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
+        path_matches_kind "$payload" "$kind" || return 1
+        [ "$(path_identity "$payload")" = "$expected_identity" ] || return 1
+        payload_matches_target "$index" || return 1
+        move_path_no_clobber_exact "$payload" "$delete_stage" || return 1
+        [ "$(path_identity "$delete_stage")" = "$expected_identity" ] || return 1
+    fi
+    if [ -e "$delete_stage" ] || [ -L "$delete_stage" ]; then
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ] || return 1
+        path_matches_kind "$delete_stage" "$kind" || return 1
+        [ "$(path_identity "$delete_stage")" = "$expected_identity" ] || return 1
+        paths_match "$delete_stage" "$HOME/${TARGETS[$index]}" "$kind" || return 1
+        move_path_no_clobber_exact "$delete_stage" "$purge_stage" || return 1
+        [ "$(path_identity "$purge_stage")" = "$expected_identity" ] || return 1
+        sync_parent_directory "$purge_stage" || return 1
+    fi
+    if [ -e "$purge_stage" ] || [ -L "$purge_stage" ]; then
+        path_matches_kind "$purge_stage" "$kind" || return 1
+        [ "$(path_identity "$purge_stage")" = "$expected_identity" ] || return 1
+        case "$kind" in
+            file) rm -f "$purge_stage" ;;
+            directory) rm -r "$purge_stage" ;;
+        esac || return 1
+    fi
+    [ ! -e "$payload" ] && [ ! -L "$payload" ] &&
+        [ ! -e "$delete_stage" ] && [ ! -L "$delete_stage" ] &&
+        [ ! -e "$purge_stage" ] && [ ! -L "$purge_stage" ]
+}
+
+restore_payload() {
+    local index="$1"
+    local absolute_target="$HOME/${TARGETS[$index]}"
+    local parent target_name
+    parent="$(dirname "$absolute_target")"
+    target_name="$(basename "$absolute_target")"
+
+    (
+        cd -P "$parent" || return 1
+        validate_target_ancestors "${TARGETS[$index]}" || return 1
+        [ "$parent" -ef . ] || return 1
+        restore_payload_in_parent "$index" "$target_name" "$parent"
+    )
+}
+
+restore_payload_in_parent() {
+    local index="$1"
+    local target="./$2"
+    local parent="$3"
+    local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
+    local kind="${KINDS[$index]}"
+    local marker stage marker_record='' marker_state='' marker_identity='' stage_identity payload_identity expected_action
+    marker="$(restore_marker_path "$index")"
+    stage="./.restore.stage.${TX_ID}.${SEQUENCES[$index]}"
+
+    if [ -e "$marker" ] || [ -L "$marker" ]; then
+        marker_record="$(read_restore_marker "$marker")" || return 1
+        IFS='|' read -r marker_state marker_identity <<<"$marker_record"
+    fi
+
+    if [ "${ACTIONS[$index]}" = applied ] || [ "${ACTIONS[$index]}" = prepared ]; then
+        if [ "$marker_state" != deleting ] && { [ -e "$payload" ] || [ -L "$payload" ]; }; then
+            payload_matches_kind "$index" || return 1
+            payload_matches_target "$index" || return 1
+        fi
+        if [ "$marker_state" != cleaning ] && [ "$marker_state" != deleting ]; then
+            if [ "$marker_state" = copying ]; then
+                [ "$(path_identity "$stage")" = "$marker_identity" ] || return 1
+                case "$kind" in
+                    file) rm -f "$stage" ;;
+                    directory) rm -rf "$stage" ;;
+                esac || return 1
+                [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+            fi
+            sync_tree_and_parent "$target" || return 1
+            write_restore_marker "$index" cleaning || return 1
+        fi
+        if [ "$marker_state" != deleting ]; then
+            if [ -e "$payload" ] || [ -L "$payload" ]; then
+                payload_matches_kind "$index" || return 1
+                payload_matches_target "$index" || return 1
+            fi
+            sync_tree_and_parent "$target" || return 1
+            payload_matches_kind "$index" || return 1
+            payload_identity="$(path_identity "$payload")" || return 1
+            write_restore_marker "$index" deleting "$payload_identity" || return 1
+            marker_identity="$payload_identity"
+        fi
+        delete_restored_payload "$index" "$marker_identity" || return 1
+        rm -f "$marker"
+        return 0
+    fi
+
+    if [ "$marker_state" = ready ] && [ ! -e "$stage" ] && [ ! -L "$stage" ]; then
+        rm -f "$marker" || return 1
+        marker_state=
+    fi
+
+    if [ "$marker_state" != ready ]; then
+        if [ "$marker_state" = copying ]; then
+            [ "$(path_identity "$stage")" = "$marker_identity" ] || return 1
+            copy_payload_into_stage "$kind" "$payload" "$stage" || return 1
+        elif [ -e "$stage" ] || [ -L "$stage" ]; then
+            [ ! -L "$stage" ] || return 1
+            paths_match "$payload" "$stage" "$kind" || return 1
+        else
+            payload_matches_kind "$index" || return 1
+            if [ -z "$marker_state" ]; then
+                write_restore_marker "$index" reserving || return 1
+            fi
+            reserve_restore_stage "$kind" "$stage" "$payload" || return 1
+            stage_identity="$(path_identity "$stage")" || return 1
+            write_restore_marker "$index" copying "$stage_identity" || return 1
+            copy_payload_into_stage "$kind" "$payload" "$stage" || return 1
+            path_matches_kind "$stage" "$kind" || return 1
+            paths_match "$payload" "$stage" "$kind" || return 1
+        fi
+        stage_identity="$(path_identity "$stage")" || return 1
+        write_restore_marker "$index" ready "$stage_identity" || return 1
+    fi
+    stage_identity="$(path_identity "$stage")" || return 1
+    [ "$marker_state" != ready ] || [ "$stage_identity" = "$marker_identity" ] || return 1
+
+    expected_action="${ACTIONS[$index]}"
+    if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
+        echo "Error: target state changed while staging restore: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+
+    if [ "${ACTIONS[$index]}" = managed ]; then
+        guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
+    fi
+    if ! place_restore_stage_exact "$stage" "$target" "$stage_identity"; then
+        echo "Error: target changed while placing restore: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+    path_matches_kind "$target" "$kind" || return 1
+    paths_match "$payload" "$target" "$kind" || return 1
+    validate_target_ancestors "${TARGETS[$index]}" || return 1
+    [ "$parent" -ef . ] || return 1
+
+    payload_matches_target "$index" || return 1
+    sync_tree_and_parent "$target" || return 1
+    write_restore_marker "$index" cleaning || return 1
+    payload_matches_target "$index" || return 1
+    payload_identity="$(path_identity "$payload")" || return 1
+    write_restore_marker "$index" deleting "$payload_identity" || return 1
+    delete_restored_payload "$index" "$payload_identity" || return 1
+    rm -f "$marker"
+}
+
+apply_entry() {
+    local index="$1"
+    local expected_action="${ACTIONS[$index]}"
+
+    if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
+        echo "Error: target state changed at apply time: ${TARGETS[$index]}" >&2
+        return 1
+    fi
+    case "${ACTIONS[$index]}:${KINDS[$index]}" in
+        original:symlink | original:absent)
+            if [ "$TX_STATE" = restoring ]; then
+                restore_link_entry "$index" || return 1
+            fi
+            echo "Already in original state: ${TARGETS[$index]}"
+            ;;
+        original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
+        managed:absent)
+            restore_link_entry "$index" || return 1
+            echo "Removed managed symlink: ${TARGETS[$index]}"
+            ;;
+        managed:symlink | missing:symlink)
+            restore_link_entry "$index" || return 1
+            echo "Restored symlink: ${TARGETS[$index]} -> ${PRIOR_VALUES[$index]}"
+            ;;
+        applied:file | applied:directory | prepared:file | prepared:directory | managed:file | managed:directory | missing:file | missing:directory)
+            restore_payload "$index" || return 1
+            echo "Restored original ${KINDS[$index]}: ${TARGETS[$index]}"
+            ;;
+    esac
+}
+
+cmd_apply() {
+    local selector="$1" auto_yes="$2" index answer
+    load_transaction "$selector" || return 1
+    case "$TX_STATE" in
+        restored)
+            echo "Error: transaction ${TX_ID} is already restored." >&2
+            return 1
+            ;;
+        in_progress)
+            echo "Error: transaction ${TX_ID} is in progress (not complete or failed)" >&2
+            return 1
+            ;;
+    esac
+    load_entries || return 1
+    validate_actions apply || return 1
+    require_transaction_binding "during preflight" || return 1
+
+    if [ "$auto_yes" != true ]; then
+        [ -t 0 ] || {
+            echo "Error: restore requires confirmation; run interactively or pass --yes" >&2
+            return 1
+        }
+        read -r -p "Restore transaction ${TX_ID}? [y/N] " answer
+        case "$answer" in
+            [Yy] | [Yy][Ee][Ss]) ;;
+            *)
+                echo "Restore cancelled."
+                return 0
+                ;;
+        esac
+        validate_actions apply || return 1
+        require_transaction_binding "after confirmation" || return 1
+    fi
+
+    if [ "$TX_STATE" != restoring ]; then
+        require_transaction_binding "before starting restore" || return 1
+        update_transaction_state "$TX_DIR" restoring "${#TARGETS[@]}" || {
+            echo "Error: failed to mark transaction state as restoring" >&2
+            return 1
+        }
+        require_transaction_binding "while starting restore" || return 1
+        TX_STATE=restoring
+    fi
+
+    for ((index = ${#TARGETS[@]} - 1; index >= 0; index--)); do
+        require_transaction_binding "during restore" || return 1
+        apply_entry "$index" || return 1
+        require_transaction_binding "during restore" || return 1
+    done
+    require_transaction_binding "before completing restore" || return 1
+    update_transaction_state "$TX_DIR" restored || {
+        echo "Error: failed to mark transaction state as restored" >&2
+        return 1
+    }
+    require_transaction_binding "while completing restore" || return 1
+    echo "Transaction ${TX_ID} successfully restored."
+}
+
+main() {
+    local action selector=latest assume_yes=false selector_seen=false
+    [ $# -gt 0 ] || {
+        print_help
+        return 0
+    }
+    action="$1"
+    shift
+    case "$action" in
+        -h | --help)
+            [ $# -eq 0 ] || usage_error '--help accepts no arguments'
+            print_help
+            ;;
+        --list)
+            [ $# -eq 0 ] || usage_error '--list accepts no arguments'
+            cmd_list
+            ;;
+        --plan)
+            [ $# -le 1 ] || usage_error '--plan accepts at most one transaction selector'
+            if [ $# -eq 1 ]; then
+                [[ "$1" != -* ]] || usage_error "unknown option: $1"
+                selector="$1"
+            fi
+            cmd_plan "$selector"
+            ;;
+        --apply)
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --yes | -y) assume_yes=true ;;
+                    -*) usage_error "unknown option: $1" ;;
+                    *)
+                        [ "$selector_seen" = false ] || usage_error "multiple transaction selectors provided ('$selector' and '$1')"
+                        selector="$1"
+                        selector_seen=true
+                        ;;
+                esac
+                shift
+            done
+            cmd_apply "$selector" "$assume_yes"
+            ;;
+        *) usage_error "unknown action: $action" ;;
+    esac
+}
+
+main "$@"

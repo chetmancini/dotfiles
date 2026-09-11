@@ -5,12 +5,19 @@ set -euo pipefail
 # Dotfiles Installation Wizard
 #==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
-BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 # shellcheck source=bin/lib/symlinks.sh
 source "$SCRIPT_DIR/bin/lib/symlinks.sh"
+# shellcheck source=bin/lib/transactions.sh
+source "$SCRIPT_DIR/bin/lib/transactions.sh"
 
 AUTO_YES=false
 SKIP_TPM=false
@@ -26,6 +33,32 @@ PLAN_MODE=false
 # redirect stdin, and prompts must never consume manifest records.
 exec 9<&0
 
+CURRENT_TRANSACTION_ID=""
+CURRENT_TRANSACTION_DIR=""
+CURRENT_TRANSACTION_ROOT=""
+CURRENT_TRANSACTION_ROOT_IDENTITY=""
+CURRENT_TRANSACTION_IDENTITY=""
+TRANSACTION_SEQUENCE=0
+INSTALL_SUCCESS=false
+
+# Isolate installer git operations from any caller/hook git environment
+unset GIT_INDEX_FILE
+
+cleanup_install_trap() {
+    local exit_code=$?
+    if [ "$INSTALL_SUCCESS" != true ] && validate_current_transaction_paths 2>/dev/null; then
+        local meta_file="$CURRENT_TRANSACTION_DIR/metadata"
+        if [ -f "$meta_file" ]; then
+            local state
+            state="$(grep '^state=' "$meta_file" 2>/dev/null | cut -d'=' -f2 || true)"
+            if [ "$state" = "in_progress" ]; then
+                update_transaction_state "$CURRENT_TRANSACTION_DIR" "failed" 2>/dev/null || true
+            fi
+        fi
+    fi
+    exit "$exit_code"
+}
+trap cleanup_install_trap EXIT
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -175,59 +208,186 @@ ask_yes_no() {
 
 # Validate tracked sources before any managed target can be replaced.
 validate_managed_sources() {
-    local group source_rel _target_rel _install_name _doctor_label _description
+    local group source_rel target_rel _install_name _doctor_label _description
     local missing=0
 
     for group in config home legacy; do
-        while IFS='|' read -r source_rel _target_rel _install_name _doctor_label _description; do
+        while IFS='|' read -r source_rel target_rel _install_name _doctor_label _description; do
             if [ ! -e "$DOTFILES_DIR/$source_rel" ]; then
                 print_error "Managed source is missing: $DOTFILES_DIR/$source_rel"
+                missing=$((missing + 1))
+            fi
+            if ! validate_target_ancestors_install "$target_rel"; then
+                print_error "Target ancestor for $target_rel is a symlink or invalid directory"
                 missing=$((missing + 1))
             fi
         done < <(managed_symlinks_for_group "$group")
     done
 
     if [ "$missing" -gt 0 ]; then
-        print_error "Refusing to install with $missing missing managed source(s)"
+        print_error "Refusing to install with $missing invalid managed source/target precondition(s)"
         return 1
     fi
 }
 
-# Back up a file or directory if it exists and is not a symlink
-backup_if_exists() {
+inspect_target() {
     local target="$1"
-    local name="$2"
+    local raw
 
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
-        local backup_path="$BACKUP_DIR/$name"
-        if [ "$PLAN_MODE" = true ]; then
-            print_plan "Would back up existing $name to $backup_path"
-            BACKUPS_PLANNED=$((BACKUPS_PLANNED + 1))
-        else
-            mkdir -p "$BACKUP_DIR"
-            mv "$target" "$backup_path"
-            print_warning "Backed up existing $name to $backup_path"
+    TARGET_PRIOR_VALUE=
+    if [ -L "$target" ]; then
+        TARGET_KIND="symlink"
+        raw="$(
+            readlink -n "$target"
+            printf x
+        )"
+        TARGET_PRIOR_VALUE="${raw%x}"
+        if [[ "$TARGET_PRIOR_VALUE" == *$'\n'* || "$TARGET_PRIOR_VALUE" == *$'\r'* || "$TARGET_PRIOR_VALUE" == *'|'* ]]; then
+            echo "Error: unsupported characters in symlink target at $target" >&2
+            return 1
         fi
-        return 0
-    elif [ -L "$target" ]; then
-        if [ "$PLAN_MODE" = true ]; then
-            print_plan "Existing symlink found, would replace it"
-        else
-            print_info "Existing symlink found, will be replaced"
-            rm -f "$target"
-        fi
-        return 0
+    elif [ -f "$target" ]; then
+        TARGET_KIND="file"
+    elif [ -d "$target" ]; then
+        TARGET_KIND="directory"
+    elif [ ! -e "$target" ]; then
+        TARGET_KIND="absent"
+    else
+        echo "Error: unsupported filesystem object at $target" >&2
+        return 1
     fi
-
-    return 0
 }
 
-# Create a symlink with explanation
+stage_backup_payload() {
+    local target="$1"
+    local kind="$2"
+    local sequence="$3"
+
+    (
+        local copy_dir copy_item payload="./$sequence"
+        cd -P "$CURRENT_TRANSACTION_DIR/payload" || return 1
+        validate_current_transaction_paths || return 1
+        [ "$CURRENT_TRANSACTION_DIR/payload" -ef . ] || return 1
+        copy_dir="$(mktemp -d "./.copy-${sequence}.XXXXXX")" || return 1
+        copy_item="$copy_dir/item"
+        case "$kind" in
+            file) copy_file_with_metadata "$target" "$copy_item" ;;
+            directory) copy_directory_tree "$target" "$copy_item" ;;
+            *) return 1 ;;
+        esac || return 1
+        move_path_no_clobber_exact "$copy_item" "$payload" || return 1
+        rmdir "$copy_dir" || return 1
+        validate_current_transaction_paths && [ "$CURRENT_TRANSACTION_DIR/payload" -ef . ]
+    )
+}
+
+validate_current_transaction_paths() {
+    [ -n "${CURRENT_TRANSACTION_ROOT:-}" ] && [ -d "$CURRENT_TRANSACTION_ROOT" ] && [ ! -L "$CURRENT_TRANSACTION_ROOT" ] || return 1
+    [ "$(path_identity "$CURRENT_TRANSACTION_ROOT" 2>/dev/null)" = "$CURRENT_TRANSACTION_ROOT_IDENTITY" ] || return 1
+    [ -n "${CURRENT_TRANSACTION_DIR:-}" ] && [ -d "$CURRENT_TRANSACTION_DIR" ] && [ ! -L "$CURRENT_TRANSACTION_DIR" ] || return 1
+    [ "$(path_identity "$CURRENT_TRANSACTION_DIR" 2>/dev/null)" = "$CURRENT_TRANSACTION_IDENTITY" ] || return 1
+    [ -d "$CURRENT_TRANSACTION_DIR/payload" ] && [ ! -L "$CURRENT_TRANSACTION_DIR/payload" ]
+}
+
+initialize_transaction() {
+    local root="$1" id="$2" created_at="$3" repo_rev="$4" owner_started_at="$5"
+    local parent root_name
+    parent="$(dirname "$root")"
+    root_name="$(basename "$root")"
+
+    (
+        cd -P "$parent" || return 1
+        [ "$parent" -ef . ] || return 1
+        [ ! -L "$root_name" ] && { [ ! -e "$root_name" ] || [ -d "$root_name" ]; } || return 1
+        if [ ! -e "$root_name" ]; then
+            (umask 077 && mkdir "$root_name") || return 1
+            sync_parent_directory "./$root_name" || return 1
+        fi
+        cd -P "$root_name" || return 1
+        [ "$root" -ef . ] || return 1
+        (umask 077 && mkdir "$id") || return 1
+        (umask 077 && mkdir "$id/payload") || return 1
+        write_transaction_metadata "./$id" "$id" "$created_at" "$repo_rev" in_progress "" "$DOTFILES_DIR" "$$" "$owner_started_at" || return 1
+        sync_parent_directory "./$id" || return 1
+        [ "$root" -ef . ]
+    )
+}
+
+install_symlink_anchored() {
+    local target_rel="$1" source="$2" prior_kind="$3" prior_value="$4" name="$5"
+    local parent_rel target_name
+    parent_rel="$(dirname "$target_rel")"
+    target_name="$(basename "$target_rel")"
+
+    (
+        local current="$HOME" part target
+        local -a parent_parts=()
+        cd -P "$HOME" || return 1
+        [ "$HOME" -ef . ] || return 1
+        if [ "$parent_rel" != . ]; then
+            IFS='/' read -r -a parent_parts <<<"$parent_rel"
+            for part in "${parent_parts[@]}"; do
+                [ -n "$part" ] || continue
+                [ ! -L "$part" ] || return 1
+                if [ ! -e "$part" ]; then
+                    mkdir "$part" || return 1
+                    sync_parent_directory "./$part" || return 1
+                fi
+                [ -d "$part" ] && [ ! -L "$part" ] || return 1
+                cd -P "$part" || return 1
+                current="$current/$part"
+                [ "$current" -ef . ] || return 1
+            done
+        fi
+        target="./$target_name"
+        validate_current_transaction_paths || return 1
+
+        inspect_target "$target" || return 1
+        [ "$TARGET_KIND" = "$prior_kind" ] || return 1
+        case "$prior_kind" in
+            file | directory) paths_match "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" "$prior_kind" || return 1 ;;
+            symlink) [ "$TARGET_PRIOR_VALUE" = "$prior_value" ] || return 1 ;;
+        esac
+
+        case "$prior_kind" in
+            file | directory)
+                guarded_remove_path "$target" "$prior_kind" "$CURRENT_TRANSACTION_DIR/$prior_value" install || return 1
+                print_warning "Backed up existing $name to $CURRENT_TRANSACTION_DIR/$prior_value"
+                ;;
+            symlink)
+                guarded_remove_path "$target" symlink "$prior_value" install || return 1
+                print_info "Existing symlink found, replaced"
+                ;;
+        esac
+        place_symlink_no_clobber "$source" "$target" install || return 1
+        sync_parent_directory "$target" || return 1
+        validate_current_transaction_paths || return 1
+        validate_target_ancestors_install "$target_rel" || return 1
+        [ "$current" -ef . ]
+    )
+}
+
+# Create a symlink with explanation and transactional safety.
 create_symlink() {
-    local source="$1"
-    local target="$2"
+    local source_rel="$1"
+    local target_rel="$2"
     local name="$3"
     local description="$4"
+    local source="$DOTFILES_DIR/$source_rel"
+    local target="$HOME/$target_rel"
+
+    validate_relative_path "$target_rel" || {
+        echo "Error: invalid relative target path: $target_rel" >&2
+        exit 1
+    }
+    validate_relative_path "$source_rel" || {
+        echo "Error: invalid relative source path: $source_rel" >&2
+        exit 1
+    }
+    validate_target_ancestors_install "$target_rel" || {
+        echo "Error: target ancestor for $target_rel is a symlink or invalid directory" >&2
+        exit 1
+    }
 
     echo ""
     print_step "${BOLD}$name${NC}"
@@ -240,25 +400,133 @@ create_symlink() {
         return 1
     fi
 
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
+    if [ -L "$target" ] && is_managed_symlink "$target" "$source"; then
         print_success "Already correctly symlinked"
         return 0
     fi
 
+    inspect_target "$target"
+
     if ask_yes_no "  Create this symlink?"; then
-        backup_if_exists "$target" "$(basename "$target")"
+        validate_target_ancestors_install "$target_rel" || {
+            echo "Error: target ancestor for $target_rel changed while awaiting confirmation" >&2
+            return 1
+        }
+        if [ -L "$target" ] && is_managed_symlink "$target" "$source"; then
+            print_success "Already correctly symlinked"
+            return 0
+        fi
+        # Confirmation may have taken arbitrarily long. Inspect again before
+        # writing a journal record or changing the target.
+        inspect_target "$target"
+
         if [ "$PLAN_MODE" = true ]; then
+            case "$TARGET_KIND" in
+                file | directory)
+                    print_plan "Would back up existing $name to transaction payload"
+                    BACKUPS_PLANNED=$((BACKUPS_PLANNED + 1))
+                    ;;
+                symlink)
+                    print_plan "Existing symlink found, would replace it"
+                    ;;
+                absent) ;;
+            esac
             if [ ! -d "$(dirname "$target")" ]; then
                 print_plan "Would create parent directory $(dirname "$target")"
             fi
             print_success "Symlink would be created"
             SYMLINKS_PLANNED=$((SYMLINKS_PLANNED + 1))
-        else
-            mkdir -p "$(dirname "$target")"
-            ln -sf "$source" "$target"
-            print_success "Symlink created"
-            SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
+            return 0
         fi
+
+        # Lazily create transaction on the first target that actually needs a change
+        if [ -z "$CURRENT_TRANSACTION_ID" ]; then
+            local root
+            root="$(transaction_backup_root)"
+            if [ -L "$root" ] || { [ -e "$root" ] && [ ! -d "$root" ]; }; then
+                echo "Error: backup root at $root is invalid or symlinked" >&2
+                exit 1
+            fi
+            CURRENT_TRANSACTION_ID="$(generate_transaction_id)" || {
+                echo "Error: failed to generate transaction ID" >&2
+                exit 1
+            }
+            local repo_rev
+            repo_rev="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
+            local created_at
+            created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            local owner_started_at
+            owner_started_at="$(process_start_identity "$$")" || owner_started_at="unverified-$CURRENT_TRANSACTION_ID"
+            initialize_transaction "$root" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "$owner_started_at" || {
+                echo "Error: failed to initialize transaction under $root" >&2
+                exit 1
+            }
+            CURRENT_TRANSACTION_ROOT="$root"
+            CURRENT_TRANSACTION_DIR="$root/$CURRENT_TRANSACTION_ID"
+            CURRENT_TRANSACTION_ROOT_IDENTITY="$(path_identity "$CURRENT_TRANSACTION_ROOT")" || exit 1
+            CURRENT_TRANSACTION_IDENTITY="$(path_identity "$CURRENT_TRANSACTION_DIR")" || exit 1
+            validate_current_transaction_paths || exit 1
+        fi
+
+        TRANSACTION_SEQUENCE=$((TRANSACTION_SEQUENCE + 1))
+        local seq
+        seq="$(printf "%04d" "$TRANSACTION_SEQUENCE")"
+
+        local prior_kind="$TARGET_KIND"
+        local prior_value="$TARGET_PRIOR_VALUE"
+        case "$prior_kind" in
+            file | directory)
+                prior_value="payload/$seq"
+                ;;
+        esac
+
+        # Append and flush journal record before any move, removal, or link creation
+        validate_current_transaction_paths &&
+            append_journal_entry "$CURRENT_TRANSACTION_DIR" "$seq" "$target_rel" "$prior_kind" "$prior_value" "$source_rel" &&
+            validate_current_transaction_paths || {
+            echo "Error: failed to append journal entry for $target_rel" >&2
+            exit 1
+        }
+
+        # Transaction setup and journal flushing can take time. Refuse to
+        # remove or move a target that no longer matches the recorded state.
+        if ! inspect_target "$target" || [ "$TARGET_KIND" != "$prior_kind" ] ||
+            { [ "$prior_kind" = symlink ] && [ "$TARGET_PRIOR_VALUE" != "$prior_value" ]; }; then
+            echo "Error: target changed before installation: $target_rel" >&2
+            return 1
+        fi
+
+        if [ "$prior_kind" = file ] || [ "$prior_kind" = directory ]; then
+            stage_backup_payload "$target" "$prior_kind" "$seq" || {
+                echo "Error: failed to stage backup for $target_rel" >&2
+                return 1
+            }
+            if ! inspect_target "$target" || [ "$TARGET_KIND" != "$prior_kind" ]; then
+                echo "Error: target changed while backing it up: $target_rel" >&2
+                return 1
+            fi
+            paths_match "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" "$prior_kind" || {
+                echo "Error: target changed while backing it up: $target_rel" >&2
+                return 1
+            }
+            sync_tree_and_parent "$CURRENT_TRANSACTION_DIR/$prior_value" || {
+                echo "Error: failed to sync backup for $target_rel" >&2
+                return 1
+            }
+            validate_current_transaction_paths || {
+                echo "Error: transaction root changed while backing up $target_rel" >&2
+                return 1
+            }
+        fi
+
+        # Hold the validated parent as the working directory while removing and
+        # placing the target so a pathname swap cannot redirect either action.
+        if ! install_symlink_anchored "$target_rel" "$source" "$prior_kind" "$prior_value" "$name"; then
+            echo "Error: target changed while creating symlink: $target_rel" >&2
+            return 1
+        fi
+        print_success "Symlink created"
+        SYMLINKS_CREATED=$((SYMLINKS_CREATED + 1))
     else
         print_warning "Skipped"
         SYMLINKS_SKIPPED=$((SYMLINKS_SKIPPED + 1))
@@ -288,7 +556,7 @@ install_tpm() {
             print_success "TPM install planned"
         else
             print_step "Cloning TPM..."
-            git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+            env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
             print_success "TPM installed"
         fi
         print_info "After setup, press prefix + I in tmux to install plugins"
@@ -375,8 +643,8 @@ install_config_symlinks() {
 
     while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
         create_symlink \
-            "$DOTFILES_DIR/$source_rel" \
-            "$HOME/$target_rel" \
+            "$source_rel" \
+            "$target_rel" \
             "$install_name" \
             "$description"
     done < <(managed_symlinks_for_group config)
@@ -391,8 +659,8 @@ install_home_symlinks() {
 
     while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
         create_symlink \
-            "$DOTFILES_DIR/$source_rel" \
-            "$HOME/$target_rel" \
+            "$source_rel" \
+            "$target_rel" \
             "$install_name" \
             "$description"
     done < <(managed_symlinks_for_group home)
@@ -421,8 +689,8 @@ install_home_symlinks() {
         print_header "Step 4b: Legacy Vim Symlinks"
         while IFS='|' read -r source_rel target_rel install_name _doctor_label description; do
             create_symlink \
-                "$DOTFILES_DIR/$source_rel" \
-                "$HOME/$target_rel" \
+                "$source_rel" \
+                "$target_rel" \
                 "$install_name" \
                 "$description"
         done < <(managed_symlinks_for_group legacy)
@@ -564,12 +832,15 @@ print_summary() {
 
     if [ "$PLAN_MODE" = true ] && [ "$BACKUPS_PLANNED" -gt 0 ]; then
         echo ""
-        echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
+        echo -e "  ${YELLOW}Backup directory:${NC} $(transaction_backup_root)"
         echo -e "  Existing files would be moved there before applying changes."
-    elif [ -d "$BACKUP_DIR" ]; then
+    elif [ -n "$CURRENT_TRANSACTION_ID" ]; then
         echo ""
-        echo -e "  ${YELLOW}Backup directory:${NC} $BACKUP_DIR"
+        echo -e "  ${YELLOW}Backup directory:${NC} $CURRENT_TRANSACTION_DIR"
         echo -e "  Files that were replaced have been backed up there."
+        echo ""
+        echo -e "  ${YELLOW}Transaction:${NC} $CURRENT_TRANSACTION_ID"
+        echo -e "  ${YELLOW}Restore preview:${NC} dot restore --plan $CURRENT_TRANSACTION_ID"
     fi
 
     echo ""
@@ -616,7 +887,7 @@ echo "Each step will be explained and you'll be asked for confirmation."
 echo ""
 echo -e "  ${BOLD}Dotfiles directory:${NC} $DOTFILES_DIR"
 echo -e "  ${BOLD}Home directory:${NC}     $HOME"
-echo -e "  ${BOLD}Backup directory:${NC}   $BACKUP_DIR (if needed)"
+echo -e "  ${BOLD}Backup root:${NC}        $(transaction_backup_root) (if needed)"
 if [ "$PLAN_MODE" = true ]; then
     echo -e "  ${BOLD}Mode:${NC}               Preview only (--plan)"
 fi
@@ -627,6 +898,14 @@ if ! ask_yes_no "Ready to begin?"; then
     exit 0
 fi
 
+if [ "$PLAN_MODE" != true ]; then
+    early_tx_root="$(transaction_backup_root)"
+    if [ -L "$early_tx_root" ] || { [ -e "$early_tx_root" ] && [ ! -d "$early_tx_root" ]; }; then
+        echo "Error: backup root at $early_tx_root is invalid or symlinked" >&2
+        exit 1
+    fi
+fi
+
 validate_managed_sources
 
 install_tpm
@@ -635,4 +914,40 @@ install_config_symlinks
 install_home_symlinks
 install_api_keys_template
 install_git_hooks
+
+if [ "$PLAN_MODE" != true ] && [ -n "$CURRENT_TRANSACTION_DIR" ]; then
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed before completion" >&2
+        exit 1
+    }
+    update_transaction_state "$CURRENT_TRANSACTION_DIR" "complete" "$TRANSACTION_SEQUENCE" || {
+        echo "Error: failed to mark transaction complete" >&2
+        exit 1
+    }
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed while completing installation" >&2
+        exit 1
+    }
+    tx_root="$(transaction_backup_root)"
+    validate_current_transaction_paths || {
+        echo "Error: transaction root changed before publishing latest" >&2
+        exit 1
+    }
+    tx_tmp_latest="$(mktemp "$tx_root/latest.tmp.XXXXXX")" || {
+        echo "Error: failed to reserve latest transaction pointer" >&2
+        exit 1
+    }
+    if ! printf "%s\n" "$CURRENT_TRANSACTION_ID" >"$tx_tmp_latest" ||
+        ! mv -f "$tx_tmp_latest" "$tx_root/latest"; then
+        rm -f "$tx_tmp_latest" 2>/dev/null || true
+        echo "Error: failed to publish latest transaction pointer" >&2
+        exit 1
+    fi
+    sync_file_and_parent "$tx_root/latest" && validate_current_transaction_paths || {
+        echo "Error: transaction root changed while publishing latest" >&2
+        exit 1
+    }
+fi
+INSTALL_SUCCESS=true
+
 print_summary

@@ -11,6 +11,7 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"status"* ]]
     [[ "$output" == *"doctor"* ]]
+    [[ "$output" == *"restore"* ]]
     [[ "$output" == *"brew-sync"* ]]
     [[ "$output" == *"cache-clean"* ]]
     [[ "$output" == *"install"* ]]
@@ -37,4 +38,11 @@ setup() {
     run "$DOTFILES_DIR/bin/dot" status --help
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage: status"* ]]
+}
+
+@test "dot restore --help works" {
+    run "$DOTFILES_DIR/bin/dot" restore --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage:"* ]]
+    [[ "$output" == *"--list"* ]]
 }
