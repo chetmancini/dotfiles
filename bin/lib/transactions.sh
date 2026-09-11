@@ -242,7 +242,42 @@ copy_directory_tree() {
     local source="$1"
     local destination="$2"
     mkdir "$destination" || return 1
-    (cd "$source" && tar -cf - .) | (cd "$destination" && tar -xpf -)
+    (cd "$source" && tar -cf - .) | (cd "$destination" && tar -xpf -) || return 1
+    touch -r "$source" "$destination"
+}
+
+path_metadata() {
+    local path="$1"
+    stat -f '%p|%u|%g|%m|%l' "$path" 2>/dev/null || stat -c '%f|%u|%g|%Y|%h' "$path"
+}
+
+paths_match() {
+    local source="$1"
+    local target="$2"
+    local kind="$3"
+    local relative source_metadata target_metadata
+
+    source_metadata="$(path_metadata "$source")" || return 1
+    target_metadata="$(path_metadata "$target")" || return 1
+    [ "$source_metadata" = "$target_metadata" ] || return 1
+    case "$kind" in
+        file) cmp -s "$source" "$target" ;;
+        directory)
+            diff -qr "$source" "$target" >/dev/null 2>&1 || return 1
+            while IFS= read -r -d '' relative; do
+                relative="${relative#./}"
+                source_metadata="$(path_metadata "$source/$relative")" || return 1
+                target_metadata="$(path_metadata "$target/$relative")" || return 1
+                [ "$source_metadata" = "$target_metadata" ] || return 1
+            done < <(cd "$source" && find . -mindepth 1 -print0)
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+path_link_count() {
+    local path="$1"
+    stat -f '%l' "$path" 2>/dev/null || stat -c '%h' "$path"
 }
 
 # Check whether target is a symlink pointing to expected_source, either literally

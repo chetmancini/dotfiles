@@ -265,7 +265,16 @@ stage_backup_payload() {
     copy_dir="$(mktemp -d "$CURRENT_TRANSACTION_DIR/payload/.copy-${sequence}.XXXXXX")" || return 1
     copy_item="$copy_dir/item"
     case "$kind" in
-        file) cp -p "$target" "$copy_item" ;;
+        file)
+            if [ "$(path_link_count "$target")" -gt 1 ]; then
+                ln "$target" "$copy_item" || {
+                    echo "Error: cannot preserve hard-linked file across backup filesystems: $target" >&2
+                    return 1
+                }
+            else
+                cp -p "$target" "$copy_item"
+            fi
+            ;;
         directory) copy_directory_tree "$target" "$copy_item" ;;
         *) return 1 ;;
     esac || return 1
@@ -404,10 +413,7 @@ create_symlink() {
                 echo "Error: target changed while backing it up: $target_rel" >&2
                 return 1
             fi
-            case "$prior_kind" in
-                file) cmp -s "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" ;;
-                directory) diff -qr "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" >/dev/null 2>&1 ;;
-            esac || {
+            paths_match "$target" "$CURRENT_TRANSACTION_DIR/$prior_value" "$prior_kind" || {
                 echo "Error: target changed while backing it up: $target_rel" >&2
                 return 1
             }

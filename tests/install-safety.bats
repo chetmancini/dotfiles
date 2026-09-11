@@ -324,3 +324,22 @@ EOF
     [ ! -e "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008" ]
     grep -q '^state=restored$' "$TEST_HOME/.dotfiles-backup/$tx_id/metadata"
 }
+
+@test "install and restore preserve an external hard link to a managed file" {
+    printf 'hard-linked git config\n' >"$TEST_HOME/.gitconfig"
+    ln "$TEST_HOME/.gitconfig" "$TEST_HOME/gitconfig-peer"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+    [ "$status" -eq 0 ]
+    [ -L "$TEST_HOME/.gitconfig" ]
+    local tx_id
+    tx_id="$(tr -d '[:space:]' <"$TEST_HOME/.dotfiles-backup/latest")"
+    [ "$TEST_HOME/.dotfiles-backup/$tx_id/payload/0008" -ef "$TEST_HOME/gitconfig-peer" ]
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_HOME/.gitconfig" ]
+    [ ! -L "$TEST_HOME/.gitconfig" ]
+    [ "$TEST_HOME/.gitconfig" -ef "$TEST_HOME/gitconfig-peer" ]
+    [ "$(cat "$TEST_HOME/.gitconfig")" = "hard-linked git config" ]
+}

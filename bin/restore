@@ -180,11 +180,7 @@ payload_matches_target() {
     local index="$1"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
     local target="$HOME/${TARGETS[$index]}"
-    case "${KINDS[$index]}" in
-        file) cmp -s "$payload" "$target" ;;
-        directory) diff -qr "$payload" "$target" >/dev/null 2>&1 ;;
-        *) return 1 ;;
-    esac
+    paths_match "$payload" "$target" "${KINDS[$index]}"
 }
 
 symlink_matches_destination() {
@@ -491,7 +487,13 @@ restore_payload() {
         fi
         payload_matches_kind "$index" || return 1
         case "$kind" in
-            file) cp -p "$payload" "$stage" ;;
+            file)
+                if [ "$(path_link_count "$payload")" -gt 1 ]; then
+                    ln "$payload" "$stage"
+                else
+                    cp -p "$payload" "$stage"
+                fi
+                ;;
             directory) copy_directory_tree "$payload" "$stage" ;;
         esac || return 1
         path_matches_kind "$stage" "$kind" || return 1

@@ -1577,3 +1577,31 @@ EOF
     [ "$(readlink "$HOME/.gitconfig")" = "prior-target" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }
+
+@test "47. Resume rejects metadata changes before payload cleanup" {
+    local tx_id="20260101T000000-111-833"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    mkdir -p "$tx_dir/payload"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=restoring
+entry_count=1
+EOF
+    printf 'original content\n' >"$tx_dir/payload/0001"
+    cp -p "$tx_dir/payload/0001" "$HOME/.gitconfig"
+    chmod 600 "$tx_dir/payload/0001"
+    chmod 644 "$HOME/.gitconfig"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    printf 'ready\n' >"$tx_dir/restore-0001"
+
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Conflict detected"* ]]
+    [ -f "$HOME/.gitconfig" ]
+    [ -f "$tx_dir/payload/0001" ]
+    [ ! "$HOME/.gitconfig" -ef "$tx_dir/payload/0001" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+}
