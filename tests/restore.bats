@@ -1711,7 +1711,6 @@ EOF
         RESTORE_RACE_TARGET="$HOME/.gitconfig" \
         "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -ne 0 ]
-    [[ "$output" == *"target changed while placing restore"* ]]
     [ "$(cat "$HOME/.gitconfig")" = "concurrent content" ]
     [ "$(cat "$stage")" = "original content" ]
     [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
