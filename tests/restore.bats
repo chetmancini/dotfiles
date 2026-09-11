@@ -1989,7 +1989,13 @@ EOF
 @test "59. Stale in-progress install recovers while a live installer is refused" {
     local live_id="20260101T000000-111-842"
     local live_dir="$TMP_BACKUP/$live_id"
-    mkdir -p "$live_dir"
+    local fake_bin="$TMP_HOME/fake-bin-owner"
+    mkdir -p "$live_dir" "$fake_bin"
+    cat <<'EOF' >"$fake_bin/ps"
+#!/usr/bin/env bash
+printf '%s\n' "$RESTORE_FAKE_PROCESS_START"
+EOF
+    chmod +x "$fake_bin/ps"
     cat <<EOF >"$live_dir/metadata"
 version=1
 id=$live_id
@@ -1997,20 +2003,18 @@ created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=in_progress
 owner_pid=$$
+owner_started_at=matching process start
 EOF
     touch "$live_dir/entries"
 
-    run "$DOTFILES_DIR/bin/restore" --plan "$live_id"
+    run env PATH="$fake_bin:$PATH" RESTORE_FAKE_PROCESS_START='matching process start' \
+        "$DOTFILES_DIR/bin/restore" --plan "$live_id"
     [ "$status" -ne 0 ]
     [[ "$output" == *"active installer process"* ]]
     grep -q '^state=in_progress$' "$live_dir/metadata"
 
     local stale_id="20260101T000000-111-843"
     local stale_dir="$TMP_BACKUP/$stale_id"
-    local dead_pid
-    sh -c 'exit 0' &
-    dead_pid=$!
-    wait "$dead_pid"
     mkdir -p "$stale_dir/payload"
     cat <<EOF >"$stale_dir/metadata"
 version=1
@@ -2018,17 +2022,20 @@ id=$stale_id
 created_at=2026-01-01T00:00:00Z
 repo_revision=dummy
 state=in_progress
-owner_pid=$dead_pid
+owner_pid=$$
+owner_started_at=Mon Jan  1 00:00:00 2001
 EOF
     printf 'original content\n' >"$stale_dir/payload/0001"
     echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$stale_dir/entries"
     printf '%s\n' "$stale_id" >"$TMP_BACKUP/latest"
     ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
 
-    run "$DOTFILES_DIR/bin/restore" --plan latest
+    run env PATH="$fake_bin:$PATH" RESTORE_FAKE_PROCESS_START='matching process start' \
+        "$DOTFILES_DIR/bin/restore" --plan latest
     [ "$status" -eq 0 ]
     [[ "$output" == *"(state: failed)"* ]]
-    run "$DOTFILES_DIR/bin/restore" --apply latest --yes
+    run env PATH="$fake_bin:$PATH" RESTORE_FAKE_PROCESS_START='matching process start' \
+        "$DOTFILES_DIR/bin/restore" --apply latest --yes
     [ "$status" -eq 0 ]
     [ "$(cat "$HOME/.gitconfig")" = "original content" ]
     grep -q '^state=restored$' "$stale_dir/metadata"

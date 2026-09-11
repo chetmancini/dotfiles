@@ -372,7 +372,9 @@ create_symlink() {
             repo_rev="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
             local created_at
             created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" "" "$DOTFILES_DIR" "$$" || {
+            local owner_started_at
+            owner_started_at="$(process_start_identity "$$")" || owner_started_at="unverified-$CURRENT_TRANSACTION_ID"
+            write_transaction_metadata "$CURRENT_TRANSACTION_DIR" "$CURRENT_TRANSACTION_ID" "$created_at" "$repo_rev" "in_progress" "" "$DOTFILES_DIR" "$$" "$owner_started_at" || {
                 echo "Error: failed to write transaction metadata" >&2
                 exit 1
             }

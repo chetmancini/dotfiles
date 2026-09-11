@@ -10,6 +10,12 @@ transaction_backup_root() {
     echo "${DOTFILES_BACKUP_ROOT:-$HOME/.dotfiles-backup}"
 }
 
+process_start_identity() {
+    local pid="$1"
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null
+}
+
 # Validate transaction ID against strict allowlist: digits, 'T', and '-' only.
 validate_transaction_id() {
     local id="$1"
@@ -502,8 +508,8 @@ read_transaction_metadata() {
     [ -f "$meta_file" ] && [ ! -L "$meta_file" ] || return 1
 
     local key val
-    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_repo_root="" m_owner_pid="" m_state="" m_entry_count=""
-    local seen_version=false seen_id=false seen_created_at=false seen_repo_rev=false seen_repo_root=false seen_owner_pid=false seen_state=false seen_entry_count=false
+    local m_version="" m_id="" m_created_at="" m_repo_revision="" m_repo_root="" m_owner_pid="" m_owner_started_at="" m_state="" m_entry_count=""
+    local seen_version=false seen_id=false seen_created_at=false seen_repo_rev=false seen_repo_root=false seen_owner_pid=false seen_owner_started_at=false seen_state=false seen_entry_count=false
 
     while IFS='=' read -r key val || [ -n "$key" ]; do
         [ -z "$key" ] && continue
@@ -547,6 +553,12 @@ read_transaction_metadata() {
                 [[ "$val" =~ ^[1-9][0-9]*$ ]] || return 1
                 m_owner_pid="$val"
                 ;;
+            owner_started_at)
+                [ "$seen_owner_started_at" = false ] || return 1
+                seen_owner_started_at=true
+                [ -n "$val" ] || return 1
+                m_owner_started_at="$val"
+                ;;
             state)
                 [ "$seen_state" = false ] || return 1
                 seen_state=true
@@ -585,6 +597,9 @@ read_transaction_metadata() {
     if [ -n "$m_owner_pid" ]; then
         printf "owner_pid=%s\n" "$m_owner_pid"
     fi
+    if [ -n "$m_owner_started_at" ]; then
+        printf "owner_started_at=%s\n" "$m_owner_started_at"
+    fi
     if [ -n "$m_entry_count" ]; then
         printf "entry_count=%s\n" "$m_entry_count"
     fi
@@ -601,6 +616,7 @@ write_transaction_metadata() {
     local entry_count="${6:-}"
     local repo_root="${7:-}"
     local owner_pid="${8:-}"
+    local owner_started_at="${9:-}"
 
     validate_transaction_id "$id" || return 1
     case "$state" in
@@ -615,6 +631,9 @@ write_transaction_metadata() {
     fi
     if [ -n "$owner_pid" ]; then
         [[ "$owner_pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    fi
+    if [ -n "$owner_started_at" ]; then
+        [[ "$owner_started_at" != *$'\n'* && "$owner_started_at" != *$'\r'* && "$owner_started_at" != *"|"* ]] || return 1
     fi
 
     local meta_file="$tx_dir/metadata"
@@ -633,6 +652,9 @@ EOF
     fi
     if [ -n "$owner_pid" ]; then
         printf "owner_pid=%s\n" "$owner_pid" >>"$tmp_file"
+    fi
+    if [ -n "$owner_started_at" ]; then
+        printf "owner_started_at=%s\n" "$owner_started_at" >>"$tmp_file"
     fi
     if [ -n "$entry_count" ]; then
         printf "entry_count=%s\n" "$entry_count" >>"$tmp_file"

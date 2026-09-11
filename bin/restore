@@ -23,6 +23,7 @@ TX_STATE=
 TX_ENTRY_COUNT=
 TX_REPO_ROOT=
 TX_OWNER_PID=
+TX_OWNER_STARTED_AT=
 SEQUENCES=()
 TARGETS=()
 KINDS=()
@@ -49,7 +50,7 @@ usage_error() {
 
 load_transaction() {
     local selector="$1"
-    local metadata key value metadata_id=
+    local metadata key value metadata_id='' current_owner_started_at
 
     if ! TX_ID="$(resolve_transaction "$selector")"; then
         echo "Error: could not resolve transaction '${selector}'" >&2
@@ -65,6 +66,7 @@ load_transaction() {
     TX_ENTRY_COUNT=
     TX_REPO_ROOT="$DOTFILES_DIR"
     TX_OWNER_PID=
+    TX_OWNER_STARTED_AT=
     while IFS='=' read -r key value; do
         case "$key" in
             id) metadata_id="$value" ;;
@@ -72,6 +74,7 @@ load_transaction() {
             entry_count) TX_ENTRY_COUNT="$value" ;;
             repo_root) TX_REPO_ROOT="$value" ;;
             owner_pid) TX_OWNER_PID="$value" ;;
+            owner_started_at) TX_OWNER_STARTED_AT="$value" ;;
         esac
     done <<<"$metadata"
     [ "$metadata_id" = "$TX_ID" ] || {
@@ -84,8 +87,24 @@ load_transaction() {
             return 1
         }
         if kill -0 "$TX_OWNER_PID" 2>/dev/null; then
-            echo "Error: transaction '${TX_ID}' is owned by active installer process ${TX_OWNER_PID}" >&2
-            return 1
+            [ -n "$TX_OWNER_STARTED_AT" ] || {
+                echo "Error: transaction '${TX_ID}' has a live but unverifiable installer owner" >&2
+                return 1
+            }
+            case "$TX_OWNER_STARTED_AT" in
+                unverified-*)
+                    echo "Error: transaction '${TX_ID}' has a live but unverifiable installer owner" >&2
+                    return 1
+                    ;;
+            esac
+            if ! current_owner_started_at="$(process_start_identity "$TX_OWNER_PID")"; then
+                echo "Error: transaction '${TX_ID}' has a live installer owner whose identity cannot be verified" >&2
+                return 1
+            fi
+            if [ "$current_owner_started_at" = "$TX_OWNER_STARTED_AT" ]; then
+                echo "Error: transaction '${TX_ID}' is owned by active installer process ${TX_OWNER_PID}" >&2
+                return 1
+            fi
         fi
         TX_STATE=failed
     fi
