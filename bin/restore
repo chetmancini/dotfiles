@@ -555,7 +555,12 @@ restore_link_entry() {
                 return 1
             fi
         fi
-        if [ "${KINDS[$index]}" = symlink ] && ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
+        case "${ACTIONS[$index]}:${KINDS[$index]}" in
+            original:symlink) symlink_matches_destination "$target" "${PRIOR_VALUES[$index]}" || return 1 ;;
+            original:absent) [ ! -e "$target" ] && [ ! -L "$target" ] || return 1 ;;
+        esac
+        if [ "${ACTIONS[$index]}" != original ] && [ "${KINDS[$index]}" = symlink ] &&
+            ! place_symlink_no_clobber "${PRIOR_VALUES[$index]}" "$target" restore; then
             echo "Error: target changed while restoring symlink: ${TARGETS[$index]}" >&2
             return 1
         fi
@@ -638,6 +643,7 @@ restore_payload_in_parent() {
                 esac || return 1
                 [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
             fi
+            sync_tree_and_parent "$target" || return 1
             write_restore_marker "$index" cleaning || return 1
         fi
         if [ "$marker_state" != deleting ]; then
@@ -704,9 +710,10 @@ restore_payload_in_parent() {
     validate_target_ancestors "${TARGETS[$index]}" || return 1
     [ "$parent" -ef . ] || return 1
 
-    write_restore_marker "$index" cleaning || return 1
     payload_matches_target "$index" || return 1
     sync_tree_and_parent "$target" || return 1
+    write_restore_marker "$index" cleaning || return 1
+    payload_matches_target "$index" || return 1
     payload_identity="$(path_identity "$payload")" || return 1
     write_restore_marker "$index" deleting "$payload_identity" || return 1
     delete_restored_payload "$index" "$payload_identity" || return 1
@@ -722,6 +729,12 @@ apply_entry() {
         return 1
     fi
     case "${ACTIONS[$index]}:${KINDS[$index]}" in
+        original:symlink | original:absent)
+            if [ "$TX_STATE" = restoring ]; then
+                restore_link_entry "$index" || return 1
+            fi
+            echo "Already in original state: ${TARGETS[$index]}"
+            ;;
         original:*) echo "Already in original state: ${TARGETS[$index]}" ;;
         managed:absent)
             restore_link_entry "$index" || return 1

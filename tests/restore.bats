@@ -2227,7 +2227,7 @@ EOF
     [ -z "$(find "$tx_dir" -maxdepth 1 -name 'metadata.tmp.*' -print -quit)" ]
 }
 
-@test "66. Restore keeps its payload when restored-target sync fails" {
+@test "66. Restore publishes cleaning only after restored-target sync" {
     local tx_id="20260101T000000-111-848"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local fake_bin="$TMP_HOME/fake-bin-target-sync"
@@ -2258,7 +2258,7 @@ EOF
     [ "$status" -ne 0 ]
     [ "$(cat "$HOME/.gitconfig")" = "original content" ]
     [ "$(cat "$tx_dir/payload/0001")" = "original content" ]
-    grep -q '^cleaning$' "$tx_dir/restore-0001"
+    grep -Eq '^ready\|[0-9]+:[0-9]+$' "$tx_dir/restore-0001"
 
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -eq 0 ]
@@ -2400,6 +2400,11 @@ EOF
     [ "$status" -ne 0 ]
     [ -L "$HOME/.zshrc" ]
     [ "$(readlink "$HOME/.zshrc")" = "prior/target" ]
+    grep -q '^state=restoring$' "$tx_dir/metadata"
+
+    run env PATH="$fake_bin:$PATH" RESTORE_REAL_PYTHON="$(command -v python3)" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
     grep -q '^state=restoring$' "$tx_dir/metadata"
 
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
