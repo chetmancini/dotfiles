@@ -923,10 +923,20 @@ append_journal_entry() {
     local installed="$6"
 
     [ -d "$tx_dir" ] && [ ! -L "$tx_dir" ] || return 1
-    [ ! -L "$tx_dir/entries" ] || return 1
+    local entries_file="$tx_dir/entries"
+    local tmp_file
+    [ ! -L "$entries_file" ] && { [ ! -e "$entries_file" ] || [ -f "$entries_file" ]; } || return 1
     validate_journal_entry "$seq" "$target" "$kind" "$val" "$installed" || return 1
-    printf "%s|%s|%s|%s|%s\n" "$seq" "$target" "$kind" "$val" "$installed" >>"$tx_dir/entries" || return 1
-    sync_file_and_parent "$tx_dir/entries"
+    tmp_file="$(mktemp "$tx_dir/entries.tmp.XXXXXX")" || return 1
+    if { [ ! -e "$entries_file" ] || cat "$entries_file"; } >"$tmp_file" &&
+        printf "%s|%s|%s|%s|%s\n" "$seq" "$target" "$kind" "$val" "$installed" >>"$tmp_file" &&
+        sync_file_and_parent "$tmp_file" &&
+        mv -f "$tmp_file" "$entries_file"; then
+        sync_file_and_parent "$entries_file"
+        return
+    fi
+    rm -f "$tmp_file" 2>/dev/null || true
+    return 1
 }
 
 # Resolve a transaction ID from 'latest' or an explicit ID.

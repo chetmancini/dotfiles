@@ -1409,6 +1409,7 @@ EOF
     local tx_id="20260101T000000-111-829"
     local tx_dir="$TMP_BACKUP/$tx_id"
     local fake_bin="$TMP_HOME/fake-bin-race"
+    local stage="$HOME/.config/.restore.stage.$tx_id.0001"
     mkdir -p "$tx_dir/payload/0001/nested" "$fake_bin"
     cat <<EOF >"$tx_dir/metadata"
 version=1
@@ -1448,6 +1449,8 @@ EOF
     grep -q '^state=restoring$' "$tx_dir/metadata"
     [ -d "$tx_dir/payload/0001" ]
     [ -f "$tx_dir/payload/0001/nested/file" ]
+    [ -f "$stage/nested/file" ]
+    [ ! -e "$HOME/.config/yazi/.restore.stage.$tx_id.0001" ]
 
     rm -rf "$HOME/.config/yazi"
     run "$DOTFILES_DIR/bin/restore" --apply latest --yes
@@ -2389,5 +2392,120 @@ EOF
 
     run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
     [ "$status" -eq 0 ]
+    grep -q '^state=restored$' "$tx_dir/metadata"
+}
+
+@test "71. Failed journal append leaves the prior journal intact" {
+    local tx_dir="$TMP_BACKUP/journal-append-failure"
+    local original="0001|.gitconfig|absent||.gitconfig"
+    mkdir -p "$tx_dir"
+    printf '%s\n' "$original" >"$tx_dir/entries"
+
+    run bash -c '
+        source "$1"
+        printf() {
+            if [ "${1:-}" = "%s|%s|%s|%s|%s\\n" ] && [ "${2:-}" = 0002 ]; then
+                builtin printf "0002|partial"
+                return 75
+            fi
+            builtin printf "$@"
+        }
+        append_journal_entry "$2" 0002 .zshrc absent "" .zshrc
+    ' _ "$DOTFILES_DIR/bin/lib/transactions.sh" "$tx_dir"
+    [ "$status" -ne 0 ]
+    [ "$(cat "$tx_dir/entries")" = "$original" ]
+    [ -z "$(find "$tx_dir" -maxdepth 1 -name 'entries.tmp.*' -print -quit)" ]
+}
+
+@test "72. File restore stage is private before payload copy" {
+    local tx_id="20260101T000000-111-852"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-stage-mode"
+    local observed_mode="$TMP_HOME/stage-mode"
+    mkdir -p "$tx_dir/payload" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'private original content\n' >"$tx_dir/payload/0001"
+    chmod 600 "$tx_dir/payload/0001"
+    echo "0001|.gitconfig|file|payload/0001|.gitconfig" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+
+    cat <<'EOF' >"$fake_bin/cp"
+#!/usr/bin/env bash
+destination="${@: -1}"
+if stat -f '%Lp' "$destination" >/dev/null 2>&1; then
+    stat -f '%Lp' "$destination" >"$RESTORE_OBSERVED_MODE"
+else
+    stat -c '%a' "$destination" >"$RESTORE_OBSERVED_MODE"
+fi
+exec "$RESTORE_REAL_CP" "$@"
+EOF
+    chmod +x "$fake_bin/cp"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_CP="$(command -v cp)" \
+        RESTORE_OBSERVED_MODE="$observed_mode" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$observed_mode")" = 600 ]
+    [ "$(stat -f '%Lp' "$HOME/.gitconfig" 2>/dev/null || stat -c '%a' "$HOME/.gitconfig")" = 600 ]
+}
+
+@test "73. Portable placement fallback removes a consumed stage" {
+    local tx_id="20260101T000000-111-853"
+    local tx_dir="$TMP_BACKUP/$tx_id"
+    local fake_bin="$TMP_HOME/fake-bin-portable-placement"
+    local target="$HOME/.config/yazi"
+    local nested="$target/.restore.stage.$tx_id.0001"
+    mkdir -p "$tx_dir/payload/0001" "$HOME/.config" "$fake_bin"
+    cat <<EOF >"$tx_dir/metadata"
+version=1
+id=$tx_id
+created_at=2026-01-01T00:00:00Z
+repo_revision=dummy
+state=complete
+entry_count=1
+EOF
+    printf 'private original content\n' >"$tx_dir/payload/0001/file"
+    echo "0001|.config/yazi|directory|payload/0001|yazi" >"$tx_dir/entries"
+    ln -s "$DOTFILES_DIR/yazi" "$target"
+
+    cat <<'EOF' >"$fake_bin/mv"
+#!/usr/bin/env bash
+for argument in "$@"; do
+    if [ "$argument" = -T ]; then
+        exit 64
+    fi
+done
+destination="${@: -1}"
+if [ "$destination" = "$RESTORE_RACE_TARGET" ] && [ ! -e "$RESTORE_RACE_DONE" ]; then
+    : >"$RESTORE_RACE_DONE"
+    mkdir "$destination"
+fi
+exec "$RESTORE_REAL_MV" "$@"
+EOF
+    chmod +x "$fake_bin/mv"
+
+    run env PATH="$fake_bin:$PATH" \
+        RESTORE_REAL_MV="$(command -v mv)" \
+        RESTORE_RACE_TARGET="./yazi" \
+        RESTORE_RACE_DONE="$TMP_HOME/portable-placement-raced" \
+        "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -ne 0 ]
+    [ -d "$target" ]
+    [ ! -e "$nested" ]
+    [ -z "$(find "$target" -mindepth 1 -print -quit)" ]
+    [ "$(cat "$tx_dir/payload/0001/file")" = "private original content" ]
+
+    rmdir "$target"
+    run "$DOTFILES_DIR/bin/restore" --apply "$tx_id" --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat "$target/file")" = "private original content" ]
     grep -q '^state=restored$' "$tx_dir/metadata"
 }

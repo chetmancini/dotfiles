@@ -268,11 +268,34 @@ reserve_restore_stage() {
     local kind="$1" stage="$2" payload="$3"
     case "$kind" in
         file)
-            (set -o noclobber && : >"$stage")
+            (umask 077 && set -o noclobber && : >"$stage")
             ;;
-        directory) mkdir "$stage" ;;
+        directory) (umask 077 && mkdir "$stage") ;;
         *) return 1 ;;
     esac
+}
+
+place_restore_stage_exact() {
+    local stage="$1" target="$2" kind="$3" payload="$4" expected_identity="$5"
+    local nested
+    nested="$target/$(basename "$stage")"
+
+    [ "$(path_identity "$stage")" = "$expected_identity" ] || return 1
+    if mv -n -T "$stage" "$target" 2>/dev/null; then
+        :
+    elif [ ! -e "$target" ] && [ ! -L "$target" ] && { [ -e "$stage" ] || [ -L "$stage" ]; }; then
+        mv -n "$stage" "$target" || return 1
+    else
+        return 1
+    fi
+
+    if [ -e "$nested" ] || [ -L "$nested" ]; then
+        [ "$(path_identity "$nested")" = "$expected_identity" ] || return 1
+        guarded_remove_path "$nested" "$kind" "$payload" restore-stage || return 1
+        return 1
+    fi
+    [ ! -e "$stage" ] && [ ! -L "$stage" ] || return 1
+    [ "$(path_identity "$target")" = "$expected_identity" ]
 }
 
 copy_payload_into_stage() {
@@ -581,10 +604,9 @@ restore_payload_in_parent() {
     local parent="$3"
     local payload="$TX_DIR/${PRIOR_VALUES[$index]}"
     local kind="${KINDS[$index]}"
-    local marker stage stage_name marker_record='' marker_state='' marker_identity='' stage_identity expected_action nested
+    local marker stage marker_record='' marker_state='' marker_identity='' stage_identity expected_action
     marker="$(restore_marker_path "$index")"
     stage="./.restore.stage.${TX_ID}.${SEQUENCES[$index]}"
-    stage_name="$(basename "$stage")"
 
     if [ -e "$marker" ] || [ -L "$marker" ]; then
         marker_record="$(read_restore_marker "$marker")" || return 1
@@ -647,6 +669,8 @@ restore_payload_in_parent() {
         stage_identity="$(path_identity "$stage")" || return 1
         write_restore_marker "$index" ready "$stage_identity" || return 1
     fi
+    stage_identity="$(path_identity "$stage")" || return 1
+    [ "$marker_state" != ready ] || [ "$stage_identity" = "$marker_identity" ] || return 1
 
     expected_action="${ACTIONS[$index]}"
     if ! classify_entry "$index" || [ "${ACTIONS[$index]}" != "$expected_action" ]; then
@@ -657,13 +681,7 @@ restore_payload_in_parent() {
     if [ "${ACTIONS[$index]}" = managed ]; then
         guarded_remove_path "$target" managed "$TX_REPO_ROOT/${SOURCES[$index]}" restore || return 1
     fi
-    mv -n "$stage" "$target" || return 1
-    nested="$target/$stage_name"
-    if [ -e "$nested" ] || [ -L "$nested" ]; then
-        echo "Error: target became a directory while restoring: ${TARGETS[$index]}" >&2
-        return 1
-    fi
-    if [ -e "$stage" ] || [ -L "$stage" ]; then
+    if ! place_restore_stage_exact "$stage" "$target" "$kind" "$payload" "$stage_identity"; then
         echo "Error: target changed while placing restore: ${TARGETS[$index]}" >&2
         return 1
     fi
