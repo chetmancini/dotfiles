@@ -214,12 +214,12 @@ validate_managed_sources() {
     fi
 }
 
-# Back up a file or directory if it exists and is not a symlink
+# Preserve existing files, directories, and symlinks (including dangling links).
 backup_if_exists() {
     local target="$1"
     local name="$2"
 
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
+    if [ -e "$target" ] || [ -L "$target" ]; then
         local backup_path="$BACKUP_DIR/$name"
         if [ "$PLAN_MODE" = true ]; then
             print_plan "Would back up existing $name to $backup_path"
@@ -230,14 +230,7 @@ backup_if_exists() {
             print_warning "Backed up existing $name to $backup_path"
         fi
         return 0
-    elif [ -L "$target" ]; then
-        if [ "$PLAN_MODE" = true ]; then
-            print_plan "Existing symlink found, would replace it"
-        else
-            print_info "Existing symlink found, will be replaced"
-            rm -f "$target"
-        fi
-        return 0
+
     fi
 
     return 0

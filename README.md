@@ -54,7 +54,9 @@ Start `zsh` explicitly to use this shell setup; the installer does not change yo
 login shell. Development installs replace the selected app configs (including
 Neovim), but leave Ghostty, Hyprland, and Omarchy's desktop/theme files alone.
 Use `minimal` if you want to keep Omarchy's editor configuration too.
-Existing regular files/directories are backed up; existing symlinks are replaced.
+Existing files, directories, and symlinks are backed up before replacement.
+Backed-up symlinks retain their original link text, including relative targets;
+restore them to their original location to restore relative resolution.
 
 Keep Omarchy updated through its normal update workflow before installing packages.
 The installer does not refresh pacman's databases, perform system upgrades, install

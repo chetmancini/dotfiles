@@ -37,14 +37,14 @@ h() {
 _clipboard_copy() {
     if [[ "$(uname)" == "Darwin" ]]; then
         pbcopy
-    elif command -v wl-copy >/dev/null 2>&1; then
+    elif [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-copy >/dev/null 2>&1; then
         wl-copy
-    elif command -v xclip >/dev/null 2>&1; then
+    elif [[ -n "${DISPLAY:-}" ]] && command -v xclip >/dev/null 2>&1; then
         xclip -selection clipboard
-    elif command -v xsel >/dev/null 2>&1; then
+    elif [[ -n "${DISPLAY:-}" ]] && command -v xsel >/dev/null 2>&1; then
         xsel --clipboard
     else
-        echo "Error: No clipboard utility found (pbcopy, wl-copy, xclip, or xsel)" >&2
+        echo "Error: No clipboard utility available for this display session (pbcopy, wl-copy, xclip, or xsel)" >&2
         return 1
     fi
 }

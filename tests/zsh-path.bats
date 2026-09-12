@@ -28,6 +28,13 @@ assert_mise_preserves_pnpm_path() {
                 print -r -- "export PATH=/usr/bin:/bin"
         }
         source "$DOTFILES_DIR/zsh/tools/mise.zsh"
+        [[ ":$PATH:" == *":$PNPM_HOME:"* ]] || exit 1
+        [[ ":$PATH:" == *":$PNPM_GLOBAL_BIN:"* ]] || exit 1
+        # The prompt/directory hook must recover both paths after later resets.
+        export PATH=/usr/bin:/bin
+        _dotfiles_restore_pnpm_path
+        _dotfiles_restore_pnpm_path
+        [[ ":$PATH:" == *":$PNPM_HOME:"* ]] || exit 1
         [[ ":$PATH:" == *":$PNPM_GLOBAL_BIN:"* ]]
     ' -- "$platform" "$expected_home"
     [ "$status" -eq 0 ]

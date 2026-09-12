@@ -57,3 +57,32 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"managed source is missing"* ]]
 }
+
+@test "installer backs up relative and dangling symlinks without changing their targets" {
+    echo original >"$TEST_HOME/original-gitconfig"
+    ln -s original-gitconfig "$TEST_HOME/.gitconfig"
+    ln -s missing-zshrc "$TEST_HOME/.zshrc"
+
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --profile minimal --yes --skip-packages --skip-tpm --no-clear
+    [ "$status" -eq 0 ]
+    backups=("$TEST_HOME"/.dotfiles-backup/*)
+    [ "${#backups[@]}" -eq 1 ]
+    [ "$(readlink "${backups[0]}/.gitconfig")" = original-gitconfig ]
+    [ "$(readlink "${backups[0]}/.zshrc")" = missing-zshrc ]
+    [ "$(cat "$TEST_HOME/original-gitconfig")" = original ]
+    [ "$(readlink "$TEST_HOME/.zshrc")" = "$DOTFILES_DIR/.zshrc" ]
+
+    # A repeat install leaves correct links alone and makes no further backups.
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --profile minimal --yes --skip-packages --skip-tpm --no-clear
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Backed up existing"* ]]
+}
+
+@test "preview preserves existing symlinks without creating backups" {
+    ln -s missing-zshrc "$TEST_HOME/.zshrc"
+    run env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --profile minimal --plan --yes --skip-packages --skip-tpm --no-clear
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Would back up existing .zshrc"* ]]
+    [ "$(readlink "$TEST_HOME/.zshrc")" = missing-zshrc ]
+    [ ! -e "$TEST_HOME/.dotfiles-backup" ]
+}

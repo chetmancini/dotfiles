@@ -3,9 +3,9 @@
 if command -v mise &>/dev/null; then
   eval "$(mise activate zsh)"
 
-  # Mise rebuilds PATH and can drop pnpm's module-owned global bin.
+  # Mise rebuilds PATH and can drop pnpm's home and global bin directories.
   _dotfiles_restore_pnpm_path() {
-    path_add "$PNPM_GLOBAL_BIN"
+    path_add "$PNPM_HOME" "$PNPM_GLOBAL_BIN"
     export PATH
   }
 
