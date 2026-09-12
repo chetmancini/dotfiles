@@ -4,26 +4,39 @@
 setup() {
     load helpers.bash
     setup_temp_home
-    mkdir -p "$HOME/Library/pnpm/bin"
+    # Do not inherit the developer's pnpm or XDG location into the fixture.
+    unset PNPM_HOME XDG_DATA_HOME
 }
 
 teardown() {
     teardown_temp_home
 }
 
-@test "Mise activation preserves the module-owned pnpm global bin" {
+assert_mise_preserves_pnpm_path() {
+    local platform="$1" expected_home="$2"
+    mkdir -p "$expected_home/bin"
     run env \
         DOTFILES_DIR="$DOTFILES_DIR" \
         HOME="$HOME" \
         PATH="/usr/bin:/bin" \
         zsh -dfc '
+        OSTYPE="$1"
         source "$DOTFILES_DIR/zsh/path.zsh"
+        [[ "$PNPM_GLOBAL_BIN" == "$2/bin" ]] || exit 1
         mise() {
             [[ "$1" == activate ]] &&
                 print -r -- "export PATH=/usr/bin:/bin"
         }
         source "$DOTFILES_DIR/zsh/tools/mise.zsh"
         [[ ":$PATH:" == *":$PNPM_GLOBAL_BIN:"* ]]
-    '
+    ' -- "$platform" "$expected_home"
     [ "$status" -eq 0 ]
+}
+
+@test "Mise activation preserves the macOS pnpm global bin" {
+    assert_mise_preserves_pnpm_path darwin "$HOME/Library/pnpm"
+}
+
+@test "Mise activation preserves the Linux pnpm global bin" {
+    assert_mise_preserves_pnpm_path linux-gnu "$HOME/.local/share/pnpm"
 }
