@@ -2,7 +2,7 @@
 
 # Shared manifest for dotfiles symlinks installed by install.sh and verified by doctor.
 # Fields are: source_relative_path|target_relative_to_home|install_name|doctor_label|description
-managed_symlinks_for_group() {
+all_managed_symlinks_for_group() {
     case "$1" in
         config)
             cat <<'EOF'
@@ -37,4 +37,45 @@ EOF
             return 1
             ;;
     esac
+}
+
+# Profiles are cumulative. An unset profile preserves the historical full manifest.
+managed_symlinks_for_group() {
+    local record source_rel
+    while IFS= read -r record; do
+        source_rel="${record%%|*}"
+        case "${DOTFILES_PROFILE:-desktop}:$source_rel" in
+            minimal:*)
+                case "$source_rel" in
+                    .gitconfig | .gitignore | .zshrc | .bashrc | .bash_profile | .tmux.conf) ;;
+                    *) continue ;;
+                esac
+                ;;
+            development:ghostty) continue ;;
+        esac
+        # Omarchy owns its Bash startup and desktop integration. Use our zsh
+        # config separately without replacing the distribution's login shell.
+        if [ "${DOTFILES_PLATFORM:-}" = linux ]; then
+            case "$source_rel" in .bashrc | .bash_profile) continue ;; esac
+        fi
+        printf '%s\n' "$record"
+    done < <(all_managed_symlinks_for_group "$1")
+}
+
+load_install_profile() {
+    local state="$HOME/.config/dotfiles/profile"
+    if [ -f "$state" ]; then
+        IFS= read -r DOTFILES_PROFILE <"$state"
+        case "$DOTFILES_PROFILE" in
+            minimal | development | desktop) ;;
+            *)
+                echo "Invalid install profile in $state" >&2
+                return 1
+                ;;
+        esac
+        case "$(uname -s)" in
+            Linux) DOTFILES_PLATFORM=linux ;;
+            Darwin) DOTFILES_PLATFORM=macos ;;
+        esac
+    fi
 }

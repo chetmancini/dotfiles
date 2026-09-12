@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal dotfiles for macOS. Configuration for zsh, neovim, git, tmux, and various CLI tools.
+Personal dotfiles for macOS and Linux (Arch/Omarchy). Configuration for zsh, neovim, git, tmux, and various CLI tools.
 
 > **Note**: These are my personal dotfiles. Feel free to read and take inspiration, but make your own edits - there's a lot of me-specific configuration here.
 
@@ -18,6 +18,58 @@ cd ~/dotfiles
 # Verify the installed state
 doctor
 ```
+
+## Install profiles and Omarchy
+
+Profiles are cumulative, and independent of interactive (`--yes`) or preview
+(`--plan`) mode:
+
+| Profile | Configuration | Packages |
+|---------|---------------|----------|
+| `minimal` | Git, zsh, tmux; Bash on macOS | Shell, Git/gh/delta, tmux, Python for doctor |
+| `development` | Minimal + Neovim, Yazi, Atuin, mise, uv, npm, Herdr | Development CLI tools; no desktop casks |
+| `desktop` | Development + Ghostty | Adds desktop packages/fonts |
+
+macOS defaults to `desktop` and uses Homebrew. Linux defaults to `development`;
+Arch/Omarchy uses the cumulative `packages/arch.*` lists with `pacman -S --needed`.
+Other Linux distributions can install configurations but must provide packages
+with their own package manager. The Arch list is a curated native subset of the
+Mac Brewfile; vendor tools such as Herdr are installed separately when available.
+
+```bash
+# Omarchy: inspect exactly which existing configs would be replaced first
+./install.sh --profile development --plan
+./install.sh --profile development
+
+# Small shell setup, or configuration only
+./install.sh --profile minimal
+./install.sh --profile development --skip-packages
+
+# Explicitly take ownership of Ghostty config as well
+./install.sh --profile desktop --plan
+```
+
+On Linux, Bash startup files are left intact to preserve Omarchy's integration.
+Start `zsh` explicitly to use this shell setup; the installer does not change your
+login shell. Development installs replace the selected app configs (including
+Neovim), but leave Ghostty, Hyprland, and Omarchy's desktop/theme files alone.
+Use `minimal` if you want to keep Omarchy's editor configuration too.
+Existing regular files/directories are backed up; existing symlinks are replaced.
+
+Keep Omarchy updated through its normal update workflow before installing packages.
+The installer does not refresh pacman's databases, perform system upgrades, install
+AUR packages, or change desktop defaults. Pacman retains its own confirmation prompt
+and sudo authentication even with `--yes`. Use Omarchy's own terminal menu to select
+your terminal ([Omarchy terminal documentation](https://omarchy.org/manual/terminal/)).
+
+The selected profile is saved in `~/.config/dotfiles/profile`, so `doctor` (and
+`status`) only require selected configs. Rerunning with a smaller profile does not
+uninstall packages or remove existing links. `--plan` does not save state. Older
+installs without a profile retain the historical full doctor checks.
+`--skip-brew` remains an alias for skipping all package installation;
+`--with-optional-brew` requires macOS desktop, and legacy Vim requires development
+or desktop. `brew-sync` checks the selected Mac profile, refuses manifest rewrites
+from partial profiles, and does not check Homebrew drift for native Linux installs.
 
 ## What's Included
 

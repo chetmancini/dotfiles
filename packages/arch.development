@@ -1,0 +1,20 @@
+# Native Arch packages; runtimes remain owned by mise.
+neovim
+yazi
+atuin
+mise
+uv
+pnpm
+bat
+eza
+fd
+ripgrep
+fzf
+zoxide
+direnv
+jq
+shellcheck
+shfmt
+bats
+stylua
+wl-clipboard

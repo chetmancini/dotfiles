@@ -3,7 +3,8 @@
 # Minimal bashrc (zsh is primary shell)
 ##############################
 
-export EDITOR="nvim"
+export EDITOR="vi"
+command -v nvim >/dev/null 2>&1 && export EDITOR="nvim"
 
 ##############################
 # Aliases
@@ -13,7 +14,7 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias grep='grep --color=auto'
-alias vi='nvim'
+command -v nvim >/dev/null 2>&1 && alias vi='nvim'
 alias x='exit'
 
 # Git
@@ -36,12 +37,14 @@ h() {
 _clipboard_copy() {
     if [[ "$(uname)" == "Darwin" ]]; then
         pbcopy
+    elif command -v wl-copy >/dev/null 2>&1; then
+        wl-copy
     elif command -v xclip >/dev/null 2>&1; then
         xclip -selection clipboard
     elif command -v xsel >/dev/null 2>&1; then
         xsel --clipboard
     else
-        echo "Error: No clipboard utility found (pbcopy, xclip, or xsel)" >&2
+        echo "Error: No clipboard utility found (pbcopy, wl-copy, xclip, or xsel)" >&2
         return 1
     fi
 }

@@ -3,10 +3,12 @@
 # then syntax-highlighting last (must wrap all other zle widgets).
 
 _zsh_plugin_share_dirs=(
+  "${HOMEBREW_PREFIX:-/usr}/share"
   /opt/homebrew/share
   /home/linuxbrew/.linuxbrew/share
   /usr/local/share
   /usr/share
+  /usr/share/zsh/plugins
 )
 
 _zsh_source_plugin() {
@@ -36,3 +38,4 @@ _zsh_source_plugin zsh-syntax-highlighting
 
 unset -f _zsh_source_plugin
 unset _zsh_plugin_share_dirs
+true

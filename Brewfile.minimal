@@ -1,0 +1,10 @@
+# Minimal shell/Git/tmux layer.
+brew "git"
+brew "zsh"
+brew "tmux"
+brew "python"
+brew "zsh-autosuggestions"
+brew "zsh-history-substring-search"
+brew "zsh-syntax-highlighting"
+brew "git-delta"
+brew "gh"

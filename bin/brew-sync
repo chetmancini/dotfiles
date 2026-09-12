@@ -24,6 +24,12 @@ source "$SCRIPT_DIR/lib/helpers.sh"
 # shellcheck source=bin/lib/package-policy.sh
 source "${PACKAGE_POLICY:-$SCRIPT_DIR/lib/package-policy.sh}"
 
+# shellcheck source=bin/lib/symlinks.sh
+source "$SCRIPT_DIR/lib/symlinks.sh"
+load_install_profile
+if [ "${DOTFILES_PROFILE:-desktop}" = minimal ]; then
+    BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile.minimal}"
+fi
 BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile}"
 BREWFILE_OPTIONAL="${BREWFILE_OPTIONAL:-$DOTFILES_DIR/Brewfile.optional}"
 DRY_RUN=false
@@ -107,6 +113,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+if [ "${DOTFILES_PLATFORM:-}" = linux ]; then
+    echo "This install uses native Linux packages; Homebrew drift does not apply."
+    exit 0
+fi
+if [ "${DOTFILES_PROFILE:-desktop}" != desktop ] && [ "$ACTION" != check ]; then
+    echo "Brewfile edits require a desktop profile; edit manifests directly for partial installs." >&2
+    exit 1
+fi
+
 # Check if Brewfile exists
 if [ ! -f "$BREWFILE" ]; then
     echo -e "${RED}Error: Brewfile not found at $BREWFILE${NC}"
@@ -132,14 +147,27 @@ _extract_brewfile_names() {
 }
 
 get_brewfile_formulae() { _extract_brewfile_names "$BREWFILE" brew; }
-get_brewfile_casks() { _extract_brewfile_names "$BREWFILE" cask; }
+get_brewfile_casks() {
+    [ "${DOTFILES_PROFILE:-desktop}" = desktop ] || return 0
+    _extract_brewfile_names "$BREWFILE" cask
+}
 get_optional_formulae() {
     [ -f "$BREWFILE_OPTIONAL" ] || return 0
-    _extract_brewfile_names "$BREWFILE_OPTIONAL" brew
+    {
+        _extract_brewfile_names "$BREWFILE_OPTIONAL" brew
+        if [ "${DOTFILES_PROFILE:-desktop}" = minimal ]; then
+            _extract_brewfile_names "$DOTFILES_DIR/Brewfile" brew
+        fi
+    } | sort -u
 }
 get_optional_casks() {
     [ -f "$BREWFILE_OPTIONAL" ] || return 0
-    _extract_brewfile_names "$BREWFILE_OPTIONAL" cask
+    {
+        _extract_brewfile_names "$BREWFILE_OPTIONAL" cask
+        if [ "${DOTFILES_PROFILE:-desktop}" != desktop ]; then
+            _extract_brewfile_names "$DOTFILES_DIR/Brewfile" cask
+        fi
+    } | sort -u
 }
 
 get_installed_formulae() { brew list --formula 2>/dev/null | sort -u; }

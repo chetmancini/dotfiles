@@ -236,6 +236,8 @@ run_dependency_checks() {
         record_warning "TPM is missing (optional; install via install.sh tmux step)"
     fi
 
+    [ "${DOTFILES_PROFILE:-desktop}" != minimal ] || return 0
+
     # Secrets: prefer 1Password-backed file. Never read or print file contents.
     local has_plaintext=false
     local has_1p=false
@@ -342,6 +344,7 @@ run_tool_checks() {
     check_command git
     check_command zsh
     check_command tmux
+    [ "${DOTFILES_PROFILE:-desktop}" != minimal ] || return 0
     check_command nvim
     check_command eza
     check_command bat
@@ -381,6 +384,7 @@ print_summary() {
 }
 
 parse_args "$@"
+load_install_profile
 print_header
 print_info "Dotfiles directory: $DOTFILES_DIR"
 print_info "Home directory: $HOME"

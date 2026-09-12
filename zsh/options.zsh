@@ -40,7 +40,8 @@ setopt NO_BEEP
 # Editor Settings
 ##############################
 setopt VI
-export EDITOR="nvim"
+export EDITOR="vi"
+command -v nvim >/dev/null 2>&1 && export EDITOR="nvim"
 bindkey -v
 export KEYTIMEOUT=1  # 10ms delay for multi-char sequences (eliminates ESC lag in vi mode)
 

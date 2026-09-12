@@ -23,7 +23,7 @@ unset _compinit_rebuild
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 # Docker CLI completions are added to fpath above, before compinit
 
-if [ -x /opt/homebrew/bin/terraform ]; then
+if command -v terraform >/dev/null 2>&1; then
   autoload -U +X bashcompinit && bashcompinit
-  complete -o nospace -C /opt/homebrew/bin/terraform terraform
+  complete -o nospace -C "$(command -v terraform)" terraform
 fi

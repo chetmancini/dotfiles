@@ -50,12 +50,17 @@ jobs:
         run: make bats
 
   install-smoke:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        profile: [minimal, development, desktop]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install zsh
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
 
       - name: Prepare bootstrap fixtures
@@ -68,14 +73,14 @@ jobs:
           HOME: ${{ runner.temp }}/home-plan
         run: |
           echo "existing git config" > "$HOME/.gitconfig"
-          ./install.sh --plan --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+          ./install.sh --profile ${{ matrix.profile }} --plan --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
           test -f "$HOME/.gitconfig"
           test ! -L "$HOME/.gitconfig"
 
       - name: Run installer
         env:
           HOME: ${{ runner.temp }}/home
-        run: ./install.sh --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
+        run: ./install.sh --profile ${{ matrix.profile }} --yes --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear
 
       - name: Run doctor
         env:

@@ -21,6 +21,9 @@ SKIP_API_KEYS=false
 SKIP_HOOKS=false
 CLEAR_SCREEN=true
 PLAN_MODE=false
+DOTFILES_PROFILE=""
+DOTFILES_PLATFORM=""
+SKIP_PACKAGES=false
 
 # Keep confirmations on the original input stream. Manifest loops temporarily
 # redirect stdin, and prompts must never consume manifest records.
@@ -48,8 +51,10 @@ Install dotfiles into the current HOME directory.
 Options:
   --yes                 Run non-interactively and accept all prompts
   --plan, --dry-run     Preview changes without modifying files
+  --profile NAME        minimal, development, desktop (Mac default: desktop; Linux: development)
+  --skip-packages       Install configuration only (no Homebrew or pacman)
   --skip-tpm            Skip tmux plugin manager installation
-  --skip-brew           Skip Homebrew package installation
+  --skip-brew           Alias for --skip-packages (all platforms)
   --with-optional-brew  Also install Brewfile.optional (default off under --yes)
   --with-legacy-vim     Symlink legacy Vim runtime/config (default off under --yes)
   --skip-api-keys       Skip creating secrets stubs from templates
@@ -68,6 +73,20 @@ parse_args() {
                 ;;
             --plan | --dry-run)
                 PLAN_MODE=true
+                shift
+                ;;
+            --profile)
+                case "${2:-}" in
+                    minimal | development | desktop) DOTFILES_PROFILE="$2" ;;
+                    *)
+                        print_error "--profile requires minimal, development, or desktop"
+                        exit 1
+                        ;;
+                esac
+                shift 2
+                ;;
+            --skip-packages)
+                SKIP_PACKAGES=true
                 shift
                 ;;
             --skip-tpm)
@@ -179,6 +198,7 @@ validate_managed_sources() {
     local missing=0
 
     for group in config home legacy; do
+        [ "$group" = legacy ] && [ "$DOTFILES_PROFILE" = minimal ] && continue
         while IFS='|' read -r source_rel _target_rel _install_name _doctor_label _description; do
             if [ ! -e "$DOTFILES_DIR/$source_rel" ]; then
                 print_error "Managed source is missing: $DOTFILES_DIR/$source_rel"
@@ -297,6 +317,37 @@ install_tpm() {
     fi
 }
 
+install_packages() {
+    if [ "$SKIP_PACKAGES" = true ] || [ "$SKIP_BREW" = true ]; then
+        print_info "Skipping package installation"
+        return
+    fi
+    if [ "$DOTFILES_PLATFORM" = macos ]; then
+        install_homebrew
+        return
+    fi
+    if ! command -v pacman >/dev/null 2>&1; then
+        print_warning "Automatic Linux packages support Arch/Omarchy only; install tools with your distro package manager."
+        return
+    fi
+    local packages=() package layer
+    for layer in minimal development desktop; do
+        while IFS= read -r package; do
+            case "$package" in '' | \#*) continue ;; esac
+            packages+=("$package")
+        done <"$DOTFILES_DIR/packages/arch.$layer"
+        [ "$layer" = "$DOTFILES_PROFILE" ] && break
+    done
+    print_info "Arch/Omarchy packages (keep the system updated through your normal update workflow)"
+    if ask_yes_no "Install selected Arch packages?"; then
+        if [ "$PLAN_MODE" = true ]; then
+            print_plan "Would run: sudo pacman -S --needed ${packages[*]}"
+        else
+            sudo pacman -S --needed "${packages[@]}"
+        fi
+    fi
+}
+
 install_homebrew() {
     print_header "Step 2: Homebrew Packages"
 
@@ -315,21 +366,29 @@ install_homebrew() {
         return 0
     fi
 
-    if ask_yes_no "Install/update core Homebrew packages from Brewfile?"; then
+    local brewfile="$DOTFILES_DIR/Brewfile"
+    [ "$DOTFILES_PROFILE" = minimal ] && brewfile="$DOTFILES_DIR/Brewfile.minimal"
+    local cask_skip="${HOMEBREW_BUNDLE_CASK_SKIP:-}"
+    if [ "$DOTFILES_PROFILE" = development ]; then
+        cask_skip="$cask_skip $(sed -nE 's/^cask "([^"]+)".*/\1/p' "$brewfile" | tr '\n' ' ')"
+    fi
+    if ask_yes_no "Install/update Homebrew packages for $DOTFILES_PROFILE?"; then
         if [ "$PLAN_MODE" = true ]; then
             print_step "Would run: brew update"
-            print_step "Would run: brew bundle --file=\"$DOTFILES_DIR/Brewfile\""
+            print_step "Would run: brew bundle --file=\"$brewfile\" (profile: $DOTFILES_PROFILE; skipped casks: $cask_skip)"
             print_success "Core Homebrew package install planned"
         else
             print_step "Updating Homebrew..."
             brew update
             print_step "Installing core packages from Brewfile..."
-            brew bundle --file="$DOTFILES_DIR/Brewfile"
+            HOMEBREW_BUNDLE_CASK_SKIP="$cask_skip" brew bundle --file="$brewfile"
             print_success "Core Homebrew packages installed"
         fi
     else
         print_warning "Skipped core Homebrew packages"
     fi
+
+    [ "$DOTFILES_PROFILE" = desktop ] || return 0
 
     # Optional profile: default No under --yes (keep CI/bootstrap light).
     local install_optional=false
@@ -396,6 +455,10 @@ install_home_symlinks() {
             "$install_name" \
             "$description"
     done < <(managed_symlinks_for_group home)
+
+    if [ "$DOTFILES_PROFILE" = minimal ]; then
+        return
+    fi
 
     # npm's portable user-level prefix is managed by npm/npmrc. Create it here
     # so npm list/update work on a freshly bootstrapped machine before its first
@@ -585,10 +648,14 @@ print_summary() {
         echo -e "${BOLD}Next steps:${NC}"
         echo "  1. Restart your terminal or run: source ~/.zshrc"
         echo "  2. Run 'doctor' to verify the installed state"
-        echo "  3. Open Neovim — plugins sync via vim.pack on first launch (may take a moment)"
-        echo "  4. In tmux, press prefix + I to install tmux plugins"
-        echo "  5. Run 'brew-sync --check' to verify core Brewfile is in sync"
-        echo "  6. Optional apps: brew bundle --file=~/dotfiles/Brewfile.optional"
+        if [ "$DOTFILES_PROFILE" != minimal ]; then
+            echo "  3. Open Neovim — plugins sync via vim.pack on first launch (may take a moment)"
+            echo "  4. In tmux, press prefix + I to install tmux plugins"
+        fi
+        if [ "$DOTFILES_PLATFORM" = macos ] && [ "$DOTFILES_PROFILE" = desktop ]; then
+            echo "  5. Run 'brew-sync --check' to verify core Brewfile is in sync"
+            echo "  6. Optional apps: brew bundle --file=~/dotfiles/Brewfile.optional"
+        fi
         echo ""
         print_success "Happy coding!"
     fi
@@ -604,12 +671,36 @@ SYMLINKS_SKIPPED=0
 BACKUPS_PLANNED=0
 
 parse_args "$@"
+case "$(uname -s)" in
+    Darwin)
+        DOTFILES_PLATFORM=macos
+        DOTFILES_PROFILE="${DOTFILES_PROFILE:-desktop}"
+        ;;
+    Linux)
+        DOTFILES_PLATFORM=linux
+        DOTFILES_PROFILE="${DOTFILES_PROFILE:-development}"
+        ;;
+    *)
+        print_error "Supported platforms are macOS and Linux"
+        exit 1
+        ;;
+esac
+if [ "$WITH_OPTIONAL_BREW" = true ] && { [ "$DOTFILES_PLATFORM" != macos ] || [ "$DOTFILES_PROFILE" != desktop ]; }; then
+    print_error "--with-optional-brew requires macOS and --profile desktop"
+    exit 1
+fi
+if [ "$WITH_LEGACY_VIM" = true ] && [ "$DOTFILES_PROFILE" = minimal ]; then
+    print_error "--with-legacy-vim requires development or desktop"
+    exit 1
+fi
 
 if [ "$CLEAR_SCREEN" = true ] && [ -t 1 ]; then
     clear
 fi
 
 print_header "Dotfiles Installation Wizard"
+
+print_info "Platform: $DOTFILES_PLATFORM; profile: $DOTFILES_PROFILE"
 
 echo "Welcome! This wizard will help you set up your dotfiles."
 echo "Each step will be explained and you'll be asked for confirmation."
@@ -630,9 +721,17 @@ fi
 validate_managed_sources
 
 install_tpm
-install_homebrew
+install_packages
 install_config_symlinks
 install_home_symlinks
-install_api_keys_template
-install_git_hooks
+if [ "$DOTFILES_PROFILE" != minimal ]; then
+    install_api_keys_template
+    install_git_hooks
+fi
+if [ "$PLAN_MODE" = true ]; then
+    print_plan "Would save profile $DOTFILES_PROFILE to $HOME/.config/dotfiles/profile"
+else
+    mkdir -p "$HOME/.config/dotfiles"
+    printf '%s\n' "$DOTFILES_PROFILE" >"$HOME/.config/dotfiles/profile"
+fi
 print_summary

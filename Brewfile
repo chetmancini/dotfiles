@@ -11,6 +11,9 @@ tap "oven-sh/bun"
 #==============================================================================
 # Core CLI Tools
 #==============================================================================
+brew "git"                      # Git (also in minimal profile)
+brew "zsh"                      # Primary shell
+brew "python"                   # Bootstrap doctor path checks; project runtimes use mise
 brew "atuin"                    # SQLite shell history + better search (^R)
 brew "bat"                      # Better cat
 brew "brotli"                   # Lossless compression

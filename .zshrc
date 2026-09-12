@@ -27,6 +27,3 @@ for _m in ${_zsh_modules[@]}; do
   [[ -r "$DOTFILES_DIR/zsh/${_m}.zsh" ]] && source "$DOTFILES_DIR/zsh/${_m}.zsh"
 done
 unset _m _zsh_modules
-
-# bun completions
-[ -s "/Users/chet/.bun/_bun" ] && source "/Users/chet/.bun/_bun"

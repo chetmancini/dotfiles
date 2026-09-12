@@ -48,12 +48,14 @@ __git_files () {
 _clipboard_copy() {
     if [[ "$(uname)" == "Darwin" ]]; then
         pbcopy
+    elif command -v wl-copy >/dev/null 2>&1; then
+        wl-copy
     elif command -v xclip &>/dev/null; then
         xclip -selection clipboard
     elif command -v xsel &>/dev/null; then
         xsel --clipboard
     else
-        echo "Error: No clipboard utility found (pbcopy, xclip, or xsel)" >&2
+        echo "Error: No clipboard utility found (pbcopy, wl-copy, xclip, or xsel)" >&2
         return 1
     fi
 }

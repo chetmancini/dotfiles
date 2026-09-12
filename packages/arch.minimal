@@ -1,0 +1,10 @@
+# Shell, Git, tmux; Python resolves symlinks in doctor.
+git
+zsh
+tmux
+python
+zsh-autosuggestions
+zsh-syntax-highlighting
+zsh-history-substring-search
+git-delta
+github-cli

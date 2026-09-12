@@ -14,7 +14,7 @@ teardown() {
 }
 
 @test "interactive confirmations do not consume manifest records" {
-    run bash -c 'yes y | env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --with-legacy-vim --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear'
+    run bash -c 'yes y | env HOME="$TEST_HOME" "$DOTFILES_DIR/install.sh" --profile desktop --with-legacy-vim --skip-tpm --skip-brew --skip-api-keys --skip-hooks --no-clear'
 
     [ "$status" -eq 0 ]
     [ -L "$TEST_HOME/.config/yazi" ]

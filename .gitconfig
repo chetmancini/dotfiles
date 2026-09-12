@@ -50,7 +50,7 @@
     status = auto
     ui = auto
 [core]
-    editor = nvim
+    editor = "sh -c 'if command -v nvim >/dev/null 2>&1; then exec nvim \"$@\"; else exec vi \"$@\"; fi' --"
     pager = delta
 [interactive]
     diffFilter = delta --color-only
@@ -104,11 +104,11 @@
 	git-commit-alias = 8df5c1b18b1393dc5046c729094f897bd3636a9b
 [credential "https://github.com"]
 	helper =
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !gh auth git-credential
 [coderabbit]
 	machineId = cli/c236e7dd59ab4076bf99c21de2a1cbf7
 [credential]
-	helper = osxkeychain
+	helper = "!f() { if [ \"$(uname -s)\" = Darwin ]; then git credential-osxkeychain \"$@\"; fi; }; f"

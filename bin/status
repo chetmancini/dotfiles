@@ -20,6 +20,8 @@ DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=bin/lib/helpers.sh
 source "$SCRIPT_DIR/lib/helpers.sh"
+# shellcheck source=bin/lib/symlinks.sh
+source "$SCRIPT_DIR/lib/symlinks.sh"
 
 print_help() {
     cat <<EOF
@@ -126,7 +128,10 @@ fi
 
 # 3. homebrew component (deep mode only)
 if [[ "$DEEP" == true ]]; then
-    if ! command -v brew >/dev/null 2>&1; then
+    load_install_profile
+    if [ "${DOTFILES_PLATFORM:-}" = linux ]; then
+        add_component "homebrew" "skipped" 0 "Native Linux packages are managed outside Homebrew" ""
+    elif ! command -v brew >/dev/null 2>&1; then
         add_component "homebrew" "skipped" 0 "Homebrew is not installed or not on PATH" "dot brew-sync"
     else
         brew_rc=0
