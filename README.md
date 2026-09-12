@@ -30,7 +30,7 @@ Profiles are cumulative, and independent of interactive (`--yes`) or preview
 | `development` | Minimal + Neovim, Yazi, Atuin, mise, uv, npm, Herdr | Development CLI tools; no desktop casks |
 | `desktop` | Development + Ghostty | Adds desktop packages/fonts |
 
-macOS defaults to `desktop` and uses Homebrew. Linux defaults to `development`;
+On first install, macOS defaults to `desktop` and uses Homebrew. Linux defaults to `development`;
 Arch/Omarchy uses the cumulative `packages/arch.*` lists with `pacman -S --needed`.
 Other Linux distributions can install configurations but must provide packages
 with their own package manager. The Arch list is a curated native subset of the
@@ -63,7 +63,9 @@ and sudo authentication even with `--yes`. Use Omarchy's own terminal menu to se
 your terminal ([Omarchy terminal documentation](https://omarchy.org/manual/terminal/)).
 
 The selected profile is saved in `~/.config/dotfiles/profile`, so `doctor` (and
-`status`) only require selected configs. Rerunning with a smaller profile does not
+`status`) only require selected configs. Reinstalls reuse that profile unless you
+pass `--profile` explicitly. Invalid saved profiles stop installation before changes;
+an explicit `--profile` can replace invalid state. Rerunning with a smaller profile does not
 uninstall packages or remove existing links. `--plan` does not save state. Older
 installs without a profile retain the historical full doctor checks.
 `--skip-brew` remains an alias for skipping all package installation;

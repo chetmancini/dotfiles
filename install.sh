@@ -51,7 +51,8 @@ Install dotfiles into the current HOME directory.
 Options:
   --yes                 Run non-interactively and accept all prompts
   --plan, --dry-run     Preview changes without modifying files
-  --profile NAME        minimal, development, desktop (Mac default: desktop; Linux: development)
+  --profile NAME        minimal, development, desktop (defaults to saved profile)
+                        First install: desktop on Mac, development on Linux
   --skip-packages       Install configuration only (no Homebrew or pacman)
   --skip-tpm            Skip tmux plugin manager installation
   --skip-brew           Alias for --skip-packages (all platforms)
@@ -671,6 +672,10 @@ SYMLINKS_SKIPPED=0
 BACKUPS_PLANNED=0
 
 parse_args "$@"
+# An explicit profile takes precedence, including when repairing invalid state.
+if [ -z "$DOTFILES_PROFILE" ]; then
+    load_install_profile
+fi
 case "$(uname -s)" in
     Darwin)
         DOTFILES_PLATFORM=macos

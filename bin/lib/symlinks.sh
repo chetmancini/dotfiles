@@ -65,7 +65,9 @@ managed_symlinks_for_group() {
 load_install_profile() {
     local state="$HOME/.config/dotfiles/profile"
     if [ -f "$state" ]; then
-        IFS= read -r DOTFILES_PROFILE <"$state"
+        # read returns nonzero without a final newline; validate the value even
+        # then, and report empty files through the same invalid-profile error.
+        IFS= read -r DOTFILES_PROFILE <"$state" || true
         case "$DOTFILES_PROFILE" in
             minimal | development | desktop) ;;
             *)

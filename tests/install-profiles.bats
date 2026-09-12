@@ -131,3 +131,53 @@ BREW
     '
     [ "$status" -eq 0 ]
 }
+
+@test "reinstall retains the saved minimal profile on both platforms" {
+    for os in Linux Darwin; do
+        platform "$os"
+        export HOME="$TEST_ROOT/reinstall-$os"
+        mkdir -p "$HOME"
+        install_profile --profile minimal
+        install_profile
+        [ "$(cat "$HOME/.config/dotfiles/profile")" = minimal ]
+        [ ! -e "$HOME/.config/nvim" ]
+        [ ! -e "$HOME/.config/ghostty" ]
+    done
+}
+
+@test "explicit profile overrides saved state while preview preserves it" {
+    platform Linux
+    install_profile --profile minimal
+    install_profile --profile development --plan
+    [[ "$output" == *"profile: development"* ]]
+    [ "$(cat "$HOME/.config/dotfiles/profile")" = minimal ]
+    [ ! -e "$HOME/.config/nvim" ]
+    install_profile --profile development
+    [ "$(cat "$HOME/.config/dotfiles/profile")" = development ]
+    [ -L "$HOME/.config/nvim" ]
+}
+
+@test "saved profile without a trailing newline is accepted" {
+    platform Linux
+    mkdir -p "$HOME/.config/dotfiles"
+    printf minimal >"$HOME/.config/dotfiles/profile"
+    install_profile --plan
+    [[ "$output" == *"profile: minimal"* ]]
+    [ ! -e "$HOME/.zshrc" ]
+}
+
+@test "invalid saved profiles stop installation and can be explicitly repaired" {
+    platform Linux
+    mkdir -p "$HOME/.config/dotfiles"
+    for invalid in bogus ''; do
+        printf '%s' "$invalid" >"$HOME/.config/dotfiles/profile"
+        run "$DOTFILES_DIR/install.sh" --yes --skip-packages --skip-tpm --skip-api-keys --skip-hooks --no-clear
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"Invalid install profile"* ]]
+        [ ! -e "$HOME/.zshrc" ]
+        [ "$(cat "$HOME/.config/dotfiles/profile")" = "$invalid" ]
+    done
+    install_profile --profile minimal
+    [ "$(cat "$HOME/.config/dotfiles/profile")" = minimal ]
+    [ -L "$HOME/.zshrc" ]
+}
