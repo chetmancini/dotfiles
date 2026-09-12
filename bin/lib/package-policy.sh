@@ -12,6 +12,7 @@ package_policy_records() {
 # id|brew_kind|brew_name|command|owner|install_hint
 node|formula|node|node|mise|Install and pin Node with mise, not Homebrew
 python|formula|python|python|mise|Install and pin Python with mise, not Homebrew
+mise|formula|mise|mise|vendor|Install mise with the official installer: curl https://mise.run | sh
 claude-code|cask|claude-code|claude|vendor|Use the official Claude Code installer; Homebrew releases can lag
 EOF
 }
@@ -25,6 +26,11 @@ package_policy_external_satisfaction() {
     local package id record_kind brew_name command owner install_hint
 
     [ -n "$packages" ] || return 0
+
+    # brew-sync says "brew"; records and `brew list --formula` say "formula".
+    if [ "$brew_kind" = "brew" ]; then
+        brew_kind="formula"
+    fi
 
     while IFS= read -r package; do
         [ -n "$package" ] || continue

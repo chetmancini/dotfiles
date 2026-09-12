@@ -47,3 +47,31 @@ assert_mise_preserves_pnpm_path() {
 @test "Mise activation preserves the Linux pnpm global bin" {
     assert_mise_preserves_pnpm_path linux-gnu "$HOME/.local/share/pnpm"
 }
+
+@test "Mise prefers the official ~/.local/bin install over PATH" {
+    mkdir -p "$HOME/.local/bin"
+    cat >"$HOME/.local/bin/mise" <<'EOF'
+#!/bin/sh
+[ "$1" = activate ] && printf '%s\n' 'export MISE_CORE_ACTIVATED=1'
+EOF
+    chmod +x "$HOME/.local/bin/mise"
+    run env \
+        DOTFILES_DIR="$DOTFILES_DIR" \
+        HOME="$HOME" \
+        PATH="/usr/bin:/bin" \
+        zsh -dfc '
+        source "$DOTFILES_DIR/zsh/path.zsh"
+        mise() {
+            print -r -- "export MISE_PATH_ACTIVATED=1"
+        }
+        source "$DOTFILES_DIR/zsh/tools/mise.zsh"
+        [[ "$MISE_CORE_ACTIVATED" == 1 ]] || exit 1
+        [[ -z "${MISE_PATH_ACTIVATED:-}" ]]
+    '
+    [ "$status" -eq 0 ]
+}
+
+@test ".zshrc does not append mise activate (lives in zsh/tools/mise.zsh)" {
+    run grep -n 'mise activate' "$DOTFILES_DIR/.zshrc"
+    [ "$status" -ne 0 ]
+}

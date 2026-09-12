@@ -115,7 +115,7 @@ brew-sync
 ### Core categories
 
 - **CLI Tools**: eza, bat, fzf, zoxide, atuin, direnv, jq, htop, yazi, shellcheck, shfmt
-- **Development**: neovim, gh, git-delta, awscli, mise
+- **Development**: neovim, gh, git-delta, awscli
 - **Kubernetes**: kubectl, kubectx, k9s, helm
 - **Languages**: Mise (Node/Python runtimes), OpenJDK, Bun, uv, pnpm
 - **Databases**: postgresql, redis, sqlite

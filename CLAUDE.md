@@ -153,6 +153,7 @@ Modular configuration in `nvim/` (no LazyVim / lazy.nvim):
 - Plugins that wrap ZLE must load in `zsh/plugins.zsh` after custom widgets (syntax-highlighting last)
 - Prefer API keys via `api_keys_1password.sh` + `op_secret` (template tracked; live file gitignored). Plaintext `api_keys.sh` is bootstrap-only.
 - Daily tools → `Brewfile`; experimental/GUI → `Brewfile.optional`
+- mise is installed with the official installer (`curl https://mise.run | sh` → `~/.local/bin/mise`), not Homebrew; activation lives in `zsh/tools/mise.zsh`
 - Legacy `vim/` and `iterm/` are kept in-repo but not installed by default
 - If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
 - Agent/MCP layout: `claude/agents/`, `claude/commands/`, `mcp.json.example` (see `docs/agents.md`; live `mcp.json` gitignored)

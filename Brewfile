@@ -60,11 +60,12 @@ brew "zsh-syntax-highlighting"  # Command syntax coloring
 #==============================================================================
 # Development - General
 #==============================================================================
+# mise: official installer (curl https://mise.run | sh) → ~/.local/bin/mise
+# Activated in zsh/tools/mise.zsh. Do not brew install mise.
 brew "awscli"                   # AWS CLI
 brew "aws-vault"                # AWS credentials manager
 brew "gh"                       # GitHub CLI
 brew "git-delta"                # Better git diffs
-brew "mise"                     # Polyglot version manager
 brew "git-lfs"                  # Large file storage
 brew "neovim"                   # Hyperextensible Vim
 brew "tig"                      # Git TUI
