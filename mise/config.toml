@@ -18,5 +18,5 @@ shell_out = true
 
 [tools]
 # Global defaults — override per-project with mise.toml / .tool-versions
-node = "26.7.0"
+node = "26.8.2"
 python = "3.14.7"
