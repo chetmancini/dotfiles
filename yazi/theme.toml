@@ -16,13 +16,13 @@ rules = [
 	{ mime = "inode/empty", fg = "cyan" },
 
 	# Orphan symbolic links
-	{ name = "*", is = "orphan", fg = "red" },
+	{ url = "*", is = "orphan", fg = "red" },
 
 	# ...
 
 	# Fallback
-	# { name = "*", fg = "white" },
-	{ name = "*/", fg = "blue" }
+	# { url = "*", fg = "white" },
+	{ url = "*/", fg = "blue" }
 ]
 
 [icon]

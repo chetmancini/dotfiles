@@ -1,6 +1,7 @@
-# A TOML linter such as https://taplo.tamasfe.dev/ can use this schema to validate your config.
-# If you encounter any issues, please make an issue at https://github.com/yazi-rs/schemas.
-"$schema" = "https://yazi-rs.github.io/schemas/yazi.json"
+# A TOML linter such as Tombi can use this schema to validate your config.
+# If you encounter any problems, please file an issue at https://github.com/yazi-rs/schemas.
+
+#:schema https://yazi-rs.github.io/schemas/yazi.json
 
 [mgr]
 ratio          = [ 1, 3, 4 ]
@@ -57,7 +58,7 @@ play = [
 [open]
 rules = [
 	# Folder
-	{ name = "*/", use = [ "edit", "open", "reveal" ] },
+	{ url = "*/", use = [ "edit", "open", "reveal" ] },
 	# Text
 	{ mime = "text/*", use = [ "edit", "reveal" ] },
 	# Image
@@ -72,7 +73,7 @@ rules = [
 	# Empty file
 	{ mime = "inode/empty", use = [ "edit", "reveal" ] },
 	# Fallback
-	{ name = "*", use = [ "open", "reveal" ] },
+	{ url = "*", use = [ "open", "reveal" ] },
 ]
 
 [tasks]
@@ -85,10 +86,6 @@ suppress_preload = false
 
 [plugin]
 
-fetchers = [
-	# Mimetype
-	{ id = "mime", url = "*", run = "mime.local", if = "!mime", prio = "high" },
-]
 spotters = [
 	{ url = "*/", run = "folder" },
 	# Code
@@ -147,14 +144,14 @@ previewers = [
 
 
 [[plugin.prepend_fetchers]]
-id   = "git"
-url  = "*"
-run  = "git"
+url   = "*"
+run   = "git"
+group = "git"
 
 [[plugin.prepend_fetchers]]
-id   = "git"
-url  = "*/"
-run  = "git"
+url   = "*/"
+run   = "git"
+group = "git"
 
 
 [input]
