@@ -41,3 +41,56 @@ setup() {
     [ "$status" -eq 0 ]
     rm -rf "$tmp_home"
 }
+
+stub_pnpm_global_root() {
+    # Creates $PNPM_STUB_BIN (fake pnpm answering bin/root --global) and
+    # $PNPM_STUB_ROOT (global/v11-like dir). Caller writes the manifest into
+    # $PNPM_STUB_ROOT/abcd-1234567890a-bcdef0123456789a/package.json.
+    # An alias symlink mirrors pnpm's sha->dir links to exercise dedup.
+    local install_dir="abcd-1234567890a-bcdef0123456789a"
+    PNPM_STUB_BIN="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-pnpm-bin.XXXXXX")"
+    PNPM_STUB_GLOBAL_BIN="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-pnpm-globalbin.XXXXXX")"
+    PNPM_STUB_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-pnpm-root.XXXXXX")"
+    mkdir -p "$PNPM_STUB_ROOT/$install_dir/node_modules"
+    ln -s "$install_dir" "$PNPM_STUB_ROOT/deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    cat >"$PNPM_STUB_BIN/pnpm" <<EOF
+#!/usr/bin/env bash
+case "\$1 \$2" in
+    "bin --global") echo "$PNPM_STUB_GLOBAL_BIN" ;;
+    "root --global") echo "$PNPM_STUB_ROOT" ;;
+    *) exit 1 ;;
+esac
+EOF
+    chmod +x "$PNPM_STUB_BIN/pnpm"
+}
+
+cleanup_pnpm_stub() {
+    rm -rf "$PNPM_STUB_BIN" "$PNPM_STUB_GLOBAL_BIN" "$PNPM_STUB_ROOT"
+}
+
+@test "doctor warns on file:/link: deps in pnpm global manifests" {
+    stub_pnpm_global_root
+    printf '{"dependencies":{"@pnpm/exe":"file:/opt/homebrew/bin"}}\n' \
+        >"$PNPM_STUB_ROOT/abcd-1234567890a-bcdef0123456789a/package.json"
+    tmp_home="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-pnpm-home.XXXXXX")"
+    run env HOME="$tmp_home" PATH="$PNPM_STUB_BIN:$PNPM_STUB_GLOBAL_BIN:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/doctor"
+    [[ "$output" == *"links a local directory for '@pnpm/exe'"* ]]
+    # The alias symlink mirrors the same install dir; it must not double-warn.
+    [ "$(printf '%s\n' "$output" | grep -c 'links a local directory')" -eq 1 ]
+    cleanup_pnpm_stub
+    rm -rf "$tmp_home"
+}
+
+@test "doctor stays quiet for registry-only pnpm global manifests" {
+    stub_pnpm_global_root
+    printf '{"dependencies":{"pnpm":"11.21.0"}}\n' \
+        >"$PNPM_STUB_ROOT/abcd-1234567890a-bcdef0123456789a/package.json"
+    tmp_home="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-doctor-pnpm-home.XXXXXX")"
+    run env HOME="$tmp_home" PATH="$PNPM_STUB_BIN:$PNPM_STUB_GLOBAL_BIN:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/doctor"
+    [[ "$output" == *"pnpm global bin is on PATH"* ]]
+    [[ "$output" != *"links a local directory"* ]]
+    cleanup_pnpm_stub
+    rm -rf "$tmp_home"
+}

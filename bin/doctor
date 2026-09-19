@@ -127,6 +127,30 @@ check_mise_runtime() {
     fi
 }
 
+# Warn about pnpm global manifests that link local directories (file:/link: deps).
+# Such deps have no package.json in the pnpm store and make `pnpm update --global`
+# fail with ENOENT (seen with "@pnpm/exe": "file:/opt/homebrew/bin" leftovers).
+check_pnpm_global_manifests() {
+    local global_root manifest resolved dep seen
+    global_root="$(pnpm root --global 2>/dev/null || true)"
+    if [ -z "$global_root" ] || [ ! -d "$global_root" ]; then
+        return 0
+    fi
+
+    seen=""
+    for manifest in "$global_root"/*/package.json; do
+        [ -f "$manifest" ] || continue
+        # Alias symlinks point at the same install dir; warn once per manifest.
+        resolved="$(resolve_path "$manifest")"
+        case " $seen " in *" $resolved "*) continue ;; esac
+        seen="$seen $resolved"
+        while IFS= read -r dep; do
+            [ -n "$dep" ] || continue
+            record_warning "pnpm global dir links a local directory for '$dep' ($manifest); 'pnpm update --global' can fail with ENOENT (fix: pnpm remove --global $dep)"
+        done < <(sed -nE 's/.*"([^"]+)":[[:space:]]*"(file|link):[^"]*".*/\1/p' "$resolved")
+    done
+}
+
 check_global_package_paths() {
     local npm_prefix pnpm_global_bin
 
@@ -152,6 +176,7 @@ check_global_package_paths() {
         else
             print_success "pnpm global bin is on PATH: $pnpm_global_bin"
         fi
+        check_pnpm_global_manifests
     fi
 }
 
