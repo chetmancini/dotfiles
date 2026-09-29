@@ -244,18 +244,29 @@ my_ip -q                # Quiet mode
 Clean up local branches whose remote tracking branch was deleted.
 
 ```bash
-git-rm-gone
+git-rm-gone                          # Preview only (default; deletes nothing)
+git-rm-gone --apply                  # Delete merged gone branches (confirms first)
+git-rm-gone --apply --yes            # Delete without confirmation
+git-rm-gone --apply --force --yes    # Also delete unmerged gone branches
 ```
 
 **Features:**
 - Finds branches marked as "gone" after `git fetch --prune`
-- Skips current branch for safety
-- Shows before/after listing
+- Preview-first: the default run only lists branches and worktrees with merged/unmerged status
+- Safe delete with `git branch -d`; unmerged work is preserved unless `--force`
+- Removes worktrees checked out on gone, merged branches (clean only), then
+  deletes their branches; stale worktree entries are pruned, and branches
+  freed this way are previewed as deletable so the confirmed count is honest
+- Always skips the current branch and the worktree you run from; dirty
+  (including ignored files), locked, bare, and detached worktrees are
+  preserved even with `--force`
+- Refuses non-interactive deletion without `--yes`
 
 **Typical workflow:**
 ```bash
 git fetch --prune
 git-rm-gone
+git-rm-gone --apply
 ```
 
 ---
