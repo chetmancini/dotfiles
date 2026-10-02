@@ -1,0 +1,12 @@
+# OpenClaw skill tools — install separately with:
+#   brew bundle --file=~/dotfiles/Brewfile.openclaw
+# Never included by install.sh, including --with-optional-brew.
+# brew-sync excludes these packages from core drift and --add.
+# Trust only the individual formulae below, not the entire taps.
+
+tap "openclaw/tap"
+tap "steipete/tap"
+
+brew "steipete/tap/gifgrep", trusted: true  # GIF search
+brew "openclaw/tap/goplaces", trusted: true # Google Places
+brew "steipete/tap/imsg", trusted: true     # iMessage

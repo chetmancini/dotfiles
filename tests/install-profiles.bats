@@ -37,6 +37,9 @@ install_profile() {
                 [ ! -e "$HOME/.npm-global" ]
             else
                 [ -L "$HOME/.config/nvim" ]
+                [ -f "$HOME/.npmrc" ]
+                [ ! -L "$HOME/.npmrc" ]
+                cmp "$DOTFILES_DIR/npm/npmrc" "$HOME/.npmrc"
             fi
             if [ "$profile" = desktop ]; then
                 [ -L "$HOME/.config/ghostty" ]
@@ -52,6 +55,31 @@ install_profile() {
             [ "$status" -eq 0 ]
         done
     done
+}
+
+@test "npm config migration detaches old links and preserves local settings on reinstall" {
+    platform Darwin
+    ln -s "$DOTFILES_DIR/npm/npmrc" "$HOME/.npmrc"
+    install_profile --profile development --plan
+    [ -L "$HOME/.npmrc" ]
+    install_profile --profile development
+    [ ! -L "$HOME/.npmrc" ]
+    cmp "$DOTFILES_DIR/npm/npmrc" "$HOME/.npmrc"
+    printf '\n@private-test:registry=https://registry.example.invalid\n' >>"$HOME/.npmrc"
+    cp "$HOME/.npmrc" "$TEST_ROOT/expected-npmrc"
+    install_profile --profile development
+    cmp "$TEST_ROOT/expected-npmrc" "$HOME/.npmrc"
+    run grep -q '@private-test' "$DOTFILES_DIR/npm/npmrc"
+    [ "$status" -eq 1 ]
+}
+
+@test "install preserves a preexisting local npm config" {
+    platform Linux
+    printf '@private-test:registry=https://registry.example.invalid\n' >"$HOME/.npmrc"
+    cp "$HOME/.npmrc" "$TEST_ROOT/expected-npmrc"
+    install_profile --profile development
+    [ ! -L "$HOME/.npmrc" ]
+    cmp "$TEST_ROOT/expected-npmrc" "$HOME/.npmrc"
 }
 
 @test "Linux defaults preserve Omarchy Bash and terminal configuration" {

@@ -32,6 +32,7 @@ if [ "${DOTFILES_PROFILE:-desktop}" = minimal ]; then
 fi
 BREWFILE="${BREWFILE:-$DOTFILES_DIR/Brewfile}"
 BREWFILE_OPTIONAL="${BREWFILE_OPTIONAL:-$DOTFILES_DIR/Brewfile.optional}"
+BREWFILE_OPENCLAW="${BREWFILE_OPENCLAW:-$DOTFILES_DIR/Brewfile.openclaw}"
 DRY_RUN=false
 
 # Colors (redefine for standalone use)
@@ -52,9 +53,9 @@ print_help() {
     echo "Usage: brew-sync [options]"
     echo ""
     echo "Check and synchronize the core Brewfile with installed Homebrew packages."
-    echo "Optional packages live in Brewfile.optional and are not required for a"
-    echo "healthy core install. They are excluded from 'extra install' drift and"
-    echo "are never removed by --remove from the optional file."
+    echo "Optional packages live in Brewfile.optional and Brewfile.openclaw. Neither"
+    echo "is required for a healthy core install. They are excluded from 'extra install' drift and"
+    echo "are never removed by --remove from either optional file."
     echo "Tools listed in the package policy are also healthy when their preferred"
     echo "non-Homebrew installer supplies the executable."
     echo ""
@@ -69,12 +70,14 @@ print_help() {
     echo "Environment:"
     echo "  BREWFILE=/path/to/Brewfile             Override core Brewfile path"
     echo "  BREWFILE_OPTIONAL=/path/to/Brewfile.optional  Optional profile path"
+    echo "  BREWFILE_OPENCLAW=/path/to/Brewfile.openclaw  OpenClaw profile path"
     echo ""
     echo "Examples:"
     echo "  brew-sync              # Check core Brewfile drift"
     echo "  brew-sync --add        # Add missing packages to core"
     echo "  brew-sync --update     # Regenerate core Brewfile from installed"
     echo "  brew bundle --file=~/dotfiles/Brewfile.optional  # install optional"
+    echo "  brew bundle --file=~/dotfiles/Brewfile.openclaw  # install OpenClaw tools"
     exit 0
 }
 
@@ -152,18 +155,26 @@ get_brewfile_casks() {
     _extract_brewfile_names "$BREWFILE" cask
 }
 get_optional_formulae() {
-    [ -f "$BREWFILE_OPTIONAL" ] || return 0
+    local file
     {
-        _extract_brewfile_names "$BREWFILE_OPTIONAL" brew
+        for file in "$BREWFILE_OPTIONAL" "$BREWFILE_OPENCLAW"; do
+            if [ -f "$file" ]; then
+                _extract_brewfile_names "$file" brew
+            fi
+        done
         if [ "${DOTFILES_PROFILE:-desktop}" = minimal ]; then
             _extract_brewfile_names "$DOTFILES_DIR/Brewfile" brew
         fi
     } | sort -u
 }
 get_optional_casks() {
-    [ -f "$BREWFILE_OPTIONAL" ] || return 0
+    local file
     {
-        _extract_brewfile_names "$BREWFILE_OPTIONAL" cask
+        for file in "$BREWFILE_OPTIONAL" "$BREWFILE_OPENCLAW"; do
+            if [ -f "$file" ]; then
+                _extract_brewfile_names "$file" cask
+            fi
+        done
         if [ "${DOTFILES_PROFILE:-desktop}" != desktop ]; then
             _extract_brewfile_names "$DOTFILES_DIR/Brewfile" cask
         fi
@@ -321,10 +332,13 @@ check_drift() {
         echo ""
     fi
 
-    if [ -f "$BREWFILE_OPTIONAL" ]; then
-        echo -e "${BLUE}Note: optional packages in $(basename "$BREWFILE_OPTIONAL") are ignored for core drift.${NC}"
-        echo ""
-    fi
+    local file
+    for file in "$BREWFILE_OPTIONAL" "$BREWFILE_OPENCLAW"; do
+        if [ -f "$file" ]; then
+            echo -e "${BLUE}Note: optional packages in $(basename "$file") are ignored for core drift.${NC}"
+            echo ""
+        fi
+    done
 
     if [ "$issues_found" = false ]; then
         echo -e "${GREEN}✓ Core Brewfile is in sync with installed packages${NC}"
@@ -334,6 +348,7 @@ check_drift() {
         echo -e "${BLUE}Run 'brew-sync --remove' to clean up core Brewfile${NC}"
         echo -e "${BLUE}Run 'brew-sync --update' to regenerate core Brewfile from installed${NC}"
         echo -e "${BLUE}Optional apps: brew bundle --file=$BREWFILE_OPTIONAL${NC}"
+        echo -e "${BLUE}OpenClaw tools: brew bundle --file=$BREWFILE_OPENCLAW${NC}"
         return 1
     fi
 }

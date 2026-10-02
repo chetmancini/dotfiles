@@ -3,9 +3,9 @@
 #   brew bundle --file=~/dotfiles/Brewfile.optional
 # Update core only: brew bundle dump --file=~/dotfiles/Brewfile --force  (prefer brew-sync)
 
-# Taps (core)
+# Taps (core). Trust only the individual formulae below, before bundle loads them.
+# Official Homebrew packages are already trusted.
 tap "can1357/tap"
-tap "github/gh"
 tap "oven-sh/bun"
 
 #==============================================================================
@@ -71,7 +71,7 @@ brew "neovim"                   # Hyperextensible Vim
 brew "tig"                      # Git TUI
 brew "bats-core"                # Bash Automated Testing System
 brew "herdr"                    # Agent multiplexer that lives in your terminal
-brew "can1357/tap/omp"          # Coding agent with the IDE wired in
+brew "can1357/tap/omp", trusted: true  # Coding agent with the IDE wired in
 brew "rtk"                      # CLI proxy to minimize LLM token consumption
 
 #==============================================================================
@@ -90,7 +90,7 @@ brew "uv"                       # Fast pip replacement
 #==============================================================================
 # Development - Node.js
 #==============================================================================
-brew "oven-sh/bun/bun"          # JavaScript runtime
+brew "oven-sh/bun/bun", trusted: true  # JavaScript runtime
 # Version management is mise (see mise/config.toml). Historical alternative:
 # brew "n"
 brew "pnpm"                     # Node package manager

@@ -88,12 +88,26 @@ from partial profiles, and does not check Homebrew drift for native Linux instal
 
 ## Homebrew Packages
 
-Packages are split into **core** and **optional** profiles:
+Packages are split into **core** and **optional** profiles, with a proposed retirement archive:
 
 | File | Purpose | Default install |
 |------|---------|-----------------|
 | `Brewfile` | Daily CLI, languages, k8s, Ghostty, fonts | Yes (`install.sh` / `brew bundle`) |
 | `Brewfile.optional` | AI IDEs, messaging, heavy casks, fun extras | Opt-in |
+| `Brewfile.openclaw` | OpenClaw skill tools: GIF search, Places, iMessage | Separate opt-in |
+| `Brewfile.deprecated` | Commented retirement candidates; moves pending agreement | Never |
+
+Third-party formulae declare `trusted: true` with their full tap-qualified name.
+Homebrew Bundle grants that individual formula trust before loading or installing it;
+official packages are already trusted. Taps are not granted blanket trust.
+This applies to both `install.sh` and direct `brew bundle` installs.
+See [Homebrew tap trust](https://docs.brew.sh/Tap-Trust).
+
+`Brewfile.deprecated` proposes retiring `ack`, `thefuck`, `gti`, `jasper`,
+`little-cms2`, `qt`, and `openlens`. It also lists workflow-dependent candidates.
+These entries remain in optional until the moves are agreed; the archive is not
+an installation profile. Before activating archived entries, teach `brew-sync`
+to exclude them from core drift and `--add`, as it does for optional packages.
 
 ```bash
 # Core (default)
@@ -103,12 +117,15 @@ brew bundle check --file=~/dotfiles/Brewfile
 # Optional apps/tools
 brew bundle --file=~/dotfiles/Brewfile.optional
 
+# OpenClaw skill tools (not included by --with-optional-brew)
+brew bundle --file=~/dotfiles/Brewfile.openclaw
+
 # Via install.sh
 ./install.sh --yes --skip-brew          # no brew
 ./install.sh --with-optional-brew       # core + optional
 ./install.sh --with-legacy-vim          # also symlink legacy Vim
 
-# Drift against core only (optional packages ignored as "extras")
+# Drift against core only (optional and OpenClaw packages ignored as "extras")
 brew-sync
 ```
 

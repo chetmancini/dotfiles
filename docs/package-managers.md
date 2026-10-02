@@ -11,6 +11,12 @@ hard to reason about.
 | JavaScript CLIs that are intentionally global | npm or pnpm | Keep the runtime in Mise. Use the manager the tool or its team specifies. Project dependencies stay local to the project. |
 | Vendor-managed CLIs | Vendor installer | Prefer the vendor release channel when it updates itself or ships more reliably than Homebrew. Mise (official installer → `~/.local/bin/mise`) and Claude Code are the current examples. |
 
+`npm/npmrc` contains public defaults only. The installer copies it to `~/.npmrc`
+on first install and preserves existing local configuration. Older links into
+the checkout are converted to regular files while preserving their contents.
+Private registry settings and login tokens belong in the local `~/.npmrc` and
+must never be added to the public template.
+
 The machine-wide npm prefix is `~/.npm-global`; its bin directory is added to
 PATH. The pnpm global bin comes from `pnpm bin --global` and is expected at
 `~/Library/pnpm/bin` on a standard macOS setup.

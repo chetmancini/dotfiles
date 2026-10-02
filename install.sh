@@ -454,7 +454,30 @@ install_home_symlinks() {
         return
     fi
 
-    # npm's portable user-level prefix is managed by npm/npmrc. Create it here
+    # npm login and registry tools write credentials to ~/.npmrc. Keep it local
+    # so those writes never follow a symlink into this public checkout.
+    local npmrc="$HOME/.npmrc"
+    if [ ! -e "$npmrc" ] && [ ! -L "$npmrc" ] ||
+        { [ -L "$npmrc" ] && [ "$npmrc" -ef "$DOTFILES_DIR/npm/npmrc" ]; }; then
+        if [ "$PLAN_MODE" = true ]; then
+            print_plan "Would create local npm config $npmrc (preserving existing linked contents)"
+        else
+            local npmrc_temp
+            npmrc_temp=$(mktemp "$HOME/.npmrc.XXXXXX")
+            if [ -f "$npmrc" ]; then
+                cp "$npmrc" "$npmrc_temp"
+            else
+                cp "$DOTFILES_DIR/npm/npmrc" "$npmrc_temp"
+            fi
+            chmod 600 "$npmrc_temp"
+            mv -f "$npmrc_temp" "$npmrc"
+            print_success "Local npm config created: $npmrc"
+        fi
+    else
+        print_info "Preserving existing local npm config: $npmrc"
+    fi
+
+    # npm's portable user-level prefix defaults to ~/.npm-global. Create it here
     # so npm list/update work on a freshly bootstrapped machine before its first
     # global install.
     if [ "$PLAN_MODE" = true ]; then

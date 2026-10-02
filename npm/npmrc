@@ -1,5 +1,6 @@
-# User-level npm configuration. Installed as ~/.npmrc; do not copy this file
-# to a project root because npm rejects global prefix settings in project config.
+# Public npm defaults. Copied to a local ~/.npmrc, never symlinked: login tools
+# write private registry credentials there. Keep credentials out of this file.
+# Keep this out of project roots: npm rejects global prefix settings there.
 min-release-age=1
 allow-scripts=@google/genai,bufferutil,protobufjs,esbuild,@anthropic/claude-code
 prefix=${HOME}/.npm-global

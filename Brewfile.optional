@@ -4,9 +4,8 @@
 # brew-sync defaults to the core Brewfile; packages listed here are not treated
 # as "extra" drift against core, and --remove will not strip them from optional.
 
-# Taps (optional-only)
+# Taps (optional-only). Formula-level trust is declared on each package below.
 tap "anomalyco/tap"
-tap "datadog/pack"
 tap "datadog-labs/pack"
 tap "schpet/tap"
 
@@ -40,15 +39,13 @@ brew "pgvector"                 # Postgres vector search
 #==============================================================================
 # AI Tools
 #==============================================================================
-brew "anomalyco/tap/gifgrep"    # Clawdbot skill: GIF search
-brew "anomalyco/tap/goplaces"   # Clawdbot skill: Google Places
-brew "anomalyco/tap/imsg"       # Clawdbot skill: iMessage
-brew "anomalyco/tap/opencode"   # AI coding assistant CLI
+# OpenClaw skill tools live in Brewfile.openclaw (separate opt-in).
+brew "anomalyco/tap/opencode", trusted: true # AI coding assistant CLI
 brew "huggingface-cli"          # HuggingFace model downloads
 brew "llm"                      # CLI for LLMs
 brew "ollama"                   # Run LLMs locally
-brew "datadog-labs/pack/pup"    # Datadog Pup CLI
-brew "schpet/tap/linear"        # Linear CLI
+brew "datadog-labs/pack/pup", trusted: true # Datadog Pup CLI
+brew "schpet/tap/linear", trusted: true     # Linear CLI
 
 #==============================================================================
 # Casks - Development Apps

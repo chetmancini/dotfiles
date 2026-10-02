@@ -1,0 +1,21 @@
+# Proposed retirement list — candidates remain active in Brewfile.optional.
+# Entries are commented out until the package moves are agreed.
+# "Deprecated" means retired from this setup, not necessarily deprecated by Homebrew.
+# Never included by install.sh, including --with-optional-brew.
+# This is an archive/reference, not a bundle to install wholesale.
+
+# Strong candidates: replaced, unnecessary direct dependencies, or no more updates.
+# brew "ack"                    # ripgrep already covers this workflow
+# brew "thefuck"                # Already removed from shell; zsh CORRECT + atuin
+# brew "gti"                    # Novelty git typo wrapper
+# brew "jasper"                 # Let consumers install this JPEG-2000 library
+# brew "little-cms2"            # Let consumers install this color-management library
+# brew "qt"                     # Keep only for a project that directly needs Qt
+# cask "openlens"               # Upstream says not to expect any more updates
+# Source: https://github.com/MuhammedKalkan/OpenLens#readme
+
+# Workflow-dependent candidates: retire only if these workflows are no longer used.
+# brew "emacs"                  # Alternative editor to configured Neovim
+# brew "mob"                    # Keep only for active mob-programming sessions
+# brew "gradle"                 # Prefer a project's Gradle wrapper where available
+# brew "sbt"                    # Keep only for active Scala projects

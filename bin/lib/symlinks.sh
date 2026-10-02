@@ -23,7 +23,6 @@ EOF
 .bashrc|.bashrc|Bash Configuration|Bash config|Compatibility shell config for environments that still start bash
 .bash_profile|.bash_profile|Bash Profile|Bash profile|Login-shell entry point for bash-based environments
 .tmux.conf|.tmux.conf|Tmux Configuration|tmux config|Terminal multiplexer config for managing multiple terminal sessions
-npm/npmrc|.npmrc|npm Configuration|npm config|User-level npm config with a portable global prefix and release-age guardrail
 EOF
             ;;
         legacy)

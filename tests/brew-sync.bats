@@ -7,10 +7,12 @@ setup() {
     DOTFILES_DIR="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
     TMP_BREWFILE="$(mktemp "${TMPDIR:-/tmp}/Brewfile.XXXXXX")"
     TMP_OPTIONAL="$(mktemp "${TMPDIR:-/tmp}/Brewfile.optional.XXXXXX")"
+    TMP_SYNC_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/brew-sync.XXXXXX")"
 }
 
 teardown() {
     rm -f "$TMP_BREWFILE" "$TMP_OPTIONAL"
+    rm -rf "$TMP_SYNC_ROOT"
 }
 
 @test "brew-sync --help prints usage" {
@@ -18,6 +20,36 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage: brew-sync"* ]]
     [[ "$output" == *"--add"* ]]
+}
+
+@test "OpenClaw packages stay out of core drift and add even without optional Brewfile" {
+    printf 'brew "ripgrep"\n' >"$TMP_BREWFILE"
+    mkdir -p "$TMP_SYNC_ROOT/bin" "$TMP_SYNC_ROOT/home"
+    cat >"$TMP_SYNC_ROOT/bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' ripgrep gifgrep goplaces imsg
+    [ -z "${EXTRA_FORMULA:-}" ] || printf '%s\n' "$EXTRA_FORMULA"
+fi
+exit 0
+EOF
+    chmod +x "$TMP_SYNC_ROOT/bin/brew"
+
+    for optional in "$TMP_OPTIONAL" "$TMP_SYNC_ROOT/missing"; do
+        run env HOME="$TMP_SYNC_ROOT/home" \
+            BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$optional" \
+            PATH="$TMP_SYNC_ROOT/bin:$PATH" "$DOTFILES_DIR/bin/brew-sync" --check
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"Brewfile.openclaw"* ]]
+    done
+
+    run env HOME="$TMP_SYNC_ROOT/home" \
+        BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_SYNC_ROOT/missing" \
+        EXTRA_FORMULA=bat PATH="$TMP_SYNC_ROOT/bin:$PATH" \
+        "$DOTFILES_DIR/bin/brew-sync" --add
+    [ "$status" -eq 0 ]
+    grep -qx 'brew "bat"' "$TMP_BREWFILE"
+    [ "$(wc -l <"$TMP_BREWFILE" | tr -d ' ')" = 2 ]
 }
 
 @test "get_brewfile_formulae strips tap prefix and comments" {
