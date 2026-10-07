@@ -158,7 +158,7 @@ run_brew_tasks() {
             brew outdated --cask --verbose >"$cask_before" 2>&3 || true
 
             echo "info:[$(timestamp)] Running brew upgrade"
-            if run_streamed_command "brew upgrade" brew upgrade; then
+            if run_streamed_command "brew upgrade" brew upgrade --yes; then
                 brew outdated --formula >"$formula_after" 2>&3 || true
                 brew outdated --cask >"$cask_after" 2>&3 || true
                 echo "success:Packages upgraded"
@@ -578,7 +578,7 @@ dry_run() {
         echo "Would run: brew update"
     fi
     if [ "$RUN_BREW_UPGRADE" = true ]; then
-        echo "Would run: brew upgrade"
+        echo "Would run: brew upgrade --yes"
     fi
     if [ "$RUN_BREW_CLEANUP" = true ]; then
         echo "Would run: brew cleanup"
