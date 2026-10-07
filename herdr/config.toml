@@ -19,7 +19,7 @@ manifest_check = true
 [ui]
 show_agent_labels_on_pane_borders = true
 agent_panel_sort = "priority"
-hide_tab_bar_when_single_tab = true
+hide_tab_bar_when_single_tab = false
 prompt_new_tab_name = false
 pane_gaps = true
 
@@ -45,6 +45,13 @@ pane_history = true
 [advanced]
 # Enough agent and build output without unbounded memory growth.
 scrollback_limit_bytes = 25000000
+
+[keys]
+# Prefix-free chords (ctrl+alt is the safe family per herdr docs; Ghostty leaves it free).
+new_tab = ["prefix+c", "ctrl+alt+c"]
+next_tab = ["prefix+n", "ctrl+alt+]"]
+previous_tab = ["prefix+p", "ctrl+alt+["]
+close_tab = ["prefix+shift+x", "ctrl+alt+w"]
 
 [[keys.command]]
 key = "prefix+f"
