@@ -103,6 +103,7 @@ vim.pack.add({
 
   -- AI
   "https://github.com/zbirenbaum/copilot.lua",
+  "https://github.com/ChmaraX/herdr-nvim",
 
   -- Editor
   "https://github.com/echasnovski/mini.ai",

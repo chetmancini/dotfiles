@@ -32,6 +32,7 @@ nvim/
     ├── finder.lua           # fzf-lua + neo-tree
     ├── format.lua           # conform.nvim + nvim-lint
     ├── git.lua              # gitsigns
+    ├── herdr.lua            # herdr-nvim annotations (<leader>a*)
     ├── lsp.lua              # lspconfig, mason, diagnostics
     ├── python.lua           # venv-selector
     ├── rust.lua             # rustaceanvim + crates.nvim
@@ -128,6 +129,14 @@ To add a plugin:
 `copilot.lua` + blink-copilot integration for inline and completion-menu
 suggestions.
 
+### Herdr integration
+
+`ChmaraX/herdr-nvim` is set up in `plugin/herdr.lua`. Inside a herdr session,
+`<leader>ac` comments a line or selection, `<leader>al` lists comments, and
+`<leader>as`/`<leader>aS` send them to an agent. `<leader>ai` inserts a
+`path:line` reference. The herdr sidebar/picker keys (`prefix+e`, `prefix+o`)
+live in `herdr/config.toml`.
+
 ### Tmux integration
 
 `christoomey/vim-tmux-navigator` with maps in `plugin/tmux.lua`. Same
@@ -139,7 +148,7 @@ configured.
 **UI & theme:** catppuccin, bufferline, lualine, noice, nui, which-key, neo-tree  
 **Editor:** mini.ai/pairs/surround/icons, flash, grug-far, persistence  
 **LSP & tools:** nvim-lspconfig, mason, mason-lspconfig, lazydev, conform, nvim-lint  
-**Completion / AI:** blink.cmp, friendly-snippets, blink-copilot, copilot.lua  
+**Completion / AI:** blink.cmp, friendly-snippets, blink-copilot, copilot.lua, herdr-nvim  
 **Nav / git:** fzf-lua, gitsigns, plenary  
 **Diagnostics:** trouble, todo-comments  
 **Lang:** rustaceanvim, crates.nvim, vim-dadbod*, venv-selector  

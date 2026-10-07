@@ -48,6 +48,10 @@
       "rev": "dc4684e163971bb1f5bfb93fbd4bb3e892bf9b15",
       "src": "https://github.com/MagicDuck/grug-far.nvim"
     },
+    "herdr-nvim": {
+      "rev": "5e849b5377fd409d2fd4be159c9c9fa36c251f7a",
+      "src": "https://github.com/ChmaraX/herdr-nvim"
+    },
     "lazydev.nvim": {
       "rev": "ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d",
       "src": "https://github.com/folke/lazydev.nvim"

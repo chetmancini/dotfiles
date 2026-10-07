@@ -1,0 +1,1 @@
+require("herdr-nvim").setup({})
