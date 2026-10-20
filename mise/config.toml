@@ -17,6 +17,7 @@ trusted_config_paths = [
 shell_out = true
 
 [tools]
+gh = "2.100.0"
 # Global defaults — override per-project with mise.toml / .tool-versions
 node = "26.9.0"
 python = "3.14.7"

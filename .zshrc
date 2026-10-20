@@ -33,3 +33,5 @@ if [ -f '/Users/chet/Downloads/google-cloud-sdk/path.zsh.inc' ]; then . '/Users/
 
 # The next line enables shell command completion for gcloud.
 if [ -f '/Users/chet/Downloads/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/chet/Downloads/google-cloud-sdk/completion.zsh.inc'; fi
+
+source "/Users/chet/.local/share/uv/tools/norm-dev-cli/lib/python3.14/site-packages/norm_dev_cli/shell/shell-init.sh" # devenv-shell-init
