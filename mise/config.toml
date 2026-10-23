@@ -20,7 +20,7 @@ shell_out = true
 gh = "2.102.0"
 # Global defaults — override per-project with mise.toml / .tool-versions
 node = "26.12.1"
-pnpm = "12.14.0"
-python = "3.14.8"
+pnpm = "12.15.0"
+python = "3.15.1"
 uv = "0.13.4"
-wrangler = { version = "4.151.3", allow_builds = ["esbuild", "sharp", "workerd"] }
+wrangler = { version = "4.152.0", allow_builds = ["esbuild", "sharp", "workerd"] }
