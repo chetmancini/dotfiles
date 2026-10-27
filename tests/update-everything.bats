@@ -19,6 +19,7 @@ write_disabled_config() {
         'RUN_BREW_UPDATE=false' \
         'RUN_BREW_UPGRADE=false' \
         'RUN_BREW_CLEANUP=false' \
+        'RUN_MISE_UPGRADE=false' \
         'RUN_NPM_GLOBAL_UPDATE=false' \
         'RUN_PNPM_GLOBAL_UPDATE=false' \
         'DOCKER_PRUNE=false' \
@@ -48,5 +49,41 @@ write_disabled_config() {
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Failed to update Homebrew"* ]]
+    [[ "$output" == *"Updates completed with errors"* ]]
+}
+
+@test "mise upgrades global requests even when invoked from a project" {
+    write_disabled_config
+    cat >"$FAKE_BIN/mise" <<'MISE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$MISE_CALL_LOG"
+MISE
+    chmod +x "$FAKE_BIN/mise"
+    printf '%s\n' 'RUN_MISE_UPGRADE=true' >>"$CONFIG_DIR/config"
+    mkdir -p "$TMP_HOME/project"
+    printf '[tools]\nnode = "22"\n' >"$TMP_HOME/project/mise.toml"
+    cd "$TMP_HOME/project"
+
+    run env HOME="$TMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" \
+        MISE_CALL_LOG="$TMP_HOME/mise.log" "$DOTFILES_DIR/bin/update-everything"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TMP_HOME/mise.log")" = "$(printf 'outdated --global\nupgrade --global')" ]
+    [ "$(cat mise.toml)" = "$(printf '[tools]\nnode = "22"')" ]
+}
+
+@test "a failed mise upgrade reaches the final error report" {
+    write_disabled_config
+    cat >"$FAKE_BIN/mise" <<'MISE'
+#!/usr/bin/env bash
+if [ "$1" = upgrade ]; then exit 42; fi
+MISE
+    chmod +x "$FAKE_BIN/mise"
+    printf '%s\n' 'RUN_MISE_UPGRADE=true' >>"$CONFIG_DIR/config"
+
+    run env HOME="$TMP_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" "$DOTFILES_DIR/bin/update-everything"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Failed to update global mise tools"* ]]
     [[ "$output" == *"Updates completed with errors"* ]]
 }

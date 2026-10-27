@@ -1,8 +1,10 @@
 # Managed by ~/dotfiles (intended symlink: ~/.config/mise).
 # Project-local overrides: put mise.toml or .tool-versions in the project root.
-# Package managers stay separate: uv (Python packages), pnpm/bun (JS packages).
+# mise owns the tool executables; uv/pnpm/bun still manage project packages.
 
 [settings]
+self_update.auto = "3d"
+self_update.minimum_release_age = "1d"
 # Honor .node-version, .python-version, .tool-versions in projects
 idiomatic_version_file_enable_tools = ["node", "python"]
 # Allow project mise.toml under common workspace roots without prompting
@@ -17,10 +19,27 @@ trusted_config_paths = [
 shell_out = true
 
 [tools]
-gh = "2.102.0"
 # Global defaults — override per-project with mise.toml / .tool-versions
 node = "26.12.1"
-pnpm = "12.15.0"
 python = "3.15.1"
-uv = "0.13.4"
 wrangler = { version = "4.152.0", allow_builds = ["esbuild", "sharp", "workerd"] }
+
+# Build and package tools: upgrade deliberately with mise upgrade --global.
+bun = { version = "latest", auto_update = false }
+pnpm = { version = "latest", auto_update = false }
+uv = { version = "latest", auto_update = false }
+ruff = { version = "latest", auto_update = false }
+shellcheck = { version = "latest", auto_update = false }
+shfmt = { version = "latest", auto_update = false }
+stylua = { version = "latest", auto_update = false }
+
+# Everyday CLIs: background updates at shell prompts, after a release delay.
+gh = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+jq = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+ripgrep = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+fd = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+bat = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+fzf = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+zoxide = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+rtk = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
+"npm:cf" = "1.0.0-beta.23"

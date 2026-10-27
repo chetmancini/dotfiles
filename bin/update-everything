@@ -28,6 +28,7 @@ DEFAULT_REPOS_DIRS=("$HOME/code" "$HOME/norm")
 DEFAULT_RUN_BREW_UPDATE=true
 DEFAULT_RUN_BREW_UPGRADE=true
 DEFAULT_RUN_BREW_CLEANUP=true
+DEFAULT_RUN_MISE_UPGRADE=true
 DEFAULT_RUN_NPM_GLOBAL_UPDATE=true
 DEFAULT_RUN_PNPM_GLOBAL_UPDATE=true
 DEFAULT_PULL_REPOS=true
@@ -43,6 +44,7 @@ load_config() {
     RUN_BREW_UPDATE="$DEFAULT_RUN_BREW_UPDATE"
     RUN_BREW_UPGRADE="$DEFAULT_RUN_BREW_UPGRADE"
     RUN_BREW_CLEANUP="$DEFAULT_RUN_BREW_CLEANUP"
+    RUN_MISE_UPGRADE="$DEFAULT_RUN_MISE_UPGRADE"
     RUN_NPM_GLOBAL_UPDATE="$DEFAULT_RUN_NPM_GLOBAL_UPDATE"
     RUN_PNPM_GLOBAL_UPDATE="$DEFAULT_RUN_PNPM_GLOBAL_UPDATE"
     PULL_REPOS="$DEFAULT_PULL_REPOS"
@@ -179,6 +181,33 @@ run_brew_tasks() {
                 echo "error:Failed to cleanup Homebrew"
                 task_failed=true
             fi
+        fi
+    } >"$output_file"
+
+    [ "$task_failed" = false ]
+}
+
+# Global requests only: project configuration and lockfiles stay untouched.
+run_mise_upgrade() {
+    local output_file="$TEMP_DIR/mise.out"
+    local task_failed=false
+
+    {
+        if [ "$RUN_MISE_UPGRADE" != true ]; then
+            return 0
+        fi
+        if ! command -v mise &>/dev/null; then
+            echo "info:mise is not installed, skipping"
+            return 0
+        fi
+
+        print_live_section "Updating global mise tools..."
+        if run_streamed_command "mise outdated --global" mise outdated --global &&
+            run_streamed_command "mise upgrade --global" mise upgrade --global; then
+            echo "success:Global mise tools updated"
+        else
+            echo "error:Failed to update global mise tools"
+            task_failed=true
         fi
     } >"$output_file"
 
@@ -546,6 +575,7 @@ print_help() {
     echo "Tasks (run serially):"
     echo "  - Check for macOS updates"
     echo "  - brew update / upgrade / cleanup"
+    echo "  - mise outdated --global / upgrade --global"
     echo "  - npm update -g"
     echo "  - pnpm update --global"
     echo "  - Docker system prune"
@@ -563,6 +593,7 @@ dry_run() {
     echo "  RUN_BREW_UPDATE=$RUN_BREW_UPDATE"
     echo "  RUN_BREW_UPGRADE=$RUN_BREW_UPGRADE"
     echo "  RUN_BREW_CLEANUP=$RUN_BREW_CLEANUP"
+    echo "  RUN_MISE_UPGRADE=$RUN_MISE_UPGRADE"
     echo "  RUN_NPM_GLOBAL_UPDATE=$RUN_NPM_GLOBAL_UPDATE"
     echo "  RUN_PNPM_GLOBAL_UPDATE=$RUN_PNPM_GLOBAL_UPDATE"
     echo "  PULL_REPOS=$PULL_REPOS"
@@ -582,6 +613,10 @@ dry_run() {
     fi
     if [ "$RUN_BREW_CLEANUP" = true ]; then
         echo "Would run: brew cleanup"
+    fi
+    if [ "$RUN_MISE_UPGRADE" = true ]; then
+        echo "Would run: mise outdated --global"
+        echo "Would run: mise upgrade --global"
     fi
     if [ "$RUN_NPM_GLOBAL_UPDATE" = true ]; then
         if command -v npm &>/dev/null; then
@@ -641,6 +676,9 @@ run_sequential() {
 
     run_brew_tasks || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/brew.out"
+
+    run_mise_upgrade || failures=$((failures + 1))
+    print_task_output "$TEMP_DIR/mise.out"
 
     run_npm_global_update || failures=$((failures + 1))
     print_task_output "$TEMP_DIR/npm.out"

@@ -13,7 +13,7 @@ print_help() {
 Usage: package-sync [options]
 
 Inspect or update the global npm and pnpm package stores. Runtime versions are
-owned by Mise; Homebrew owns native/system packages. This command only manages
+owned by Mise, along with standalone CLIs; Homebrew owns native/system packages. This command only manages
 JavaScript CLIs that are intentionally installed globally.
 
 Options:
@@ -91,7 +91,7 @@ check_pnpm() {
     local global_bin
 
     if ! command -v pnpm >/dev/null 2>&1; then
-        echo "pnpm: not installed (install it with Homebrew)"
+        echo "pnpm: not installed (install it with mise)"
         return 0
     fi
 

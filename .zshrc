@@ -12,9 +12,9 @@ _zsh_modules=(
   git
   functions
   secrets
+  tools/mise
   tools/fzf
   tools/zoxide
-  tools/mise
   tools/direnv
   tools/atuin
   tools/completions

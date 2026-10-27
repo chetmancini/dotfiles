@@ -18,9 +18,9 @@ function wifi-password() {
     security find-generic-password -D "AirPort network password" -wa "$ssid"
 }
 
-# System info on login shells only (not every new terminal tab)
+# System info in visible interactive login shells only (not startup probes)
 # Run 'fastfetch' manually to see system info
-if [[ -o login ]] && command -v fastfetch &> /dev/null; then
+if [[ -o interactive && -o login && -t 1 ]] && command -v fastfetch &> /dev/null; then
   fastfetch
 fi
 

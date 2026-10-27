@@ -379,12 +379,23 @@ add_missing() {
         formulae_to_add=$(comm -23 <(echo "$formulae_to_add") <(echo "$optional_formulae"))
     fi
 
+    # Do not re-add tools whose preferred owner supplies the executable.
+    local external_formulae
+    external_formulae=$(package_policy_external_satisfaction brew "$formulae_to_add")
+    formulae_to_add=$(exclude_policy_satisfied_packages "$formulae_to_add" "$external_formulae")
+    print_policy_satisfaction "$external_formulae"
+
     # Find casks installed but missing from core (do not pull optional into core)
     local casks_to_add
     casks_to_add=$(comm -13 <(echo "$brewfile_casks") <(echo "$installed_casks"))
     if [ -n "$optional_casks" ]; then
         casks_to_add=$(comm -23 <(echo "$casks_to_add") <(echo "$optional_casks"))
     fi
+
+    local external_casks
+    external_casks=$(package_policy_external_satisfaction cask "$casks_to_add")
+    casks_to_add=$(exclude_policy_satisfied_packages "$casks_to_add" "$external_casks")
+    print_policy_satisfaction "$external_casks"
 
     if [ -z "$formulae_to_add" ] && [ -z "$casks_to_add" ]; then
         echo -e "${GREEN}✓ Nothing to add to core Brewfile${NC}"

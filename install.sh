@@ -53,7 +53,7 @@ Options:
   --plan, --dry-run     Preview changes without modifying files
   --profile NAME        minimal, development, desktop (defaults to saved profile)
                         First install: desktop on Mac, development on Linux
-  --skip-packages       Install configuration only (no Homebrew or pacman)
+  --skip-packages       Install configuration only (no Homebrew, pacman, or mise tools)
   --skip-tpm            Skip tmux plugin manager installation
   --skip-brew           Alias for --skip-packages (all platforms)
   --with-optional-brew  Also install Brewfile.optional (default off under --yes)
@@ -340,6 +340,44 @@ install_packages() {
             sudo pacman -S --needed "${packages[@]}"
         fi
     fi
+}
+
+# Run after linking config, so new machines install the declared global tools.
+install_mise_tools() {
+    if [ "$SKIP_PACKAGES" = true ] || [ "$SKIP_BREW" = true ] ||
+        [ "$DOTFILES_PROFILE" = minimal ] || [ "$DOTFILES_PLATFORM" != macos ]; then
+        return 0
+    fi
+    if ! ask_yes_no "Install global developer tools with mise?"; then
+        return 0
+    fi
+    if [ "$PLAN_MODE" = true ]; then
+        print_plan "Would install mise with its official installer if missing"
+        print_plan "Would run: mise install (global config: $HOME/.config/mise/config.toml)"
+        return 0
+    fi
+
+    local mise_bin="$HOME/.local/bin/mise"
+    if [ ! -x "$mise_bin" ]; then
+        mise_bin="$(command -v mise || true)"
+    fi
+    if [ -z "$mise_bin" ]; then
+        local installer
+        installer="$(mktemp)"
+        if ! curl -fsSL https://mise.run -o "$installer"; then
+            rm -f "$installer"
+            print_error "Failed to download the mise installer"
+            return 1
+        fi
+        local installer_status=0
+        sh "$installer" || installer_status=$?
+        rm -f "$installer"
+        [ "$installer_status" -eq 0 ] || return "$installer_status"
+        mise_bin="$HOME/.local/bin/mise"
+    fi
+
+    # Avoid inheriting a project's config when the wizard runs inside a checkout.
+    (cd "$HOME" && "$mise_bin" install)
 }
 
 install_homebrew() {
@@ -745,6 +783,7 @@ install_tpm
 install_packages
 install_config_symlinks
 install_home_symlinks
+install_mise_tools
 if [ "$DOTFILES_PROFILE" != minimal ]; then
     install_api_keys_template
     install_git_hooks

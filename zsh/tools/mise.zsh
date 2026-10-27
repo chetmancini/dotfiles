@@ -1,5 +1,5 @@
 # Version managers — mise is the single runtime manager (node, python, …).
-# Package managers stay separate: uv, pnpm, bun.
+# mise owns uv/pnpm/bun executables; those tools manage project packages.
 # Official/core install lives at ~/.local/bin (not Homebrew).
 # Equivalent to: eval "$(~/.local/bin/mise activate zsh)"
 _dotfiles_mise="${HOME}/.local/bin/mise"

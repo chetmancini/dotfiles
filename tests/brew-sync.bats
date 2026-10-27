@@ -45,10 +45,10 @@ EOF
 
     run env HOME="$TMP_SYNC_ROOT/home" \
         BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_SYNC_ROOT/missing" \
-        EXTRA_FORMULA=bat PATH="$TMP_SYNC_ROOT/bin:$PATH" \
+        EXTRA_FORMULA=eza PATH="$TMP_SYNC_ROOT/bin:$PATH" \
         "$DOTFILES_DIR/bin/brew-sync" --add
     [ "$status" -eq 0 ]
-    grep -qx 'brew "bat"' "$TMP_BREWFILE"
+    grep -qx 'brew "eza"' "$TMP_BREWFILE"
     [ "$(wc -l <"$TMP_BREWFILE" | tr -d ' ')" = 2 ]
 }
 
@@ -187,4 +187,24 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"mise: vendor via mise"* ]]
     rm -rf "$fake_bin"
+}
+
+@test "brew-sync add does not restore a migrated CLI declaration" {
+    printf 'brew "git"\n' >"$TMP_BREWFILE"
+    cat >"$TMP_SYNC_ROOT/brew" <<'BREW'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' git bat
+fi
+BREW
+    printf '#!/bin/sh\nexit 0\n' >"$TMP_SYNC_ROOT/bat"
+    chmod +x "$TMP_SYNC_ROOT/brew" "$TMP_SYNC_ROOT/bat"
+
+    run env HOME="$TMP_SYNC_ROOT" BREWFILE="$TMP_BREWFILE" \
+        BREWFILE_OPTIONAL="$TMP_OPTIONAL" PATH="$TMP_SYNC_ROOT:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --add
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TMP_BREWFILE")" = 'brew "git"' ]
+    [[ "$output" == *"bat: mise via bat"* ]]
 }

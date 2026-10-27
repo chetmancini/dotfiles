@@ -12,6 +12,21 @@ package_policy_records() {
 # id|brew_kind|brew_name|command|owner|install_hint
 node|formula|node|node|mise|Install and pin Node with mise, not Homebrew
 python|formula|python|python|mise|Install and pin Python with mise, not Homebrew
+bun|formula|bun|bun|mise|Install bun with mise, not Homebrew
+pnpm|formula|pnpm|pnpm|mise|Install pnpm with mise, not Homebrew
+uv|formula|uv|uv|mise|Install uv with mise, not Homebrew
+ruff|formula|ruff|ruff|mise|Install ruff with mise, not Homebrew
+gh|formula|gh|gh|mise|Install gh with mise, not Homebrew
+jq|formula|jq|jq|mise|Install jq with mise, not Homebrew
+ripgrep|formula|ripgrep|rg|mise|Install ripgrep with mise, not Homebrew
+fd|formula|fd|fd|mise|Install fd with mise, not Homebrew
+bat|formula|bat|bat|mise|Install bat with mise, not Homebrew
+fzf|formula|fzf|fzf|mise|Install fzf with mise, not Homebrew
+zoxide|formula|zoxide|zoxide|mise|Install zoxide with mise, not Homebrew
+shellcheck|formula|shellcheck|shellcheck|mise|Install shellcheck with mise, not Homebrew
+shfmt|formula|shfmt|shfmt|mise|Install shfmt with mise, not Homebrew
+stylua|formula|stylua|stylua|mise|Install stylua with mise, not Homebrew
+rtk|formula|rtk|rtk|mise|Install rtk with mise, not Homebrew
 mise|formula|mise|mise|vendor|Install mise with the official installer: curl https://mise.run | sh
 claude-code|cask|claude-code|claude|vendor|Use the official Claude Code installer; Homebrew releases can lag
 EOF

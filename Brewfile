@@ -1,3 +1,6 @@
+# Standalone developer CLIs and runtimes live in mise/config.toml.
+# install.sh installs both layers for development and desktop profiles.
+
 # Core Brewfile — install with: brew bundle --file=~/dotfiles/Brewfile
 # Optional apps/tools: Brewfile.optional
 #   brew bundle --file=~/dotfiles/Brewfile.optional
@@ -6,16 +9,13 @@
 # Taps (core). Trust only the individual formulae below, before bundle loads them.
 # Official Homebrew packages are already trusted.
 tap "can1357/tap"
-tap "oven-sh/bun"
 
 #==============================================================================
 # Core CLI Tools
 #==============================================================================
 brew "git"                      # Git (also in minimal profile)
 brew "zsh"                      # Primary shell
-brew "python"                   # Bootstrap doctor path checks; project runtimes use mise
 brew "atuin"                    # SQLite shell history + better search (^R)
-brew "bat"                      # Better cat
 brew "brotli"                   # Lossless compression
 brew "btop"                     # Resource monitor
 brew "ca-certificates"          # Mozilla CA certificate store
@@ -25,9 +25,7 @@ brew "curl"                     # URL transfer tool
 brew "direnv"                   # Per-project env via .envrc
 brew "dust"                     # Better du
 brew "eza"                      # Better ls
-brew "fd"                       # Better find
 brew "fastfetch"                # System info
-brew "fzf"                      # Fuzzy finder
 brew "gnupg"                    # GPG encryption
 brew "docker"                   # Container platform
 brew "docker-completion"        # Docker completions
@@ -35,24 +33,18 @@ brew "gdbm"                     # Database library
 brew "gettext"                  # i18n library
 brew "grep"                     # GNU grep
 brew "htop"                     # Process viewer
-brew "jq"                       # JSON processor
 brew "ossp-uuid"                # UUID generator
 brew "pkg-config"               # Package metadata
 brew "procs"                    # Better ps
 brew "pup"                      # HTML parser CLI
 brew "readline"                 # Line editing library
-brew "ripgrep"                  # Fast grep (rg)
 brew "sd"                       # Better sed
-brew "shellcheck"               # Shell script linter
-brew "shfmt"                    # Shell script formatter
-brew "stylua"                   # Lua formatter (for nvim/ and yazi/ configs)
 brew "tmux"                     # Terminal multiplexer
 brew "tokei"                    # Code statistics
 brew "wget"                     # File downloader
 brew "xclip"                    # Clipboard access
 brew "xz"                       # File compression
 brew "yazi"                     # File browser
-brew "zoxide"                   # Smart cd
 brew "zsh-autosuggestions"      # Fish-style suggestions as you type
 brew "zsh-history-substring-search"  # Up/down substring history
 brew "zsh-syntax-highlighting"  # Command syntax coloring
@@ -64,7 +56,6 @@ brew "zsh-syntax-highlighting"  # Command syntax coloring
 # Activated in zsh/tools/mise.zsh. Do not brew install mise.
 brew "awscli"                   # AWS CLI
 brew "aws-vault"                # AWS credentials manager
-brew "gh"                       # GitHub CLI
 brew "git-delta"                # Better git diffs
 brew "git-lfs"                  # Large file storage
 brew "neovim"                   # Hyperextensible Vim
@@ -72,7 +63,6 @@ brew "tig"                      # Git TUI
 brew "bats-core"                # Bash Automated Testing System
 brew "herdr"                    # Agent multiplexer that lives in your terminal
 brew "can1357/tap/omp", trusted: true  # Coding agent with the IDE wired in
-brew "rtk"                      # CLI proxy to minimize LLM token consumption
 
 #==============================================================================
 # Development - Java/JVM
@@ -82,18 +72,12 @@ brew "openjdk"                  # Java JDK
 #==============================================================================
 # Development - Python
 #==============================================================================
-# Version management is mise (see mise/config.toml). Historical alternative:
-# brew "pyenv"
-brew "ruff"                     # Python linter
-brew "uv"                       # Fast pip replacement
+# Python, uv, and Ruff are managed by mise (see mise/config.toml).
 
 #==============================================================================
 # Development - Node.js
 #==============================================================================
-brew "oven-sh/bun/bun", trusted: true  # JavaScript runtime
-# Version management is mise (see mise/config.toml). Historical alternative:
-# brew "n"
-brew "pnpm"                     # Node package manager
+# Node, Bun, and pnpm are managed by mise (see mise/config.toml).
 
 #==============================================================================
 # Databases

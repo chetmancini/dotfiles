@@ -112,6 +112,7 @@ to exclude them from core drift and `--add`, as it does for optional packages.
 ```bash
 # Core (default)
 brew bundle --file=~/dotfiles/Brewfile
+mise install  # standalone developer CLIs and runtimes
 brew bundle check --file=~/dotfiles/Brewfile
 
 # Optional apps/tools
@@ -134,7 +135,7 @@ brew-sync
 - **CLI Tools**: eza, bat, fzf, zoxide, atuin, direnv, jq, htop, yazi, shellcheck, shfmt
 - **Development**: neovim, gh, git-delta, awscli
 - **Kubernetes**: kubectl, kubectx, k9s, helm
-- **Languages**: Mise (Node/Python runtimes), OpenJDK, Bun, uv, pnpm
+- **Languages/tools**: Mise (Node/Python, Bun, uv, pnpm and standalone developer CLIs); Homebrew OpenJDK
 - **Databases**: postgresql, redis, sqlite
 - **Apps**: Ghostty, 1Password CLI
 - **Fonts**: Monaspace, Hack (+ Nerd Font variants)
@@ -148,7 +149,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - Custom theme with git status (`chetmancini.zsh-theme`)
 - Homebrew zsh plugins: autosuggestions, history-substring-search, syntax-highlighting
 - Vi mode with visual cursor indicator
-- **mise** for Node/Python versions (see `mise/config.toml`); **uv** / **pnpm** / **bun** for packages
+- **mise** for runtimes and standalone developer CLIs (see `mise/config.toml`); **uv** / **pnpm** / **bun** for packages
 - zoxide for smart directory jumping
 - fzf integration for fuzzy finding (Ctrl-T files, Alt-C dirs)
 - **atuin** for shell history search (**Ctrl-R**); up-arrow stays history-substring

@@ -130,11 +130,19 @@ if [ "$1" = bundle ]; then
     printf '%s\n' "$HOMEBREW_BUNDLE_CASK_SKIP" > "$PACKAGE_LOG"
 fi
 BREW
-    chmod +x "$TEST_ROOT/bin/brew"
+    cat >"$TEST_ROOT/bin/mise" <<'MISE'
+#!/bin/sh
+[ -L "$HOME/.config/mise" ] || exit 41
+[ "$PWD" = "$HOME" ] || exit 42
+printf '%s\n' "$*" >"$MISE_PACKAGE_LOG"
+MISE
+    export MISE_PACKAGE_LOG="$TEST_ROOT/mise-packages"
+    chmod +x "$TEST_ROOT/bin/brew" "$TEST_ROOT/bin/mise"
     run "$DOTFILES_DIR/install.sh" --profile development --yes --skip-tpm --skip-api-keys --skip-hooks --no-clear
     [ "$status" -eq 0 ]
     grep -q ghostty "$PACKAGE_LOG"
     grep -q font-hack "$PACKAGE_LOG"
+    [ "$(cat "$MISE_PACKAGE_LOG")" = install ]
 }
 
 @test "Linux rejects optional Mac packages before installing anything" {
