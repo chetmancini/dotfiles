@@ -64,6 +64,7 @@ print_help() {
     echo "  --remove       Remove uninstalled packages from core Brewfile"
     echo "  --update       Full update: brew bundle dump --force (core only)"
     echo "  --check        Only check for drift (default)"
+    echo "                 exit 0 in sync, 1 manifest drift, 3 outdated packages only"
     echo "  --dry-run      Show what would be done without making changes"
     echo "  -h, --help     Show this help message"
     echo ""
@@ -116,22 +117,24 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ "${DOTFILES_PLATFORM:-}" = linux ]; then
-    echo "This install uses native Linux packages; Homebrew drift does not apply."
-    exit 0
-fi
-if [ "${DOTFILES_PROFILE:-desktop}" != desktop ] && [ "$ACTION" != check ]; then
-    echo "Brewfile edits require a desktop profile; edit manifests directly for partial installs." >&2
-    exit 1
-fi
+if [ "${BREW_SYNC_SOURCE_ONLY:-}" != 1 ]; then
+    if [ "${DOTFILES_PLATFORM:-}" = linux ]; then
+        echo "This install uses native Linux packages; Homebrew drift does not apply."
+        exit 0
+    fi
+    if [ "${DOTFILES_PROFILE:-desktop}" != desktop ] && [ "$ACTION" != check ]; then
+        echo "Brewfile edits require a desktop profile; edit manifests directly for partial installs." >&2
+        exit 1
+    fi
 
-# Check if Brewfile exists
-if [ ! -f "$BREWFILE" ]; then
-    echo -e "${RED}Error: Brewfile not found at $BREWFILE${NC}"
-    exit 1
-fi
+    # Check if Brewfile exists
+    if [ ! -f "$BREWFILE" ]; then
+        echo -e "${RED}Error: Brewfile not found at $BREWFILE${NC}"
+        exit 1
+    fi
 
-print_header
+    print_header
+fi
 
 # Normalize brewfile formula names to short form for brew list comparison
 short_formula_names() {
@@ -311,9 +314,9 @@ check_drift() {
         issues_found=true
     fi
 
-    # Check for outdated packages
+    # Outdated packages are an upgrade, not Brewfile drift.
     echo -e "${BLUE}Checking for outdated packages...${NC}"
-    local outdated
+    local outdated outdated_found=false
     outdated=$(brew outdated 2>/dev/null || true)
     if [ -n "$outdated" ]; then
         local outdated_count
@@ -325,8 +328,9 @@ check_drift() {
         if [ "$outdated_count" -gt 10 ]; then
             echo "  ... and $((outdated_count - 10)) more"
         fi
+        echo -e "${BLUE}These need 'brew upgrade', not a Brewfile edit.${NC}"
         echo ""
-        issues_found=true
+        outdated_found=true
     else
         echo -e "${GREEN}✓ All packages are up to date${NC}"
         echo ""
@@ -342,6 +346,9 @@ check_drift() {
 
     if [ "$issues_found" = false ]; then
         echo -e "${GREEN}✓ Core Brewfile is in sync with installed packages${NC}"
+        if [ "$outdated_found" = true ]; then
+            return 3
+        fi
         return 0
     else
         echo -e "${BLUE}Run 'brew-sync --add' to add missing packages to core Brewfile${NC}"
@@ -349,6 +356,9 @@ check_drift() {
         echo -e "${BLUE}Run 'brew-sync --update' to regenerate core Brewfile from installed${NC}"
         echo -e "${BLUE}Optional apps: brew bundle --file=$BREWFILE_OPTIONAL${NC}"
         echo -e "${BLUE}OpenClaw tools: brew bundle --file=$BREWFILE_OPENCLAW${NC}"
+        if [ "$outdated_found" = true ]; then
+            echo -e "${BLUE}Run 'brew upgrade' for outdated packages${NC}"
+        fi
         return 1
     fi
 }
@@ -566,6 +576,37 @@ prune_policy_satisfied_entries() {
     mv "$temp_file" "$BREWFILE"
 }
 
+# Formulae `brew bundle dump` puts back even though they are transitive
+# libraries, a Linux clipboard tool, or a deprecated completion package.
+# Dropping them from the Brewfile does not uninstall them.
+is_dependency_only_formula() {
+    case "$1" in
+        brotli | ca-certificates | gdbm | gettext | ossp-uuid | pkg-config | readline | xz | xclip | docker-completion)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+prune_dependency_only_entries() {
+    local temp_file line package
+
+    temp_file=$(mktemp)
+    while IFS= read -r line || [ -n "$line" ]; do
+        if echo "$line" | grep -qE '^[[:space:]]*brew[[:space:]]+["'\'']'; then
+            package=$(echo "$line" | sed -E "s/^[[:space:]]*brew[[:space:]]+[\"']([^\"']+)[\"'].*/\1/" | short_formula_names)
+            if is_dependency_only_formula "$package"; then
+                continue
+            fi
+        fi
+        printf '%s\n' "$line" >>"$temp_file"
+    done <"$BREWFILE"
+
+    mv "$temp_file" "$BREWFILE"
+}
+
 # Full update - regenerate Brewfile
 update_brewfile() {
     if [ "$DRY_RUN" = true ]; then
@@ -586,6 +627,7 @@ update_brewfile() {
         # Regenerate
         brew bundle dump --file="$BREWFILE" --force
         prune_policy_satisfied_entries
+        prune_dependency_only_entries
 
         echo ""
         echo -e "${GREEN}✓ Brewfile updated${NC}"
@@ -593,6 +635,12 @@ update_brewfile() {
         echo -e "${YELLOW}Note: You may want to reorganize categories manually${NC}"
     fi
 }
+
+# Tests source this file to call prune helpers. Executing it with the variable
+# set stops before the action so a sourced shell can return.
+if [ "${BREW_SYNC_SOURCE_ONLY:-}" = 1 ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 # Main
 case "$ACTION" in

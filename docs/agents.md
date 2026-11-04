@@ -68,7 +68,7 @@ python3 -m json.tool mcp.json >/dev/null  # validate
 Agents and MCP servers must use environment variables, not committed keys:
 
 - Store keys in 1Password vault **Dot Secrets** (see `api_keys_1password.sh.template`).
-- Export via `op_secret "Vault/Item/field"` in `api_keys_1password.sh` (loaded by `zsh/secrets.zsh`).
+- Shell startup only sources the mode-0600 cache. `refresh-secrets` is the `op` prompt; a new shell does not call `op`.
 - Validate with `validate-api-keys` (never prints values).
 
 Never commit `api_keys.sh` or `api_keys_1password.sh` (both gitignored) and never put `sk-` or `api_key=` literals in `claude/` or `mcp.json*` (checked by `bin/doctor` soft check).

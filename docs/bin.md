@@ -92,9 +92,10 @@ update-everything --verbose # Detailed output
 
 **Updates:**
 - Homebrew (update, upgrade, cleanup)
+- Global mise tools (`RUN_MISE_UPGRADE`, default true)
 - Global npm and pnpm packages
 - macOS software (check only)
-- Git repositories in `~/code` and `~/norm`
+- Git repositories in `~/code` and `~/norm` (`REPOS_DIRS`, or a single `REPOS_DIR` override)
 - Docker (system prune)
 - Neovim plugins
 
@@ -324,8 +325,9 @@ Scripts share a config file at `~/.config/good-morning/config`:
 # Example config
 WEATHER_LOCATION="San Francisco"
 CALENDAR_DAYS=7
-GITHUB_NOTIFICATIONS=true
+SHOW_GITHUB_NOTIFICATIONS=true
 REPOS_DIRS=("$HOME/code" "$HOME/norm")
+# REPOS_DIR="$HOME/norm"  # if set, this single directory replaces REPOS_DIRS
 ```
 
 Generate default config:

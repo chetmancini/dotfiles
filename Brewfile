@@ -16,9 +16,7 @@ tap "can1357/tap"
 brew "git"                      # Git (also in minimal profile)
 brew "zsh"                      # Primary shell
 brew "atuin"                    # SQLite shell history + better search (^R)
-brew "brotli"                   # Lossless compression
 brew "btop"                     # Resource monitor
-brew "ca-certificates"          # Mozilla CA certificate store
 brew "chafa"                    # Terminal image viewer (yazi fallback)
 brew "coreutils"                # GNU utilities
 brew "curl"                     # URL transfer tool
@@ -27,23 +25,15 @@ brew "dust"                     # Better du
 brew "eza"                      # Better ls
 brew "fastfetch"                # System info
 brew "gnupg"                    # GPG encryption
-brew "docker"                   # Container platform
-brew "docker-completion"        # Docker completions
-brew "gdbm"                     # Database library
-brew "gettext"                  # i18n library
+brew "docker"                   # Docker CLI (completions ship with the CLI; docker-completion is deprecated)
 brew "grep"                     # GNU grep
 brew "htop"                     # Process viewer
-brew "ossp-uuid"                # UUID generator
-brew "pkg-config"               # Package metadata
 brew "procs"                    # Better ps
-brew "pup"                      # HTML parser CLI
-brew "readline"                 # Line editing library
+brew "pup"                      # Datadog CLI
 brew "sd"                       # Better sed
 brew "tmux"                     # Terminal multiplexer
 brew "tokei"                    # Code statistics
 brew "wget"                     # File downloader
-brew "xclip"                    # Clipboard access
-brew "xz"                       # File compression
 brew "yazi"                     # File browser
 brew "zsh-autosuggestions"      # Fish-style suggestions as you type
 brew "zsh-history-substring-search"  # Up/down substring history
@@ -110,3 +100,4 @@ cask "font-hack-nerd-font"          # Hack Nerd Font
 cask "font-monaspace"               # Monaspace font family
 cask "font-monaspice-nerd-font"     # Monaspice Nerd Font
 cask "font-symbols-only-nerd-font"  # Symbols Nerd Font
+cask "font-jetbrains-mono-nerd-font" # JetBrains Mono NL Nerd Font (Ghostty)

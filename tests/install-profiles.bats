@@ -133,7 +133,11 @@ BREW
     cat >"$TEST_ROOT/bin/mise" <<'MISE'
 #!/bin/sh
 [ -L "$HOME/.config/mise" ] || exit 41
-[ "$PWD" = "$HOME" ] || exit 42
+# macOS TMPDIR often ends in a slash, so mktemp paths contain "//".
+# cd canonicalizes PWD; compare resolved paths, not the raw strings.
+home_real=$(cd "$HOME" && pwd -P) || exit 42
+pwd_real=$(pwd -P) || exit 42
+[ "$pwd_real" = "$home_real" ] || exit 42
 printf '%s\n' "$*" >"$MISE_PACKAGE_LOG"
 MISE
     export MISE_PACKAGE_LOG="$TEST_ROOT/mise-packages"

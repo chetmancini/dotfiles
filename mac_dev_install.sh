@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Quarantined. Not called by install.sh, the Makefile, or doctor.
+# Later steps disable local Time Machine snapshots and delete the sleep image
+# (sudo tmutil disablelocal, rm/chflags on /private/var/vm/sleepimage).
+# Do not run this script as part of a normal dotfiles install.
 
 # Set up zsh
 chsh -s /bin/zsh

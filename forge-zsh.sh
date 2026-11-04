@@ -1,3 +1,6 @@
+# Quarantined. Not sourced by .zshrc or install.sh.
+# This file still expects an Oh My Zsh `plugins` array and eval's forge's
+# shell plugin and theme. Keep it only as a reference for a manual re-enable.
 # >>> forge initialize >>>
 # !! Contents within this block are managed by 'forge zsh setup' !!
 # !! Do not edit manually - changes will be overwritten !!

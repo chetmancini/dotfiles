@@ -186,7 +186,7 @@ validate_openai() {
         401) echo "INVALID|HTTP 401 unauthorized" ;;
         429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
         000) echo "ERROR|network/timeout" ;;
-        *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+        *) echo "ERROR|HTTP $code" ;;
     esac
 }
 
@@ -219,11 +219,11 @@ validate_anthropic() {
                 200) echo "OK|HTTP $code2 (via messages probe)" ;;
                 401 | 403) echo "INVALID|HTTP $code2 unauthorized" ;;
                 429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
-                *) echo "ERROR|HTTP $code2 $(head -c 200 "$body2" | tr -d '\n')" ;;
+                *) echo "ERROR|HTTP $code2" ;;
             esac
             ;;
         000) echo "ERROR|network/timeout" ;;
-        *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+        *) echo "ERROR|HTTP $code" ;;
     esac
 }
 
@@ -242,7 +242,7 @@ validate_github() {
         401) echo "INVALID|HTTP 401 bad credentials" ;;
         403) echo "ERROR|HTTP 403 (rate-limit or scope) — key may be valid" ;;
         000) echo "ERROR|network/timeout" ;;
-        *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+        *) echo "ERROR|HTTP $code" ;;
     esac
 }
 
@@ -252,18 +252,22 @@ validate_tavily() {
         echo "MISSING|not set"
         return 0
     }
-    local body code
+    local body code payload
     body=$(mktemp)
-    trap 'rm -f "$body"' RETURN
+    payload=$(mktemp)
+    chmod 600 "$payload"
+    trap 'rm -f "$body" "$payload"' RETURN
+    # The key stays in this shell and a mode-0600 file. It is not a curl argument.
+    TAVILY_API_KEY="$key" TAVILY_PAYLOAD="$payload" python3 -c 'import json, os; json.dump({"api_key": os.environ["TAVILY_API_KEY"], "query": "test", "max_results": 1, "include_answer": False}, open(os.environ["TAVILY_PAYLOAD"], "w"))'
     code=$(curl_check "$body" -X POST -H "Content-Type: application/json" \
-        -d "{\"api_key\":\"$key\",\"query\":\"test\",\"max_results\":1,\"include_answer\":false}" \
+        -d @"$payload" \
         https://api.tavily.com/search)
     case "$code" in
         200) echo "OK|HTTP $code" ;;
         401 | 403) echo "INVALID|HTTP $code unauthorized" ;;
         429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
         000) echo "ERROR|network/timeout" ;;
-        *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+        *) echo "ERROR|HTTP $code" ;;
     esac
 }
 
@@ -286,7 +290,7 @@ validate_langchain() {
         case "$code2" in
             200 | 201) echo "OK|HTTP $code2 (via sessions)" ;;
             401 | 403) echo "INVALID|HTTP $code2 unauthorized" ;;
-            *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+            *) echo "ERROR|HTTP $code2" ;;
         esac
         return
     fi
@@ -295,7 +299,7 @@ validate_langchain() {
         401 | 403) echo "INVALID|HTTP 401 unauthorized" ;;
         429) echo "OK|HTTP 429 (key valid, rate-limited)" ;;
         000) echo "ERROR|network/timeout" ;;
-        *) echo "ERROR|HTTP $code $(head -c 200 "$body" | tr -d '\n')" ;;
+        *) echo "ERROR|HTTP $code" ;;
     esac
 }
 
@@ -305,7 +309,6 @@ KEYS=(OPENAI_API_KEY ANTHROPIC_API_KEY GITHUB_TOKEN TAVILY_API_KEY LANGCHAIN_API
 LABELS=(OpenAI Anthropic GitHub Tavily "LangChain/LangSmith")
 
 # ── Run all ──────────────────────────────────────────────────────────────────
-results=()
 statuses=()
 details=()
 previews=()

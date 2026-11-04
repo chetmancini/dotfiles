@@ -1,0 +1,19 @@
+# Machine-local shell hooks. Copy to zsh/local.zsh (gitignored).
+# .zshrc sources this module before plugins when the file is readable.
+# Keep paths guarded so a missing SDK or tool does not abort the shell.
+
+# Example: Google Cloud SDK installed under Downloads.
+# if [[ -r "$HOME/Downloads/google-cloud-sdk/path.zsh.inc" ]]; then
+#   source "$HOME/Downloads/google-cloud-sdk/path.zsh.inc"
+# fi
+# if [[ -r "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc" ]]; then
+#   source "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc"
+# fi
+
+# Example: pick the newest installed norm-dev-cli shell init.
+# typeset -a _norm_inits
+# _norm_inits=(${HOME}/.local/share/uv/tools/norm-dev-cli/lib/python*/site-packages/norm_dev_cli/shell/shell-init.sh(N))
+# if (( ${#_norm_inits} )); then
+#   source "${_norm_inits[-1]}"
+# fi
+# unset _norm_inits

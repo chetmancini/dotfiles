@@ -57,6 +57,11 @@ load_config() {
         # shellcheck source=/dev/null
         source "$CONFIG_FILE"
     fi
+
+    # Older generated configs used REPOS_DIR for a single directory.
+    if [ -n "${REPOS_DIR:-}" ]; then
+        REPOS_DIRS=("$REPOS_DIR")
+    fi
 }
 
 # Temporary directory for parallel output
@@ -90,7 +95,7 @@ emit_brew_upgrade_report() {
         fi
 
         updated_entries+=("$name $target_version")
-        ((updated_count++))
+        updated_count=$((updated_count + 1))
     done <"$before_file"
 
     if [ "$updated_count" -eq 0 ]; then
@@ -449,11 +454,18 @@ update_single_repo() {
             local stashed=false
             # If we're on the primary branch with local changes, stash before pulling.
             if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-                if git stash push -m "update-everything auto-stash" 2>/dev/null; then
-                    stashed=true
-                else
+                # `git stash push` exits 0 and saves nothing when the only
+                # dirtiness is untracked files. Popping in that case restores
+                # an older stash onto the tree we just fast-forwarded.
+                local stash_before stash_after
+                stash_before=$(git stash list | wc -l | tr -d ' ')
+                if ! git stash push -m "update-everything auto-stash" >/dev/null 2>&1; then
                     echo "error:$repo_name: failed to stash changes, skipping pull" >>"$output_file"
                     exit 0
+                fi
+                stash_after=$(git stash list | wc -l | tr -d ' ')
+                if [ "$stash_after" -gt "$stash_before" ]; then
+                    stashed=true
                 fi
             fi
 

@@ -2,7 +2,13 @@
 # Generic Tools
 ##############################
 function lt() { eza -la --sort=modified "$@" | tail; }
-function psgrep() { ps axuf | grep -v grep | grep "$@" -i --color=auto; }
+function psgrep() {
+  if [[ "$(uname)" == Darwin ]]; then
+    command ps aux
+  else
+    command ps axuf
+  fi | command grep -v grep | command grep -i --color=auto "$@"
+}
 function fname() { fd --ignore-case "$@"; }  # Uses fd for fast searching
 function take() { mkdir -p "$1" && builtin cd "$1" || return; }
 
@@ -70,7 +76,13 @@ function svim {
 # Find a file with a pattern in name:
 function ff() { fd --type f --ignore-case "$*" ; }
 
-function my_ps() { ps "$@" -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
+function my_ps() {
+  if [[ "$(uname)" == Darwin ]]; then
+    command ps "$@" -u "$USER" -o pid,%cpu,%mem,etime,command
+  else
+    command ps "$@" -u "$USER" -o pid,%cpu,%mem,bsdtime,command
+  fi
+}
 function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
 
 # Kill by process name.
@@ -84,7 +96,7 @@ function killps()
     if [ $# = 2 ]; then sig=$1 ; fi
     for pid in $(my_ps| awk '!/awk/ && $0~pat { print $1 }' pat=${!#} ) ; do
         pname=$(my_ps | awk '$1~var { print $5 }' var=$pid )
-        read -p "Kill process $pid <$pname> with signal $sig?" RESP
+        read -r "RESP?Kill process $pid <$pname> with signal $sig? "
         if [ "$RESP" = "y" ]; then
             kill $sig $pid
         fi

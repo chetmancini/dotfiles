@@ -1,5 +1,4 @@
 [flavor]
-#use = "nightfly"
 dark = "gruvbox-dark"
 
 

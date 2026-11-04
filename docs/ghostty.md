@@ -49,9 +49,11 @@ Modern, eye-friendly color scheme with vibrant syntax highlighting colors.
 ### Font: JetBrains Mono NL Nerd Font
 
 Monospace font with:
-- Programming ligatures
+- No programming ligatures (this is the NL face)
 - Nerd Font icons (for file browsers, status lines)
 - Clear distinction between similar characters
+
+The core Brewfile installs it as `font-jetbrains-mono-nerd-font`.
 
 ### Quick Terminal Toggle
 

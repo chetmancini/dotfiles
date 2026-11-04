@@ -11,7 +11,7 @@ This is a personal dotfiles repository for macOS/Linux environment configuration
 ### Configuration Loading Flow
 
 1. `.zshrc` is a thin orchestrator that resolves `DOTFILES_DIR` and sources modules from `zsh/`
-2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (fzf/zoxide/mise/direnv/atuin/completions), fun extras, then plugins last
+2. Modules cover options, PATH, platform, theme, aliases, git helpers, functions, secrets, tools (mise/fzf/zoxide/direnv/atuin/completions/workbench), fun extras, optional `zsh/local.zsh`, then plugins last
 3. Platform modules source `mac_specific.sh` or `linux_specific.sh`
 4. Secrets (`zsh/secrets.zsh`): optional plaintext `api_keys.sh`, then preferred `api_keys_1password.sh` (both gitignored; templates tracked)
 5. Tools include fzf, zoxide, mise, direnv, atuin (Ctrl-R); plugins (autosuggestions, history-substring-search, syntax-highlighting) load last from Homebrew
@@ -98,7 +98,6 @@ When modifying dotfiles, changes take effect in different ways:
 This repository includes configurations for:
 - **Python**: Uses mise for version management, uv for fast package management
 - **Node**: Uses mise for version management, with pnpm/bun as package managers
-- **Ruby**: Uses rbenv for version management (currently commented out in zshrc)
 - **Java**: OpenJDK with helper function `setjdk` to switch versions
 
 ## Important Files and Directories
@@ -151,14 +150,13 @@ Modular configuration in `nvim/` (no LazyVim / lazy.nvim):
 
 - New shell aliases go in `zsh/aliases.zsh` or `zsh/git.zsh`; new tools get `zsh/tools/<name>.zsh` plus an orchestrator entry in `.zshrc`
 - Plugins that wrap ZLE must load in `zsh/plugins.zsh` after custom widgets (syntax-highlighting last)
-- Prefer API keys via `api_keys_1password.sh` + `op_secret` (template tracked; live file gitignored). Plaintext `api_keys.sh` is bootstrap-only.
+- Prefer API keys via `api_keys_1password.sh` (template tracked; live file gitignored). Startup sources the cache only; `refresh-secrets` is the one `op` prompt. Plaintext `api_keys.sh` is bootstrap-only.
 - Daily tools → `Brewfile`; experimental/GUI → `Brewfile.optional`
 - mise is installed with the official installer (`curl https://mise.run | sh` → `~/.local/bin/mise`), not Homebrew; activation lives in `zsh/tools/mise.zsh`
 - Legacy `vim/` and `iterm/` are kept in-repo but not installed by default
-- If tools need config, add symlinks to `install.sh` and validation to `bin/doctor`
+- If tools need config, add symlinks in `bin/lib/symlinks.sh` and validation to `bin/doctor`
 - Agent/MCP layout: `claude/agents/`, `claude/commands/`, `mcp.json.example` (see `docs/agents.md`; live `mcp.json` gitignored)
 - Custom zsh theme uses lambda (λ) as prompt symbol with git status integration
 - Editor is set to neovim globally (EDITOR env var and git core.editor)
 - mise is the single runtime version manager (`zsh/tools/mise.zsh`); see `mise/config.toml`
 - atuin owns Ctrl-R history search; direnv loads project `.envrc` after `direnv allow`
-- Optional cleanup: remove a leftover `~/dotfiles/oh-my-zsh` clone if present (no longer used; removed in plan 002)

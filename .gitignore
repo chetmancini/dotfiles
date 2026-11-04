@@ -16,6 +16,8 @@ carta_specific.sh
 norm_specific.sh
 api_keys.sh
 api_keys_1password.sh
+# machine-local shell tail (tracked example is zsh/local.zsh.example)
+zsh/local.zsh
 # live MCP config (sanitized example is mcp.json.example)
 mcp.json
 # legacy clone path; no longer installed by install.sh

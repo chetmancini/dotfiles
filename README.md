@@ -165,7 +165,7 @@ Optional includes AI apps (Claude, Cursor, Zed, …), messaging, Adobe, MacTeX, 
 - `make format` formats shell scripts with `shfmt` and Lua files with `stylua`; `make check` runs formatting, syntax, ShellCheck, TOML, stylua, zsh checks, and bats tests (`tests/`)
 
 ### Secrets (1Password preferred)
-- **Preferred:** copy `api_keys_1password.sh.template` → `api_keys_1password.sh` (gitignored), set `op://` item refs via `op_secret`
+- **Preferred:** copy `api_keys_1password.sh.template` → `api_keys_1password.sh` (gitignored) and set `op://` item refs. Shells load the cache only; run `refresh-secrets` when you want the 1Password prompt
 - Install 1Password CLI (`1password-cli` cask), enable app **Settings → Developer → Integrate with 1Password CLI**, unlock the app, check `op whoami`
 - **Bootstrap only:** `api_keys.sh` from `api_keys.sh.template` for machines without 1Password
 - Shell loads plaintext first, then 1Password (so 1P can override during migration) — see `zsh/secrets.zsh`
