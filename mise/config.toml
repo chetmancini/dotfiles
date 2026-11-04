@@ -43,3 +43,4 @@ fzf = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
 zoxide = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
 rtk = { version = "latest", auto_update = "24h", minimum_release_age = "3d" }
 "npm:cf" = "1.0.0-beta.23"
+"npm:oxfmt" = "latest"
