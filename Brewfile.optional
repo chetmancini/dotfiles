@@ -6,7 +6,6 @@
 
 # Taps (optional-only). Formula-level trust is declared on each package below.
 tap "anomalyco/tap"
-tap "datadog-labs/pack"
 tap "schpet/tap"
 
 #==============================================================================
@@ -44,7 +43,6 @@ brew "anomalyco/tap/opencode", trusted: true # AI coding assistant CLI
 brew "huggingface-cli"          # HuggingFace model downloads
 brew "llm"                      # CLI for LLMs
 brew "ollama"                   # Run LLMs locally
-brew "datadog-labs/pack/pup", trusted: true # Datadog Pup CLI
 brew "schpet/tap/linear", trusted: true     # Linear CLI
 
 #==============================================================================

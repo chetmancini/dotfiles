@@ -14,13 +14,14 @@ SHFMT_FLAGS := -i 4 -ci
 SHFMT_FILES := $(shell git ls-files -z | xargs -0 $(SHFMT) -f | grep -Ev '^zsh/' | sort -u)
 BASH_SYNTAX_FILES := $(filter-out %.bats,$(SHFMT_FILES))
 SHELLCHECK_FLAGS := --severity=warning -x -P bin
-SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cache-clean bin/cheatsheet bin/colortest bin/dashboard bin/doctor bin/dot bin/dtgz bin/extract bin/flushdns bin/git-rm-gone bin/git-standup bin/good-morning bin/imgcat bin/killbyname bin/lib/helpers.sh bin/lib/package-policy.sh bin/lib/symlinks.sh bin/my_ip bin/note bin/package-sync bin/portpid bin/prettypath bin/removeexif bin/repo-report bin/running bin/server bin/status bin/update-everything install.sh mac_dev_install.sh scripts/test-install-smoke.sh scripts/pre-commit scripts/install-hooks.sh
+SHELLCHECK_FILES := .bash_profile .bashrc bin/brew-sync bin/cache-clean bin/cheatsheet bin/colortest bin/dashboard bin/doctor bin/dot bin/dtgz bin/extract bin/flushdns bin/git-rm-gone bin/git-standup bin/good-morning bin/imgcat bin/killbyname bin/lib/helpers.sh bin/lib/package-policy.sh bin/lib/symlinks.sh bin/my_ip bin/note bin/package-sync bin/portpid bin/prettypath bin/removeexif bin/repo-report bin/running bin/server bin/status bin/update-everything bin/validate-api-keys install.sh scripts/test-install-smoke.sh scripts/pre-commit scripts/install-hooks.sh
 TOML_FILES := $(shell find . -path './.git' -prune -o -path './yazi/flavors' -prune -o -path './yazi/plugins' -prune -o -type f -name '*.toml' -print | sort | sed 's,^\./,,')
-ZSH_FILES := .zshrc chetmancini.zsh-theme forge-zsh.sh linux_specific.sh mac_specific.sh \
+ZSH_FILES := .zshrc chetmancini.zsh-theme linux_specific.sh mac_specific.sh \
 	zsh/options.zsh zsh/path.zsh zsh/path.extra.zsh zsh/platform.zsh zsh/theme.zsh zsh/aliases.zsh \
 	zsh/git.zsh zsh/functions.zsh zsh/secrets.zsh zsh/plugins.zsh zsh/fun.zsh \
 	zsh/tools/fzf.zsh zsh/tools/zoxide.zsh zsh/tools/mise.zsh \
-	zsh/tools/direnv.zsh zsh/tools/atuin.zsh zsh/tools/completions.zsh
+	zsh/tools/direnv.zsh zsh/tools/atuin.zsh zsh/tools/completions.zsh \
+	zsh/tools/workbench.zsh zsh/local.zsh.example
 
 STYLUA ?= stylua
 STYLUA_CONFIG := nvim/stylua.toml

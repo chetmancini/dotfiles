@@ -9,14 +9,24 @@ if [ -d ~/.docker/completions ]; then
   fi
 fi
 
-# Cached compinit - only regenerate once per day
+# Cached compinit — rebuild when the dump is missing or older than a day.
+# The check has to be a real glob. Inside [[ ]], `(#q...)` is literal unless
+# EXTENDED_GLOB is on, and a non-empty literal string is always true.
 autoload -Uz compinit
-if [[ "$_compinit_rebuild" == true || -n ~/.zcompdump(#qN.mh+24) ]]; then
+_dotfiles_compdump_stale() {
+  setopt LOCAL_OPTIONS EXTENDED_GLOB
+  [[ -f ~/.zcompdump ]] || return 0
+  local -a stale
+  stale=(~/.zcompdump(Nmh+24))
+  (( ${#stale} ))
+}
+if [[ "$_compinit_rebuild" == true ]] || _dotfiles_compdump_stale; then
   compinit
 else
   compinit -C
 fi
 unset _compinit_rebuild
+unfunction _dotfiles_compdump_stale
 
 
 # bun completions

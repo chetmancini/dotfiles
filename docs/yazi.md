@@ -17,7 +17,7 @@ Yazi is a fast, async terminal file manager with image preview support, git inte
 - `jq` (JSON preview)
 - `poppler` (PDF preview)
 
-**Shell integration:** Add the `y` function to `.zshrc` for cd-on-exit.
+**Shell integration:** `y()` in `zsh/functions.zsh` cds on exit.
 
 ## Quick Reference
 
@@ -166,19 +166,19 @@ function Linemode:size_and_mtime()
 end
 ```
 
-### package.toml
+### Plugins
 
-Plugin dependencies:
-- `git.yazi` - Git status
-- `full-border.yazi` - Border styling
-- `gruvbox-dark` - Theme
-- `nightfly` - Alternative theme
+Vendored trees under `yazi/plugins/` and `yazi/flavors/` are the source of truth. `install.sh` does not run `ya pkg`, and there is no `package.toml`.
+
+- `git.yazi` — Git status
+- `full-border.yazi` — Border styling
+- `gruvbox-dark` — Theme (`yazi/theme.toml`)
 
 ## Integrations
 
 ### Shell (cd-on-exit)
 
-The `y` function in `.zshrc` changes directory when you quit:
+The `y` function in `zsh/functions.zsh` changes directory when you quit:
 
 ```bash
 function y() {
@@ -198,7 +198,7 @@ Files open in `$EDITOR` (neovim) for editing. The opener config:
 ```toml
 [opener]
 edit = [
-    { run = '${EDITOR:-vi} "$@"', block = true },
+    { run = '${EDITOR:-vi} %s', block = true },
 ]
 ```
 
@@ -210,12 +210,11 @@ Videos open in `mpv` with media info available.
 
 ### Change Theme
 
-Edit `yazi/theme.toml` or use a different flavor:
+Edit `yazi/theme.toml`. The active flavor is the vendored Gruvbox Dark tree:
 
 ```toml
-# Use nightfly instead
 [flavor]
-use = "nightfly"
+dark = "gruvbox-dark"
 ```
 
 ### Add Keybindings
@@ -277,7 +276,7 @@ run = "git"
 
 This is macOS only. The keybinding runs:
 ```bash
-qlmanage -p "$@"
+qlmanage -p %s
 ```
 
 ### cd-on-exit not working

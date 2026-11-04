@@ -85,16 +85,17 @@ generate_config() {
 # update-everything settings
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Directory containing git repositories to update
-# REPOS_DIR="$HOME/norm"
-
-# Default branch to pull (will fall back to master if main doesn't exist)
-# MAIN_BRANCH="main"
+# Directories containing git repositories to update.
+# A single REPOS_DIR replaces REPOS_DIRS when both are set.
+# REPOS_DIRS=("$HOME/code" "$HOME/norm")
 
 # Homebrew tasks
 # RUN_BREW_UPDATE=true
 # RUN_BREW_UPGRADE=true
 # RUN_BREW_CLEANUP=true
+
+# Global mise tool upgrades (default true)
+# RUN_MISE_UPGRADE=true
 
 # npm global package updates
 # RUN_NPM_GLOBAL_UPDATE=true
@@ -115,10 +116,6 @@ generate_config() {
 
 # Neovim plugin updates (only runs if nvim is installed)
 # UPDATE_NVIM_PLUGINS=true
-
-# Dotfiles updates
-# PULL_DOTFILES=true
-# DOTFILES_DIR="$HOME/dotfiles"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # dashboard settings
@@ -156,7 +153,7 @@ print_help() {
     echo ""
     echo "This script orchestrates:"
     echo "  1. Disk space check"
-    echo "  2. update-everything (brew, docker, nvim, dotfiles, repos)"
+    echo "  2. update-everything (brew, mise, docker, nvim, repos)"
     echo "  3. dashboard (GitHub notifications, and more)"
     echo ""
     echo "You can also run these scripts individually:"

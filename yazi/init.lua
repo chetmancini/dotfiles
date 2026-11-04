@@ -5,6 +5,13 @@ require("full-border"):setup({
   type = ui.Border.ROUNDED,
 })
 
+-- title_format was removed in Yazi 26. Keep the previous window title.
+ps.sub("ind-app-title", function(args)
+  local cwd = tostring(cx.active.current.cwd)
+  args.value = "Yazi: " .. cwd
+  return args
+end)
+
 function Linemode:size_and_mtime()
   local time = math.floor(self._file.cha.mtime or 0)
   if time == 0 then

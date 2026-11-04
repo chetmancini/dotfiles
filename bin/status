@@ -140,6 +140,8 @@ if [[ "$DEEP" == true ]]; then
             add_component "homebrew" "ok" "$brew_rc" "Homebrew packages and Brewfile are synchronized" "dot brew-sync"
         elif [[ "$brew_rc" -eq 1 ]]; then
             add_component "homebrew" "warning" "$brew_rc" "Homebrew drift detected between Brewfile and installed packages" "dot brew-sync"
+        elif [[ "$brew_rc" -eq 3 ]]; then
+            add_component "homebrew" "warning" "$brew_rc" "Installed Homebrew packages have updates available" "brew upgrade"
         else
             add_component "homebrew" "error" "$brew_rc" "Homebrew sync check encountered an error" "dot brew-sync"
         fi

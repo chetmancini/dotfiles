@@ -9,7 +9,11 @@ function wifi-password() {
         return 1
     fi
     local ssid
-    ssid=$(/System/Library/PrivateFrameworks/Apple80211.framework/Resources/airport -I | awk -F': ' '/ SSID/{print $2}')
+    # `airport` was removed from macOS. networksetup is the supported lookup.
+    ssid=$(networksetup -getairportnetwork en0 2>/dev/null | sed -n 's/^Current Wi-Fi Network: //p')
+    if [[ -z "$ssid" ]]; then
+        ssid=$(ipconfig getsummary en0 2>/dev/null | awk -F' : ' '/ SSID/{print $2; exit}')
+    fi
     if [[ -z "$ssid" ]]; then
         echo "Not connected to WiFi" >&2
         return 1

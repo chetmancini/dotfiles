@@ -29,11 +29,11 @@ when done.
 | 011 | Drop oh-my-zsh from CI (+ optional local clone) | P2 | S | 002 | DONE |
 | 012 | Slim shell PATH / toys | P3 | S | — | DONE |
 | 013 | `dot install` + install characterization | P3 | M | 006; 009 helpful | DONE |
-| 014 | Unified structured `dot status` | P1 | M | — | DONE |
-| 015 | Transactional install + `dot restore` | P1 | M | — | TODO |
-| 016 | Guarded fast-forward `dot upgrade` | P1 | M | 014, 015 | TODO |
+| 014 | Unified structured `dot status` | P1 | M | — | DONE (`bin/status`; plan body removed in `7ac7317`) |
+| 015 | Transactional install + `dot restore` | P1 | M | — | CANCELLED (`311a271`; implementation is not on master) |
+| 016 | Guarded fast-forward `dot upgrade` | P1 | M | 014, 015 | BLOCKED (015 cancelled; do not execute until restore is rewritten or revived) |
 
-Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED` (reason)
+Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `CANCELLED` (reason) | `REJECTED` (reason)
 
 ## Dependency notes
 
@@ -43,27 +43,24 @@ Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (reason) | `REJECTED`
 - **010** independent of 009; can parallel.
 - **011** independent; safe after 002.
 - **012 / 013** completed; bodies under `plans/done/`.
-- **014 and 015** are independent foundations but should execute in that order
-  for simpler review: status first, then restore.
-- **016 requires 014 and 015** because upgrade consumes the versioned status
-  exit/schema contract and the install-transaction restore contract.
+- **014** landed as `bin/status` (schema `dotfiles.status/v1`). The plan body was removed in `7ac7317`.
+- **015** was cancelled in `311a271`. That implementation is not an ancestor of master; it remains only on `origin/cm/transactional-restore-simplified`. There is no `bin/restore`.
+- **016** stays in this directory and is blocked until the restore dependency is rewritten or explicitly revived. Do not execute it as written.
 
 ## Layout
 
 ```
 plans/
-  README.md                 # this index
-  014-unified-dot-status.md
-  015-transactional-install-restore.md
-  016-guarded-dot-upgrade.md
-  done/                     # completed plan bodies (001–013)
+  README.md                      # this index
+  016-guarded-dot-upgrade.md     # blocked; restore dependency is not on master
+  done/                          # completed plan bodies (001–013)
 ```
 
-## Wave 3 execution order
+## Wave 3 bookkeeping
 
-1. **Machine truth**: 014
-2. **Recovery**: 015
-3. **Convergence**: 016 after both 014 and 015
+1. **014** is done: `bin/status`.
+2. **015** is cancelled. Do not revive transactional restore unless asked.
+3. **016** is blocked on that restore dependency.
 
 ## Wave 2 parallelism (historical)
 
@@ -82,10 +79,10 @@ plans/
 ## How to execute a plan
 
 ```bash
-git checkout -b advisor/014-unified-dot-status   # use the selected plan’s branch name
-# Follow plans/014-….md step by step
+git checkout -b advisor/<plan-name>
+# Follow the plan file step by step. 014 and 015 no longer have bodies here.
 make check
-# When done: move plan to plans/done/ and mark DONE in this README
+# When done: move the plan to plans/done/ and mark DONE in this README
 ```
 
 Do **not** push or open a PR unless the operator asks.

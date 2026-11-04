@@ -23,7 +23,15 @@ alias gdiff='git diff --color'
 alias gmerge='git merge'
 alias gff='git merge --ff-only'
 alias gpull='git pull --prune'
-alias grm="git status | grep deleted | awk '{print \$3}' | xargs git rm"
+grm() {
+  local -a deleted=()
+  local file
+  while IFS= read -r -d '' file; do
+    deleted+=("$file")
+  done < <(git ls-files -d -z)
+  (( ${#deleted} )) || return 0
+  git rm -- "${deleted[@]}"
+}
 alias gamend="git commit --amend -C HEAD"
 alias gclean='git clean -nd'
 alias gcleanf='git checkout . && git clean -f'

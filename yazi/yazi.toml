@@ -15,12 +15,11 @@ show_hidden    = true
 show_symlink   = true
 scrolloff      = 5
 mouse_events   = [ "click", "scroll" ]
-title_format   = "Yazi: {cwd}"
 
 [[mgr.prepend_keymap]]
 on = "<C-p>"
 run = '''
-  shell 'qlmanage -p "$@"'
+  shell 'qlmanage -p %s'
 '''
 
 [preview]
@@ -32,27 +31,26 @@ cache_dir       = ""
 image_delay     = 30
 image_filter    = "triangle"
 image_quality   = 75
-sixel_fraction  = 15
 ueberzug_scale  = 1
 ueberzug_offset = [ 0, 0, 0, 0 ]
 
 [opener]
 edit = [
-	{ run = '${EDITOR:-vi} "$@"', desc = "$EDITOR", block = true, for = "unix" },
+	{ run = '${EDITOR:-vi} %s', desc = "$EDITOR", block = true, for = "unix" },
 ]
 open = [
-	{ run = 'open "$@"',                    desc = "Open", for = "macos" },
+	{ run = 'open %s',                    desc = "Open", for = "macos" },
 ]
 reveal = [
-	{ run = 'open -R "$1"',                         desc = "Reveal", for = "macos" },
-	{ run = '''exiftool "$1"; echo "Press enter to exit"; read _''', block = true, desc = "Show EXIF", for = "unix" },
+	{ run = 'open -R %s1',                         desc = "Reveal", for = "macos" },
+	{ run = 'exiftool %s1; echo "Press enter to exit"; read _', block = true, desc = "Show EXIF", for = "unix" },
 ]
 extract = [
-	{ run = 'ya pub extract --list "$@"', desc = "Extract here", for = "unix" },
+	{ run = 'ya pub extract --list %s', desc = "Extract here", for = "unix" },
 ]
 play = [
-	{ run = 'mpv --force-window "$@"', orphan = true, for = "unix" },
-	{ run = '''mediainfo "$1"; echo "Press enter to exit"; read _''', block = true, desc = "Show media info", for = "unix" },
+	{ run = 'mpv --force-window %s', orphan = true, for = "unix" },
+	{ run = 'mediainfo %s1; echo "Press enter to exit"; read _', block = true, desc = "Show media info", for = "unix" },
 ]
 
 [open]
@@ -77,8 +75,11 @@ rules = [
 ]
 
 [tasks]
-micro_workers    = 10
-macro_workers    = 10
+file_workers     = 10
+plugin_workers   = 10
+fetch_workers    = 10
+preload_workers  = 10
+process_workers  = 10
 bizarre_retry    = 3
 image_alloc      = 536870912  # 512MB
 image_bound      = [ 0, 0 ]
@@ -205,13 +206,13 @@ delete_offset  = [ 0, 0, 70, 20 ]
 
 # overwrite
 overwrite_title   = "Overwrite file?"
-overwrite_content = "Will overwrite the following file:"
+overwrite_body    = "Will overwrite the following file:"
 overwrite_origin  = "center"
 overwrite_offset  = [ 0, 0, 50, 15 ]
 
 # quit
 quit_title   = "Quit?"
-quit_content = "The following task is still running, are you sure you want to quit?"
+quit_body   = "The following task is still running, are you sure you want to quit?"
 quit_origin  = "center"
 quit_offset  = [ 0, 0, 50, 15 ]
 

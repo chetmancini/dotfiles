@@ -3,6 +3,12 @@
 
 setup() {
     load helpers.bash
+    # A temp HOME makes the mise python shim install into that home and print
+    # the installer on stderr, which bats mixes into the JSON payload.
+    local quiet_python=""
+    if command -v mise >/dev/null 2>&1; then
+        quiet_python="$(mise which python3 2>/dev/null || true)"
+    fi
     setup_temp_home
 
     FAKE_BIN="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-status-fakebin.XXXXXX")"
@@ -11,6 +17,11 @@ setup() {
 brew "ripgrep"
 cask "alacritty"
 EOF
+    if [[ -n "$quiet_python" && -x "$quiet_python" ]]; then
+        printf '#!/bin/sh\nexec %q "$@"\n' "$quiet_python" >"$FAKE_BIN/python3"
+        chmod +x "$FAKE_BIN/python3"
+        export PATH="$FAKE_BIN:$PATH"
+    fi
 }
 
 teardown() {
@@ -213,6 +224,27 @@ data = json.loads(sys.argv[1])
 assert data["overall_status"] == "error"
 assert data["components"][2]["id"] == "homebrew"
 assert data["components"][2]["status"] == "error"
+' "$output"
+
+    # 4. Outdated only: fake brew-sync returns 3. Overall status stays a warning.
+    cat <<EOF >"$FAKE_BIN/fake-brew-sync-3"
+#!/bin/sh
+exit 3
+EOF
+    chmod +x "$FAKE_BIN/fake-brew-sync-3"
+
+    STATUS_BREW_SYNC_BIN="$FAKE_BIN/fake-brew-sync-3" run env PATH="$FAKE_BIN:$PATH" "$DOTFILES_DIR/bin/status" --deep --json
+    [ "$status" -eq 1 ]
+    python3 -c '
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["overall_status"] == "warning"
+homebrew = data["components"][2]
+assert homebrew["id"] == "homebrew"
+assert homebrew["status"] == "warning"
+assert homebrew["exit_code"] == 3
+assert "updates available" in homebrew["summary"]
+assert homebrew["remediation"] == "brew upgrade"
 ' "$output"
 }
 

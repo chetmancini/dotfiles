@@ -208,3 +208,130 @@ BREW
     [ "$(cat "$TMP_BREWFILE")" = 'brew "git"' ]
     [[ "$output" == *"bat: mise via bat"* ]]
 }
+
+write_brew_stub() {
+    local bin="$1"
+    cat >"$bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' git
+    exit 0
+fi
+if [ "$1" = list ] && [ "$2" = --cask ]; then
+    exit 0
+fi
+if [ "$1" = outdated ]; then
+    printf '%s\n' git
+    exit 0
+fi
+if [ "$1" = autoremove ]; then
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$bin/brew"
+}
+
+@test "brew-sync --check returns 3 when the only issue is outdated packages" {
+    printf 'brew "git"\n' >"$TMP_BREWFILE"
+    : >"$TMP_OPTIONAL"
+    local fake_bin="$TMP_SYNC_ROOT/bin"
+    mkdir -p "$fake_bin"
+    write_brew_stub "$fake_bin"
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --check
+
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"brew upgrade"* ]]
+    [[ "$output" != *"brew-sync --add"* ]]
+}
+
+@test "brew-sync --check keeps drift ahead of outdated packages" {
+    printf 'brew "git"\n' >"$TMP_BREWFILE"
+    : >"$TMP_OPTIONAL"
+    local fake_bin="$TMP_SYNC_ROOT/bin"
+    mkdir -p "$fake_bin"
+    cat >"$fake_bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' git wget
+    exit 0
+fi
+if [ "$1" = outdated ]; then
+    printf '%s\n' git
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$fake_bin/brew"
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --check
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"wget"* ]]
+    [[ "$output" == *"brew upgrade"* ]]
+}
+
+@test "brew-sync ignores installed dependency-only formulae" {
+    printf 'brew "git"\n' >"$TMP_BREWFILE"
+    : >"$TMP_OPTIONAL"
+    local fake_bin="$TMP_SYNC_ROOT/bin"
+    mkdir -p "$fake_bin"
+    cat >"$fake_bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' brotli git
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$fake_bin/brew"
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --check
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"installed but not in Brewfile"* ]]
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --add
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TMP_BREWFILE")" = 'brew "git"' ]
+    [[ "$output" == *"Nothing to add"* ]]
+}
+
+@test "dependency-only formulae stay out of a regenerated Brewfile" {
+    cat >"$TMP_BREWFILE" <<'EOF'
+brew "git"
+brew "brotli"
+brew "homebrew/core/xz"
+brew "docker-completion"
+brew "curl"
+cask "ghostty"
+EOF
+    run bash -c '
+        export BREW_SYNC_SOURCE_ONLY=1
+        export BREWFILE="$1"
+        export BREWFILE_OPTIONAL="$2"
+        export BREWFILE_OPENCLAW="$2"
+        script=$3
+        set --
+        # shellcheck disable=SC1090
+        source "$script"
+        prune_dependency_only_entries
+    ' bash "$TMP_BREWFILE" "$TMP_OPTIONAL" "$DOTFILES_DIR/bin/brew-sync"
+
+    [ "$status" -eq 0 ]
+    brewfile=$(cat "$TMP_BREWFILE")
+    [[ "$brewfile" == *'brew "git"'* ]]
+    [[ "$brewfile" == *'brew "curl"'* ]]
+    [[ "$brewfile" == *'cask "ghostty"'* ]]
+    [[ "$brewfile" != *brotli* ]]
+    [[ "$brewfile" != *xz* ]]
+    [[ "$brewfile" != *docker-completion* ]]
+}

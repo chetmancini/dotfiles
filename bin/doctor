@@ -252,7 +252,8 @@ run_dependency_checks() {
     for module in \
         options path platform theme aliases git functions secrets \
         plugins fun \
-        tools/fzf tools/zoxide tools/mise tools/direnv tools/atuin tools/completions; do
+        tools/fzf tools/zoxide tools/mise tools/direnv tools/atuin tools/completions \
+        tools/workbench; do
         check_path_exists "zsh module $module" "$DOTFILES_DIR/zsh/${module}.zsh"
     done
     if [ -e "$HOME/.tmux/plugins/tpm" ]; then
