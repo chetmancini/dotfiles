@@ -276,6 +276,35 @@ EOF
     [[ "$output" == *"brew upgrade"* ]]
 }
 
+@test "brew-sync ignores installed dependency-only formulae" {
+    printf 'brew "git"\n' >"$TMP_BREWFILE"
+    : >"$TMP_OPTIONAL"
+    local fake_bin="$TMP_SYNC_ROOT/bin"
+    mkdir -p "$fake_bin"
+    cat >"$fake_bin/brew" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = list ] && [ "$2" = --formula ]; then
+    printf '%s\n' brotli git
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$fake_bin/brew"
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --check
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"installed but not in Brewfile"* ]]
+
+    run env BREWFILE="$TMP_BREWFILE" BREWFILE_OPTIONAL="$TMP_OPTIONAL" \
+        BREWFILE_OPENCLAW="$TMP_OPTIONAL" PATH="$fake_bin:/usr/bin:/bin" \
+        "$DOTFILES_DIR/bin/brew-sync" --add
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TMP_BREWFILE")" = 'brew "git"' ]
+    [[ "$output" == *"Nothing to add"* ]]
+}
+
 @test "dependency-only formulae stay out of a regenerated Brewfile" {
     cat >"$TMP_BREWFILE" <<'EOF'
 brew "git"

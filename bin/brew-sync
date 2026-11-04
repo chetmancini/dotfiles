@@ -251,6 +251,8 @@ check_drift() {
     if [ -n "$optional_formulae" ]; then
         formulae_not_in_brewfile=$(comm -23 <(echo "$formulae_not_in_brewfile") <(echo "$optional_formulae"))
     fi
+    # Installed transitive libraries are not core Brewfile drift.
+    formulae_not_in_brewfile=$(exclude_dependency_only_formulae "$formulae_not_in_brewfile")
 
     # Casks in Brewfile but not installed
     local casks_not_installed
@@ -393,6 +395,7 @@ add_missing() {
     local external_formulae
     external_formulae=$(package_policy_external_satisfaction brew "$formulae_to_add")
     formulae_to_add=$(exclude_policy_satisfied_packages "$formulae_to_add" "$external_formulae")
+    formulae_to_add=$(exclude_dependency_only_formulae "$formulae_to_add")
     print_policy_satisfaction "$external_formulae"
 
     # Find casks installed but missing from core (do not pull optional into core)
@@ -588,6 +591,24 @@ is_dependency_only_formula() {
             return 1
             ;;
     esac
+}
+
+# Drop denylisted names from a newline-separated formula list. Used by drift
+# checks and --add, not only by the post-dump prune.
+exclude_dependency_only_formulae() {
+    local packages="$1"
+    local package
+
+    [ -n "$packages" ] || return 0
+    while IFS= read -r package; do
+        [ -n "$package" ] || continue
+        if is_dependency_only_formula "$package"; then
+            continue
+        fi
+        printf '%s\n' "$package"
+    done <<EOF
+$packages
+EOF
 }
 
 prune_dependency_only_entries() {
