@@ -246,12 +246,25 @@ Clean up local branches whose remote tracking branch was deleted.
 
 ```bash
 git-rm-gone
+git-rm-gone --dry-run
+git-rm-gone --remove-worktrees
 ```
+
+**Options:**
+- `-n`, `--dry-run`: report what would be deleted, change nothing
+- `--remove-worktrees`: also remove *clean* linked worktrees that hold a gone
+  branch (then delete the branch); worktrees with uncommitted or untracked
+  changes are never removed
 
 **Features:**
 - Finds branches marked as "gone" after `git fetch --prune`
-- Skips current branch for safety
-- Shows before/after listing
+- Prunes stale worktree metadata first (worktrees whose directory was deleted)
+- Skips the current branch for safety
+- One blocked branch (typically one checked out in a linked worktree) no longer
+  aborts the run: every removable branch is deleted, then the leftovers are
+  reported with the blocking worktree path and an unblock hint
+- Exit codes: `0` (nothing left behind), `1` (some branches could not be
+  deleted), `64` (usage error)
 
 **Typical workflow:**
 ```bash

@@ -4,30 +4,220 @@ set -euo pipefail
 
 # git-rm-gone: Delete local branches whose upstream tracking branch is gone
 #
-# Removes branches where the remote branch was deleted after merge/close
+# Removes branches where the remote branch was deleted after merge/close.
+# A branch that cannot be deleted (most often one still checked out in a linked
+# worktree) does not abort the run: every removable branch is removed first, and
+# the leftovers are reported with the reason and an unblock hint.
 
-# Handle branches with prefixes (* for current, + for worktree)
-gone_branches=$(git branch -vv | grep ': gone]' | sed 's/^[* +]*//' | awk '{print $1}')
+usage() {
+    cat <<'EOF'
+Usage: git-rm-gone [options]
 
-if [[ -z "$gone_branches" ]]; then
+Delete local branches whose upstream tracking branch is gone.
+
+Options:
+  -n, --dry-run        Report what would happen without deleting anything
+      --remove-worktrees
+                       Also remove clean linked worktrees that hold a gone
+                       branch, then delete the branch. Worktrees with
+                       uncommitted or untracked changes are never removed.
+  -h, --help           Show this help message
+
+Typical workflow:
+  git fetch --prune
+  git-rm-gone
+
+Exit codes:
+  0   nothing left to clean up
+  1   some branches could not be deleted (see summary)
+  64  usage error
+EOF
+}
+
+DRY_RUN=0
+REMOVE_WORKTREES=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        -n | --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --remove-worktrees)
+            REMOVE_WORKTREES=1
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Use --help for usage." >&2
+            exit 64
+            ;;
+    esac
+done
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Not inside a git repository." >&2
+    exit 1
+fi
+
+# Print the first line of a command's output, without git's "error: " prefix.
+first_line() {
+    printf '%s\n' "$1" | sed -n '1{s/^error: //;p;}'
+}
+
+# Worktree path whose HEAD is the given branch (short name), if any.
+worktree_for_branch() {
+    git worktree list --porcelain | awk -v ref="refs/heads/$1" '
+        /^worktree / { wt = substr($0, 10); next }
+        $1 == "branch" && $2 == ref { print wt; exit }
+    '
+}
+
+# Non-empty output => worktree has uncommitted or untracked changes.
+worktree_changes() {
+    git -C "$1" status --porcelain 2>/dev/null
+}
+
+# Drop admin entries for worktrees that were deleted by hand; those entries
+# keep their branch undeletable until pruned.
+if ! prune_report="$(git worktree prune -v 2>&1)"; then
+    echo "Warning: 'git worktree prune -v' failed: $(first_line "$prune_report")" >&2
+elif [[ -n "$prune_report" ]]; then
+    echo "Pruned stale worktree metadata:"
+    printf '%s\n' "$prune_report" | sed 's/^/  /'
+    echo ""
+fi
+
+gone_branches=()
+while IFS= read -r branch; do
+    if [[ -n "$branch" ]]; then
+        gone_branches+=("$branch")
+    fi
+done < <(
+    git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads |
+        awk -F'\t' '$2 == "[gone]" { print $1 }'
+)
+
+if [[ ${#gone_branches[@]} -eq 0 ]]; then
     echo "No branches with gone upstreams found."
     exit 0
 fi
 
 echo "Branches with gone upstreams:"
-echo "$gone_branches"
-echo ""
+for branch in "${gone_branches[@]}"; do
+    printf '  %s\n' "$branch"
+done
 
-current_branch=$(git branch --show-current)
+current_branch="$(git branch --show-current)"
 
-for branch in $gone_branches; do
+deleted=()
+skipped=()
+removed_worktrees=()
+failed_branches=()
+failed_reasons=()
+failed_hints=()
+
+for branch in "${gone_branches[@]}"; do
     if [[ "$branch" == "$current_branch" ]]; then
-        echo "Skipping $branch (current branch)"
+        skipped+=("$branch (current branch)")
         continue
     fi
-    echo "Deleting $branch..."
-    git branch -D "$branch"
+
+    blocking_worktree="$(worktree_for_branch "$branch")"
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        if [[ -n "$blocking_worktree" ]]; then
+            skipped+=("$branch (checked out in worktree $blocking_worktree)")
+        else
+            deleted+=("$branch")
+        fi
+        continue
+    fi
+
+    if delete_output="$(git branch -D "$branch" 2>&1)"; then
+        deleted+=("$branch")
+        continue
+    fi
+
+    # Blocked — almost always a linked worktree still holds the branch.
+    reason="$(first_line "$delete_output")"
+    hint=""
+
+    if [[ -z "$blocking_worktree" ]]; then
+        : # keep git's message
+    elif [[ ! -d "$blocking_worktree" ]]; then
+        reason="branch is checked out in a worktree whose directory is missing ($blocking_worktree)"
+        hint="git worktree prune"
+    elif [[ -n "$(worktree_changes "$blocking_worktree")" ]]; then
+        reason="branch is checked out in worktree $blocking_worktree, which has uncommitted or untracked changes"
+        hint="git worktree remove --force '$blocking_worktree'   # discards those changes"
+    elif [[ "$REMOVE_WORKTREES" -eq 0 ]]; then
+        reason="branch is checked out in worktree $blocking_worktree"
+        hint="git-rm-gone --remove-worktrees"
+    elif worktree_error="$(git worktree remove "$blocking_worktree" 2>&1)"; then
+        if git branch -D "$branch" >/dev/null 2>&1; then
+            removed_worktrees+=("$blocking_worktree")
+            deleted+=("$branch")
+            continue
+        fi
+        reason="removed worktree $blocking_worktree but 'git branch -D $branch' still failed"
+    else
+        reason="could not remove worktree $blocking_worktree: $(first_line "$worktree_error")"
+        hint="git worktree remove '$blocking_worktree'"
+    fi
+
+    failed_branches+=("$branch")
+    failed_reasons+=("$reason")
+    failed_hints+=("$hint")
 done
 
 echo ""
+if [[ ${#deleted[@]} -gt 0 ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "Would delete ${#deleted[@]} branch(es):"
+    else
+        echo "Deleted ${#deleted[@]} branch(es):"
+    fi
+    for branch in "${deleted[@]}"; do
+        printf '  %s\n' "$branch"
+    done
+fi
+
+if [[ ${#removed_worktrees[@]} -gt 0 ]]; then
+    echo "Removed ${#removed_worktrees[@]} clean worktree(s):"
+    for path in "${removed_worktrees[@]}"; do
+        printf '  %s\n' "$path"
+    done
+fi
+
+if [[ ${#skipped[@]} -gt 0 ]]; then
+    echo "Skipped:"
+    for entry in "${skipped[@]}"; do
+        printf '  %s\n' "$entry"
+    done
+fi
+
+if [[ ${#failed_branches[@]} -gt 0 ]]; then
+    echo "Could not remove ${#failed_branches[@]} branch(es):"
+    i=0
+    while [[ "$i" -lt "${#failed_branches[@]}" ]]; do
+        printf '  %s\n' "${failed_branches[$i]}"
+        printf '    reason: %s\n' "${failed_reasons[$i]}"
+        if [[ -n "${failed_hints[$i]}" ]]; then
+            printf '    hint:   %s\n' "${failed_hints[$i]}"
+        fi
+        i=$((i + 1))
+    done
+fi
+
+echo ""
+if [[ ${#failed_branches[@]} -gt 0 ]]; then
+    echo "Done, with ${#failed_branches[@]} branch(es) left behind."
+    exit 1
+fi
+
 echo "Done."
